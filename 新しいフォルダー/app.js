@@ -1,0 +1,859 @@
+pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+// ───── 白画面防止ガード ─────
+window.addEventListener("error",(e)=>{if(document.getElementById("err-banner"))return;const d=document.createElement("div");d.id="err-banner";d.style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#B0433A;color:#fff;font-family:Meiryo,sans-serif;font-size:12px;padding:8px 14px;";d.textContent="エラー: "+(e.message||"不明")+"（この文言を開発者へ）";document.body.appendChild(d);});
+function webglOK(){try{const c=document.createElement("canvas");return !!(window.WebGLRenderingContext&&(c.getContext("webgl")||c.getContext("experimental-webgl")));}catch(e){return false;}}
+if(!webglOK()){document.body.innerHTML='<div style="max-width:520px;margin:80px auto;padding:24px;background:#fff;border:2px solid #B0433A;border-radius:12px;font-family:Meiryo;line-height:1.9"><b style="color:#B0433A">3D描画（WebGL）が利用できません。</b><br>リモートデスクトップ経由を避け、ブラウザのハードウェアアクセラレーション設定をONにして再起動してください。</div>';throw new Error("WebGL unavailable");}
+const $=(q)=>document.querySelector(q);
+const numv=(v,fb)=>{const n=parseFloat(v);return isFinite(n)?n:fb};
+const posv=(v,fb)=>{const n=parseFloat(v);return isFinite(n)&&n>0?n:fb};
+
+// ───── 状態 ─────
+const U={
+ p:{name:"(仮称)北区上十条3丁目賃貸レジデンス計画",use:"共同住宅（賃貸）",struct:"RC",floors:14,height:42.45,tArea:2710.07},
+ site:{w:30,d:18,dx:0,dz:0,gl:0,h:[0,0,0,0]}, // h: 前左,前右,奥左,奥右
+ blocks:[{id:1,label:"高層部",f1:1,f2:14,w:19.2,d:12.0,dx:0,dz:-4,ry:0},{id:2,label:"低層部",f1:1,f2:2,w:25.0,d:11.3,dx:0,dz:6,ry:0}],
+ road:{w:8,side:"none"},
+ poles:{n:3,pitch:18,far:true,dx:0,dz:0,ry:0},
+ demo:{w:22,d:14,h:9,dx:0,dz:0,ry:0},
+ tw:{mode:"plan",step:8,crane:true,craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,scaffold:true,poles:true,mixer:true,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
+ under:{tex:null,show:true,width:40,opacity:.65,rot:0,dx:0,dz:0,pages:1,page:1,raw:null},
+ photo:{tex:null,show:true,width:160,opacity:.8,rot:0,dx:0,dz:0},
+ nbs:[], line:false, auto:true, tab:"諸元", moveLayers:false,
+ guide:{show:false, road:1.25, nbor:1.25},
+ sun:{az:135, alt:55},
+ appMode:"quick",            // quick=概算 / detail=詳細検証
+ grid:{show:false, size:1},  // グリッド表示
+ roadcond:{lane:6, walk:2.5, side:"front"}, // 道路条件（車道・歩道幅員）
+ cobj:[],                    // 施工オブジェクト配列（constructionObjects）
+ dim:{on:false, a:null, b:null}, // 寸法線ツール（2点間）
+ dxf:{ents:null, layers:{}, scale:0.001, dx:0, dz:0, raw:null}, // DXF読込（1/1000）
+ cost:{unit:32, show:true},  // 概算単価（万円/㎡）
+ sel:null,                   // 選択中オブジェクトキー
+};
+// 施工オブジェクトの種類定義
+const COBJ_TYPES={
+ bg:{label:"BG機械（杭打機）",color:0xE8731A,w:4.5,d:5.5,h:18},
+ pump:{label:"コンクリポンプ車",color:0x4F7CC4,w:2.5,d:10,h:3.6},
+ guard:{label:"警備員",color:0xCFA94A,w:0.6,d:0.6,h:1.7},
+ walkzone:{label:"歩行帯",color:0x6EA46E,w:2,d:12,h:0.05},
+ dump:{label:"ダンプトラック",color:0x9AA2AF,w:2.5,d:8,h:3.2},
+ office:{label:"現場事務所",color:0xD9C9A8,w:5.4,d:3,h:2.8},
+};
+const USES=["共同住宅（賃貸）","共同住宅（分譲）","ホテル","事務所","店舗"];
+
+// ───── three 初期化 ─────
+const mount=$("#view");
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+mount.appendChild(renderer.domElement);
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(40,1,0.5,5000);
+scene.add(new THREE.HemisphereLight(0xffffff,0x9aa0a8,.75));
+const sun=new THREE.DirectionalLight(0xfff4e0,1.0);
+sun.position.set(80,120,60);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-140,right:140,top:140,bottom:-140,far:600});
+scene.add(sun);
+const ctrl={theta:Math.PI/4+.3,phi:1.05,r:150,ty:18,ptrs:new Map(),pinch:0};
+let model=null, dragMap={}, dragObj=null, dragOff=new THREE.Vector3();
+const ray=new THREE.Raycaster();
+
+function groundPoint(e){
+ const r=renderer.domElement.getBoundingClientRect();
+ const v=new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
+ ray.setFromCamera(v,camera);
+ const t=-ray.ray.origin.y/ray.ray.direction.y;
+ return ray.ray.origin.clone().add(ray.ray.direction.clone().multiplyScalar(t));
+}
+function dragCandidates(){const small=["crane","ev","mixer","rough","poles","demo"];const out=[];
+ for(const[k,o]of Object.entries(dragMap)){
+  if(small.includes(k)||k.startsWith("nb:")||k.startsWith("blk:")||k.startsWith("co:"))out.push(o);
+  else if((k==="site"||k==="under"||k==="photo"||k==="dxf")&&U.moveLayers)out.push(o);}
+ return out;}
+function pickDrag(e){
+ const r=renderer.domElement.getBoundingClientRect();
+ const v=new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
+ ray.setFromCamera(v,camera);
+ const hits=ray.intersectObjects(dragCandidates(),true);
+ for(const h of hits){let o=h.object;while(o&&!o.userData.dragKey)o=o.parent;if(o)return o;}
+ return null;
+}
+const el=renderer.domElement; el.style.touchAction="none";
+let rotMode=false, rotStartX=0, rotStartRy=0;
+function objRyKey(k){
+ if(k==="crane")return ["tw","craneRot"]; if(k==="ev")return ["tw","evRy"];
+ if(k==="mixer")return ["tw","mixRy"]; if(k==="rough")return ["tw","rufRy"];
+ if(k==="poles")return ["poles","ry"]; if(k==="demo")return ["demo","ry"];
+ if(k.startsWith("nb:"))return ["nb",+k.slice(3)];
+ if(k.startsWith("blk:"))return ["blk",+k.slice(4)];
+ if(k.startsWith("co:"))return ["co",+k.slice(3)];
+ return null;
+}
+function getRy(k){const r=objRyKey(k);if(!r)return 0;
+ if(r[0]==="tw")return numv(U.tw[r[1]],0); if(r[0]==="poles")return numv(U.poles.ry,0); if(r[0]==="demo")return numv(U.demo.ry,0);
+ if(r[0]==="nb")return numv((U.nbs[r[1]]||{}).ry,0); if(r[0]==="blk")return numv((U.blocks[r[1]]||{}).ry,0);
+ if(r[0]==="co")return numv((U.cobj[r[1]]||{}).ry,0);
+ return 0;}
+function setRy(k,deg){const r=objRyKey(k);if(!r)return;deg=((deg%360)+360)%360;
+ if(r[0]==="tw")U.tw[r[1]]=+deg.toFixed(0);
+ else if(r[0]==="poles")U.poles.ry=+deg.toFixed(0);
+ else if(r[0]==="demo")U.demo.ry=+deg.toFixed(0);
+ else if(r[0]==="nb"){if(U.nbs[r[1]])U.nbs[r[1]].ry=+deg.toFixed(0);}
+ else if(r[0]==="blk"){if(U.blocks[r[1]])U.blocks[r[1]].ry=+deg.toFixed(0);}
+ else if(r[0]==="co"){if(U.cobj[r[1]])U.cobj[r[1]].ry=+deg.toFixed(0);}}
+el.addEventListener("pointerdown",(e)=>{
+ ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);el.setPointerCapture(e.pointerId);
+ // 寸法線ツール：地面の2点を順にクリック
+ if(U.dim.on&&ctrl.ptrs.size===1){const gp=groundPoint(e);
+  if(!U.dim.a){U.dim.a={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};U.dim.b=null;}
+  else if(!U.dim.b){U.dim.b={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};}
+  else {U.dim.a={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};U.dim.b=null;}
+  rebuild();renderBar();return;}
+ if(ctrl.ptrs.size===1){const o=pickDrag(e);if(o){dragObj=o;U.sel=o.userData.dragKey;
+   if(e.ctrlKey||e.metaKey){rotMode=true;rotStartX=e.clientX;rotStartRy=getRy(o.userData.dragKey);}
+   else{rotMode=false;const gp=groundPoint(e);dragOff.set(o.position.x-gp.x,0,o.position.z-gp.z);}
+   U.auto=false;syncBtns();}else{U.sel=null;}}
+});
+el.addEventListener("pointermove",(e)=>{
+ if(!ctrl.ptrs.has(e.pointerId))return;
+ const prev=ctrl.ptrs.get(e.pointerId);ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+ if(dragObj&&rotMode&&ctrl.ptrs.size===1){setRy(dragObj.userData.dragKey,rotStartRy+(e.clientX-rotStartX)*0.7);rebuild();return;}
+ if(dragObj&&ctrl.ptrs.size===1){const gp=groundPoint(e);dragObj.position.x=gp.x+dragOff.x;dragObj.position.z=gp.z+dragOff.z;return;}
+ if(ctrl.ptrs.size===1){ctrl.theta-=(e.clientX-prev[0])*.006;ctrl.phi=Math.min(1.52,Math.max(.12,ctrl.phi-(e.clientY-prev[1])*.004));U.auto=false;syncBtns();}
+ else if(ctrl.ptrs.size===2){const p=[...ctrl.ptrs.values()];const d=Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]);if(ctrl.pinch)ctrl.r=Math.min(800,Math.max(20,ctrl.r*(ctrl.pinch/d)));ctrl.pinch=d;}
+});
+const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;
+ if(dragObj&&!rotMode){const k=dragObj.userData.dragKey,x=dragObj.position.x,z=dragObj.position.z;
+  if(k==="crane"){U.tw.craneX=+x.toFixed(1);U.tw.craneZ=+z.toFixed(1);}
+  if(k==="ev"){U.tw.evX=+x.toFixed(1);U.tw.evZ=+z.toFixed(1);}
+  if(k==="mixer"){U.tw.mixX=+x.toFixed(1);U.tw.mixZ=+z.toFixed(1);}
+  if(k==="rough"){U.tw.rufX=+x.toFixed(1);U.tw.rufZ=+z.toFixed(1);}
+  if(k==="poles"){U.poles.dx=+(x-numv(U.site.dx,0)).toFixed(1);U.poles.dz=+(z-numv(U.site.dz,0)).toFixed(1);}
+  if(k==="demo"){U.demo.dx=+(x-numv(U.site.dx,0)).toFixed(1);U.demo.dz=+(z-numv(U.site.dz,0)).toFixed(1);}
+  if(k==="under"){U.under.dx=+x.toFixed(1);U.under.dz=+z.toFixed(1);}
+  if(k==="photo"){U.photo.dx=+x.toFixed(1);U.photo.dz=+z.toFixed(1);}
+  if(k==="site"){U.site.dx=+x.toFixed(1);U.site.dz=+z.toFixed(1);rebuild();}
+  if(k.startsWith("nb:")){const n=U.nbs[+k.slice(3)];if(n){n.x=+x.toFixed(1);n.z=+z.toFixed(1);}}
+  if(k.startsWith("blk:")){const b=U.blocks[+k.slice(4)];if(b){b.dx=+(x-numv(U.site.dx,0)).toFixed(1);b.dz=+(z-numv(U.site.dz,0)).toFixed(1);}}
+  if(k.startsWith("co:")){const c=U.cobj[+k.slice(3)];if(c){c.x=+x.toFixed(1);c.z=+z.toFixed(1);}}
+  dragObj=null;renderPanel();}
+ else if(dragObj&&rotMode){dragObj=null;rotMode=false;renderPanel();}
+};
+el.addEventListener("pointerup",endPtr);el.addEventListener("pointercancel",endPtr);
+el.addEventListener("wheel",(e)=>{e.preventDefault();
+ if((e.ctrlKey||e.metaKey)&&dragObj){setRy(dragObj.userData.dragKey,getRy(dragObj.userData.dragKey)+(e.deltaY>0?5:-5));rebuild();return;}
+ ctrl.r=Math.min(800,Math.max(20,ctrl.r*(1+e.deltaY*.001)));},{passive:false});
+function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
+addEventListener("resize",resize);resize();
+(function loop(){requestAnimationFrame(loop);if(U.auto)ctrl.theta+=.0035;
+ camera.position.set(ctrl.r*Math.sin(ctrl.phi)*Math.cos(ctrl.theta),ctrl.ty+ctrl.r*Math.cos(ctrl.phi),ctrl.r*Math.sin(ctrl.phi)*Math.sin(ctrl.theta));
+ camera.lookAt(0,ctrl.ty,0);renderer.render(scene,camera);})();
+
+// ───── 地形 ─────
+function terrainH(x,z,sw,sd,h){ // h:[前左,前右,奥左,奥右] 前=+z
+ const u=Math.min(1,Math.max(0,(x+sw/2)/sw)), v=Math.min(1,Math.max(0,(z+sd/2)/sd));
+ const back=h[2]+(h[3]-h[2])*u, front=h[0]+(h[1]-h[0])*u;
+ return back+(front-back)*v;
+}
+
+// ───── モデル再構築 ─────
+function rebuild(){
+ if(model){scene.remove(model);model.traverse(o=>{o.geometry&&o.geometry.dispose();o.material&&(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose&&m.dispose());});}
+ dragMap={};
+ const g=new THREE.Group(); const L=U.line; const DET=(U.appMode==="detail");
+ scene.background=new THREE.Color(L?0xffffff:0xdce6f0);
+ scene.fog=L?null:new THREE.Fog(0xdce6f0,400,1100);
+  sun.castShadow=!L;
+ {const az=numv(U.sun.az,135)*Math.PI/180, alt=Math.max(8,numv(U.sun.alt,55))*Math.PI/180, R=180;
+  sun.position.set(R*Math.cos(alt)*Math.sin(az),R*Math.sin(alt),R*Math.cos(alt)*Math.cos(az));}
+ const mat=(c,o={})=>L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial(Object.assign({color:c},o));
+ const edge=(geo,m,col=0x16243d)=>{if(!L)return;const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo,12),new THREE.LineBasicMaterial({color:col}));e.position.copy(m.position);e.rotation.copy(m.rotation);g.add(e);};
+ const box=(parent,w,h,d,c,x,y,z,o={})=>{const geo=new THREE.BoxGeometry(w,h,d);const m=new THREE.Mesh(geo,o.mat||mat(c,o));m.position.set(x,y,z);if(o.ry)m.rotation.y=o.ry;if(o.rx)m.rotation.x=o.rx;m.castShadow=!L&&o.shadow!==false;m.receiveShadow=!L;parent.add(m);if(parent===g)edge(geo,m);return m;};
+ const cylm=(parent,r1,r2,h,c,x,y,z,o={})=>{const geo=new THREE.CylinderGeometry(r1,r2,h,o.seg||10);const m=new THREE.Mesh(geo,mat(c));m.position.set(x,y,z);if(o.rz)m.rotation.z=o.rz;if(o.rx)m.rotation.x=o.rx;m.castShadow=!L;parent.add(m);return m;};
+
+ const floorsAll=Math.min(60,Math.max(1,Math.round(posv(U.p.floors,14))));
+ const H=posv(U.p.height,42), fh=H/floorsAll;
+ const built=U.tw.mode==="build"?Math.min(floorsAll,Math.max(1,Math.round(numv(U.tw.step,1)))):floorsAll;
+ const sw=posv(U.site.w,30), sd=posv(U.site.d,18), gl=numv(U.site.gl,0), hh=U.site.h.map(v=>numv(v,0));
+ const sdx=numv(U.site.dx,0), sdz=numv(U.site.dz,0);
+
+ // 地面・道路
+ const gnd=new THREE.Mesh(new THREE.PlaneGeometry(1200,1200),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0xb9bec7}));
+ gnd.rotation.x=-Math.PI/2;gnd.position.y=-0.07;gnd.receiveShadow=!L;g.add(gnd);
+ const rw=Math.min(20,Math.max(4,numv(U.road.w,8)));
+ const roadZ=sdz+sd/2+1.6+rw/2;
+ box(g,sw+60,0.1,rw,0x8d929b,sdx,0.05,roadZ,{shadow:false});
+ if(!L){box(g,sw+60,0.12,1.6,0xe8eaee,sdx,0.07,sdz+sd/2+0.8,{shadow:false});
+  if(rw>=6)box(g,sw+60,0.02,0.25,0xf2f4f6,sdx,0.12,roadZ,{shadow:false});}
+ if(U.road.side==="left"||U.road.side==="right"){
+  const sgn=(U.road.side==="left"?-1:1);
+  box(g,rw,0.1,sd+rw+24,0x8d929b,sdx+sgn*(sw/2+1.6+rw/2),0.05,sdz+rw/2,{shadow:false});
+  if(!L)box(g,1.6,0.12,sd,0xe8eaee,sdx+sgn*(sw/2+0.8),0.07,sdz,{shadow:false});
+ }
+ // グリッド表示
+ if(U.grid.show&&!L){
+  const gh=new THREE.GridHelper(200, Math.round(200/Math.max(0.5,numv(U.grid.size,1))), 0x9aa4b4, 0xc8cfd9);
+  gh.position.set(sdx,0.02,sdz); g.add(gh);
+ }
+ // 歩行帯（道路条件から自動生成）：前面道路沿いの歩道部に緑帯
+ let walkZone=null;
+ if(!L && U.roadcond && numv(U.roadcond.walk,0)>0){
+  const ww=numv(U.roadcond.walk,2.5);
+  const wz=sdz+sd/2+1.6+rw+ww/2;  // 車道の外側に歩道
+  walkZone={x:sdx,z:wz,w:sw+60,d:ww};
+  box(g,sw+60,0.04,ww,0x6EA46E,sdx,0.09,wz,{shadow:false});
+ }
+
+ // 敷地（地形メッシュ・ドラッグ可）
+ const siteG=new THREE.Group();siteG.userData.dragKey="site";siteG.position.set(sdx,0,sdz);
+ {const seg=12,vts=[],idx=[];
+  for(let j=0;j<=seg;j++)for(let i=0;i<=seg;i++){const x=-sw/2+sw*i/seg,z=-sd/2+sd*j/seg;vts.push(x,terrainH(x,z,sw,sd,hh)+0.12,z);}
+  for(let j=0;j<seg;j++)for(let i=0;i<seg;i++){const a=j*(seg+1)+i;idx.push(a,a+seg+1,a+1,a+1,a+seg+1,a+seg+2);}
+  const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.BufferAttribute(new Float32Array(vts),3));geo.setIndex(idx);geo.computeVertexNormals();
+  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:U.tw.mode==="build"?0xb8b2a6:0xc8ccd2}));
+  sm.receiveShadow=!L;siteG.add(sm);
+  if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo,5),new THREE.LineBasicMaterial({color:0x8a94a8}));siteG.add(e);}
+ }
+ g.add(siteG);dragMap.site=siteG;
+
+ // 下敷き（図面 / 周辺写真）
+ const layer=(st,key,y)=>{ if(!st.show||!st.tex||L)return;
+  const ar=st.tex.image?st.tex.image.height/st.tex.image.width:1, w=posv(st.width,40);
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,w*ar),new THREE.MeshBasicMaterial({map:st.tex,transparent:true,opacity:numv(st.opacity,.7),depthWrite:false}));
+  m.rotation.x=-Math.PI/2;m.rotation.z=numv(st.rot,0)*Math.PI/180;
+  m.position.set(numv(st.dx,0),y,numv(st.dz,0));m.userData.dragKey=key;g.add(m);dragMap[key]=m;};
+ layer(U.photo,"photo",0.10);
+ layer(U.under,"under",0.18);
+
+ // 近隣建物
+ U.nbs.forEach((n,i)=>{
+  const m=box(g,posv(n.w,10),posv(n.h,12),posv(n.d,10),0xdadde2,numv(n.x,20),posv(n.h,12)/2,numv(n.z,20));
+  m.rotation.y=numv(n.ry,0)*Math.PI/180;
+  m.userData.dragKey="nb:"+i;dragMap["nb:"+i]=m;
+ });
+
+ // 建物ブロック
+ const isApt=U.p.use.startsWith("共同住宅"), isOff=(U.p.use==="事務所"||U.p.use==="店舗");
+ let entDone=false, frontMax=0, sumFloorArea=0, maxFloors=0;
+ if(U.tw.mode!=="demo") U.blocks.forEach((b,bi)=>{
+  const f1=Math.max(1,Math.round(posv(b.f1,1)));
+  const f2=Math.min(floorsAll,Math.max(f1,Math.round(posv(b.f2,f1))));
+  const nFfull=f2-f1+1;
+  const W=posv(b.w, Math.sqrt(posv(b.area,200)*posv(b.ratio,1.5)));
+  const D=posv(b.d, Math.sqrt(posv(b.area,200)/posv(b.ratio,1.5)));
+  sumFloorArea+=W*D*nFfull; maxFloors=Math.max(maxFloors,f2);
+  const bTo=Math.min(f2,built); if(bTo<f1)return;
+  const dx=sdx+numv(b.dx,0), dz=sdz+numv(b.dz,0), ry=numv(b.ry,0)*Math.PI/180;
+  frontMax=Math.max(frontMax,dz+Math.max(W,D)/2);
+  const nF=bTo-f1+1, bh=nF*fh, y0=gl+(f1-1)*fh;
+  // ローカル群（原点中心）→ 回転・配置。children は dx,dz を引いたローカル座標で配置
+  const bg=new THREE.Group(); bg.userData.dragKey="blk:"+bi;
+  const lbox=(w,h,d,c,lx,ly,lz,o={})=>{const geo=new THREE.BoxGeometry(w,h,d);const m=new THREE.Mesh(geo,o.mat||mat(c,o));m.position.set(lx,ly,lz);m.castShadow=!L&&o.shadow!==false;m.receiveShadow=!L;bg.add(m);if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo,12),new THREE.LineBasicMaterial({color:0x16243d}));e.position.set(lx,ly,lz);bg.add(e);}return m;};
+  lbox(W,1.2,D,0xb4b8be,0,gl-0.55,0); // 基礎スカート
+  lbox(W,bh,D,0xcfd3d9,0,y0+bh/2+0.12,0);
+  if(bTo===f2&&U.tw.mode==="plan"){lbox(W+0.5,0.9,D+0.5,0xcfd3d9,0,y0+bh+0.55,0);
+   if(f2===floorsAll)lbox(W*0.28,3,D*0.3,0xcfd3d9,W*0.22,y0+bh+2.4,-D*0.15);}
+  if(f1===1&&!entDone){lbox(Math.min(8,W*0.5),fh*0.9,0.4,0x3a587a,0,gl+fh*0.45+0.12,D/2+0.18);entDone=true;}
+  if(!L&&DET){const M=new THREE.Matrix4();
+   if(isApt){const mk=(geo,c,zz,yy,op)=>{const im=new THREE.InstancedMesh(geo,new THREE.MeshLambertMaterial({color:c,transparent:!!op,opacity:op||1}),nF);
+     for(let i=0;i<nF;i++)im.setMatrixAt(i,M.makeTranslation(0,y0+i*fh+yy,zz));im.castShadow=true;bg.add(im);};
+    mk(new THREE.BoxGeometry(W*.96,.16,1.4),0xe2e5e9,D/2+.72,fh+.05);
+    mk(new THREE.BoxGeometry(W*.96,fh*.42,.06),0xf0f2f5,D/2+1.38,fh*.55,.85);
+    mk(new THREE.BoxGeometry(W*.92,fh*.6,.08),0x3a587a,D/2+.06,fh*.55);
+    mk(new THREE.BoxGeometry(W*.9,fh*.45,.08),0x3a587a,-D/2-.06,fh*.55);
+   }else if(isOff){const im=new THREE.InstancedMesh(new THREE.BoxGeometry(W*.96,fh*.55,.08),new THREE.MeshLambertMaterial({color:0x3a587a}),nF*2);
+    for(let i=0;i<nF;i++){im.setMatrixAt(i*2,M.makeTranslation(0,y0+i*fh+fh*.55,D/2+.06));im.setMatrixAt(i*2+1,M.makeTranslation(0,y0+i*fh+fh*.55,-D/2-.06));}
+    bg.add(im);
+   }else{const nx=Math.max(3,Math.floor(W/2.4));
+    const im=new THREE.InstancedMesh(new THREE.BoxGeometry(1.4,fh*.5,.08),new THREE.MeshLambertMaterial({color:0x3a587a}),nx*nF*2);let k=0;
+    for(let i=0;i<nF;i++)for(let j=0;j<nx;j++){const x=-W/2+(j+.5)*(W/nx);
+     if(f1+i>1){im.setMatrixAt(k++,M.makeTranslation(x,y0+i*fh+fh*.55,D/2+.06));im.setMatrixAt(k++,M.makeTranslation(x,y0+i*fh+fh*.55,-D/2-.06));}}
+    im.count=k;bg.add(im);}
+  }else if(!L){ // 概算モード：軽量ファサード（前後面に1枚ずつのガラス帯）
+   const gm=new THREE.MeshLambertMaterial({color:0x3a587a,transparent:true,opacity:.5});
+   const fb=new THREE.Mesh(new THREE.BoxGeometry(W*.9,bh*.86,.1),gm);fb.position.set(0,y0+bh/2+0.12,D/2+.06);bg.add(fb);
+   const bb=new THREE.Mesh(new THREE.BoxGeometry(W*.9,bh*.86,.1),gm);bb.position.set(0,y0+bh/2+0.12,-D/2-.06);bg.add(bb);
+  }else{const pts=[];
+   for(let i=1;i<=nF;i++){const y=y0+i*fh;
+    pts.push(-W/2,y,D/2+.01,W/2,y,D/2+.01,-W/2,y,-D/2-.01,W/2,y,-D/2-.01);
+    pts.push(W/2+.01,y,-D/2,W/2+.01,y,D/2,-W/2-.01,y,-D/2,-W/2-.01,y,D/2);}
+   const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.BufferAttribute(new Float32Array(pts),3));
+   bg.add(new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:0x5a6a85})));}
+  if(U.tw.scaffold&&U.tw.mode==="build"&&!L){
+   const sg2=new THREE.BoxGeometry(W+1.8,bh+1.5,D+1.8);
+   const sm2=new THREE.Mesh(sg2,new THREE.MeshLambertMaterial({color:0xf4f6f8,transparent:true,opacity:.3,depthWrite:false}));
+   sm2.position.set(0,y0+(bh+1.5)/2+.1,0);bg.add(sm2);
+   const ee=new THREE.LineSegments(new THREE.EdgesGeometry(sg2),new THREE.LineBasicMaterial({color:0xaab2bf}));ee.position.copy(sm2.position);bg.add(ee);}
+  bg.position.set(dx,0,dz); bg.rotation.y=ry; g.add(bg); dragMap["blk:"+bi]=bg;
+ });
+ // 既存解体フェーズ：解体予定の既存建物（ダミー）
+ if(U.tw.mode==="demo"){
+  const dw=posv(U.demo.w,22), dd=posv(U.demo.d,14), dh=posv(U.demo.h,9);
+  const dg=new THREE.Group(); dg.userData.dragKey="demo";
+  const dm=L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0xb9a89a});
+  const mm=new THREE.Mesh(new THREE.BoxGeometry(dw,dh,dd),dm); mm.position.y=gl+dh/2+0.12; mm.castShadow=!L; mm.receiveShadow=!L; dg.add(mm);
+  const ee=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(dw,dh,dd)),new THREE.LineBasicMaterial({color:0x7a5c4a})); ee.position.y=gl+dh/2+0.12; dg.add(ee);
+  // 「解体予定」を示す×印（屋根）
+  if(!L){const xm=new THREE.LineBasicMaterial({color:0xB0433A});
+   const xp=[-dw/2,gl+dh+0.2,-dd/2, dw/2,gl+dh+0.2,dd/2, dw/2,gl+dh+0.2,-dd/2, -dw/2,gl+dh+0.2,dd/2];
+   const xg=new THREE.BufferGeometry();xg.setAttribute("position",new THREE.BufferAttribute(new Float32Array(xp),3));dg.add(new THREE.LineSegments(xg,xm));}
+  dg.position.set(sdx+numv(U.demo.dx,0),0,sdz+numv(U.demo.dz,0)); dg.rotation.y=numv(U.demo.ry,0)*Math.PI/180; g.add(dg); dragMap.demo=dg;
+  frontMax=Math.max(frontMax,sdz+numv(U.demo.dz,0)+dd/2);
+ }
+ U._stats={floorArea:sumFloorArea, maxFloors};
+ // 斜線制限ガイド（道路斜線・隣地斜線の簡易可視化）
+ if(U.guide.show&&!L){
+  const slope=(grad,fromZ,sign)=>{ // 境界線(z=fromZ)から勾配gradで立ち上がる半透明斜面
+   const len=120, hgt=len*grad;
+   const geo=new THREE.PlaneGeometry(sw+40,Math.sqrt(len*len+hgt*hgt));
+   const m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0xF2A33C,transparent:true,opacity:.16,side:THREE.DoubleSide,depthWrite:false}));
+   const ang=Math.atan2(hgt,len);
+   m.rotation.x=-Math.PI/2 + sign*ang;
+   m.position.set(sdx,(hgt/2),fromZ+sign*len/2*Math.cos(ang));
+   g.add(m);
+   const lpts=[-( sw+40)/2,0,fromZ, (sw+40)/2,0,fromZ];
+   const lg=new THREE.BufferGeometry();lg.setAttribute("position",new THREE.BufferAttribute(new Float32Array([sdx-(sw+40)/2,0.05,fromZ,sdx+(sw+40)/2,0.05,fromZ]),3));
+   g.add(new THREE.LineSegments(lg,new THREE.LineBasicMaterial({color:0xF2A33C})));
+  };
+  // 道路斜線：前面道路の反対側境界から（簡易に敷地前面+道路幅で代用）
+  const rw2=Math.min(20,Math.max(4,numv(U.road.w,8)));
+  slope(numv(U.guide.road,1.25), sdz+sd/2+1.6+rw2, +1);   // 前面（道路側）
+  // 隣地斜線：背面・側面の隣地境界から（立ち上がり20m+勾配）
+  slope(numv(U.guide.nbor,1.25), sdz-sd/2, -1);           // 背面（隣地側）
+ }
+
+ const builtH=gl+built*fh;
+
+ // 仮囲い
+ if(U.tw.fence&&U.tw.mode==="build"){
+  const fG=new THREE.Group();
+  const mk=(w,x,z,ry)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,3,.1),mat(0xf0f1f3));m.position.set(x,1.62,z);m.rotation.y=ry||0;m.castShadow=!L;fG.add(m);};
+  mk(sw,0,-sd/2,0);mk(sd,-sw/2,0,Math.PI/2);mk(sd,sw/2,0,Math.PI/2);
+  mk(sw/2-4,-sw/4-2,sd/2,0);mk(sw/2-4,sw/4+2,sd/2,0);
+  fG.position.set(sdx,0,sdz);g.add(fG);}
+
+ // タワークレーン（ドラッグ可）
+ if(U.tw.crane&&U.tw.mode==="build"){
+  const mh=builtH+16, jib=posv(U.tw.craneJib,28);
+  const cg=new THREE.Group();cg.userData.dragKey="crane";
+  const cm=mat(0xe8731a);
+  const a=(geo,x,y,z)=>{const m=new THREE.Mesh(geo,cm);m.position.set(x,y,z);m.castShadow=!L;cg.add(m);if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:0x16243d}));e.position.set(x,y,z);cg.add(e);}};
+  a(new THREE.BoxGeometry(4.5,.9,4.5),0,.45,0);a(new THREE.BoxGeometry(1.5,mh,1.5),0,mh/2,0);
+  a(new THREE.BoxGeometry(2.1,2,2.1),0,mh+1,0);a(new THREE.BoxGeometry(jib,.8,1),jib/2-1.2,mh+2.2,0);
+  a(new THREE.BoxGeometry(7,.7,1),-4.2,mh+2.2,0);a(new THREE.BoxGeometry(1.4,2,2.2),-7,mh+1.4,0);
+  a(new THREE.BoxGeometry(.5,4.5,.5),0,mh+4.4,0);
+  const drop=Math.max(4,mh-builtH-4);
+  a(new THREE.BoxGeometry(.07,drop,.07),jib*.72,mh+2-drop/2,0);a(new THREE.BoxGeometry(.9,.9,.9),jib*.72,mh+2-drop,0);
+  if(U.tw.radius&&!L){const ring=new THREE.Mesh(new THREE.RingGeometry(jib-.4,jib,64),new THREE.MeshBasicMaterial({color:0xe8731a,transparent:true,opacity:.45,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.1;cg.add(ring);}
+  cg.position.set(numv(U.tw.craneX,16),.1,numv(U.tw.craneZ,0));
+  cg.rotation.y=numv(U.tw.craneRot,0)*Math.PI/180;
+  g.add(cg);dragMap.crane=cg;}
+
+ // ロングスパンEV（ドラッグ可）
+ if(U.tw.ev&&U.tw.mode==="build"){
+  const eg=new THREE.Group();eg.userData.dragKey="ev";
+  const eh=builtH-gl+3;
+  box(eg,.5,eh,.5,0xd0d3d8,-1.7,eh/2,0);box(eg,.5,eh,.5,0xd0d3d8,1.7,eh/2,0);
+  box(eg,3.8,.4,1.9,0xd0d3d8,0,eh+.2,.1);box(eg,3.4,2.4,1.6,0xeef0f3,0,Math.max(2,(builtH-gl)*.45),.1);
+  eg.position.set(numv(U.tw.evX,-6),gl,U.tw.evZ==null?frontMax+1.1:numv(U.tw.evZ,frontMax+1.1));eg.rotation.y=numv(U.tw.evRy,0)*Math.PI/180;
+  g.add(eg);dragMap.ev=eg;}
+
+ // 電柱・架線
+ if(U.tw.poles&&!L&&numv(U.poles.n,3)>0){
+  const pg=new THREE.Group();pg.userData.dragKey="poles";
+  const pz=(U.poles.far? sd/2+1.6+rw+0.8 : sd/2+0.8);
+  const n=Math.min(8,Math.max(1,Math.round(numv(U.poles.n,3)))), pitch=Math.max(6,numv(U.poles.pitch,18));
+  const tops=[];
+  for(let i=0;i<n;i++){const x=(i-(n-1)/2)*pitch;
+   cylm(pg,.17,.22,11,0x8a8378,x,5.5,pz);
+   box(pg,2,.15,.15,0x8a8378,x,10.2,pz);
+   tops.push([x,10.4,pz]);}
+  if(n>1){const pts=[];for(let i=0;i<tops.length-1;i++)pts.push(...tops[i],...tops[i+1]);
+   const lg=new THREE.BufferGeometry();lg.setAttribute("position",new THREE.BufferAttribute(new Float32Array(pts),3));
+   pg.add(new THREE.LineSegments(lg,new THREE.LineBasicMaterial({color:0x4a4f57})));}
+  pg.position.set(sdx+numv(U.poles.dx,0),0,sdz+numv(U.poles.dz,0));
+  g.add(pg);dragMap.poles=pg;}
+
+ // 生コン車（ドラッグ可）
+ if(U.tw.mixer&&U.tw.mode==="build"&&!L){
+  const mg=new THREE.Group();mg.userData.dragKey="mixer";
+  box(mg,2.4,1,7,0xe9ebee,0,1.3,0);box(mg,2.2,1.7,2.2,0x5a7fae,0,1.9,-3.1);
+  cylm(mg,1.25,.8,4.4,0xf2f4f6,0,2.6,.8,{rx:Math.PI/2-.2,seg:14});
+  [-2.3,0,2.3].forEach(o=>{cylm(mg,.55,.55,.4,0x2c2f33,-1.05,.55,o,{rz:Math.PI/2});cylm(mg,.55,.55,.4,0x2c2f33,1.05,.55,o,{rz:Math.PI/2});});
+  mg.position.set(numv(U.tw.mixX,-12),0,U.tw.mixZ==null?roadZ:numv(U.tw.mixZ,0));mg.rotation.y=numv(U.tw.mixRy,0)*Math.PI/180;
+  g.add(mg);dragMap.mixer=mg;}
+
+ // ラフタークレーン（ドラッグ可）
+ if(U.tw.rough&&U.tw.mode==="build"&&!L){
+  const rg=new THREE.Group();rg.userData.dragKey="rough";
+  box(rg,2.7,1.3,9,0xe8b820,0,1.1,0);box(rg,2.4,1.8,2.4,0xe8b820,0,2.4,2.8);
+  [[1.9,3.6],[1.9,-3.6],[-1.9,3.6],[-1.9,-3.6]].forEach(([ox,oz])=>box(rg,.4,1,.4,0x7d7f84,ox,.5,oz));
+  const bl=builtH+12;const boom=new THREE.Mesh(new THREE.BoxGeometry(.8,bl,.8),mat(0xe8b820));
+  boom.geometry.translate(0,bl/2,0);boom.position.set(0,2.2,-1);boom.rotation.x=.55;boom.castShadow=!L;rg.add(boom);
+  rg.position.set(numv(U.tw.rufX,14),0,numv(U.tw.rufZ,-2));rg.rotation.y=numv(U.tw.rufRy,0)*Math.PI/180;g.add(rg);dragMap.rough=rg;}
+
+ // 添景（完成時）
+ if(!L&&U.tw.mode==="plan"){
+  const trM=new THREE.MeshLambertMaterial({color:0x7a6048}),lfM=new THREE.MeshLambertMaterial({color:0x6e8f6a});
+  [[-sw/2+4,sd/2-3],[sw/2-4,sd/2-3],[-sw/2+4,-sd/2+4]].forEach(([x,z])=>{
+   const y=terrainH(x,z,sw,sd,hh);
+   const tr=new THREE.Mesh(new THREE.CylinderGeometry(.25,.35,3),trM);tr.position.set(sdx+x,y+1.5,sdz+z);tr.castShadow=true;g.add(tr);
+   const lf=new THREE.Mesh(new THREE.SphereGeometry(2.4,10,8),lfM);lf.position.set(sdx+x,y+4.6,sdz+z);lf.castShadow=true;g.add(lf);});
+  const hum=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,1.7,8),new THREE.MeshLambertMaterial({color:0x35435e}));
+  hum.position.set(6,.85,sdz+sd/2+5.5);hum.castShadow=true;g.add(hum);}
+
+ // ───── 施工オブジェクト（constructionObjects）─────
+ function aabb(cx,cz,w,d,ry){ // 回転考慮の概算外接（軸並行近似）
+  const a=Math.abs(Math.cos(ry)), b=Math.abs(Math.sin(ry));
+  const ew=(w*a+d*b)/2, ed=(w*b+d*a)/2;
+  return {x0:cx-ew,x1:cx+ew,z0:cz-ed,z1:cz+ed};
+ }
+ function overlap(A,B){return A.x0<B.x1&&A.x1>B.x0&&A.z0<B.z1&&A.z1>B.z0;}
+ U.cobj.forEach((c,i)=>{
+  const t=COBJ_TYPES[c.type]||COBJ_TYPES.dump;
+  const w=posv(c.w,t.w), d=posv(c.d,t.d), hgt=posv(c.h,t.h);
+  const ry=numv(c.ry,0)*Math.PI/180;
+  // 歩行帯との干渉判定 → 警告色
+  let warn=false;
+  if(walkZone){const cb=aabb(numv(c.x,0),numv(c.z,0),w,d,ry);
+   const wb={x0:walkZone.x-walkZone.w/2,x1:walkZone.x+walkZone.w/2,z0:walkZone.z-walkZone.d/2,z1:walkZone.z+walkZone.d/2};
+   if(c.type!=="walkzone"&&overlap(cb,wb))warn=true;}
+  c._warn=warn;
+  const cg=new THREE.Group(); cg.userData.dragKey="co:"+i;
+  const col=warn?0xD64545:t.color;
+  const baseMat=L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:col});
+  if(c.type==="guard"){ // 警備員：人＋三角コーン色
+   const body=new THREE.Mesh(new THREE.CylinderGeometry(.22,.26,1.5,8),baseMat);body.position.y=.75;body.castShadow=!L;cg.add(body);
+   const head=new THREE.Mesh(new THREE.SphereGeometry(.22,8,8),baseMat);head.position.y=1.6;cg.add(head);
+   const vest=new THREE.Mesh(new THREE.CylinderGeometry(.27,.27,.5,8),new THREE.MeshLambertMaterial({color:warn?0xD64545:0xF2C14E}));vest.position.y=1.0;cg.add(vest);
+  }else if(c.type==="walkzone"){ // 歩行帯：薄い緑帯＋点線縁
+   const z=new THREE.Mesh(new THREE.BoxGeometry(w,0.05,d),new THREE.MeshLambertMaterial({color:warn?0xD64545:0x6EA46E,transparent:true,opacity:.6}));z.position.y=.06;cg.add(z);
+   const ee=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w,0.05,d)),new THREE.LineBasicMaterial({color:0x3f7a3f}));ee.position.y=.06;cg.add(ee);
+  }else if(c.type==="bg"){ // BG機械：本体＋リーダー（鉛直マスト）
+   const base=new THREE.Mesh(new THREE.BoxGeometry(w,1.4,d),baseMat);base.position.y=.7;base.castShadow=!L;cg.add(base);
+   const mast=new THREE.Mesh(new THREE.BoxGeometry(.6,hgt,.6),baseMat);mast.position.set(0,hgt/2,d*0.3);mast.castShadow=!L;cg.add(mast);
+   if(L){const ee=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(.6,hgt,.6)),new THREE.LineBasicMaterial({color:0x16243d}));ee.position.copy(mast.position);cg.add(ee);}
+  }else if(c.type==="pump"){ // ポンプ車：車体＋ブーム
+   const body=new THREE.Mesh(new THREE.BoxGeometry(w,2.2,d),baseMat);body.position.y=1.4;body.castShadow=!L;cg.add(body);
+   const boom=new THREE.Mesh(new THREE.BoxGeometry(.4,.4,d*1.4),new THREE.MeshLambertMaterial({color:warn?0xD64545:0x33425a}));boom.position.set(0,3.2,d*.2);boom.rotation.x=-.5;cg.add(boom);
+  }else{ // ダンプ・事務所など箱形
+   const body=new THREE.Mesh(new THREE.BoxGeometry(w,hgt,d),baseMat);body.position.y=hgt/2;body.castShadow=!L;cg.add(body);
+   if(c.type==="dump"){const cab=new THREE.Mesh(new THREE.BoxGeometry(w,1.6,d*.25),baseMat);cab.position.set(0,1.6,-d*.34);cg.add(cab);}
+  }
+  cg.position.set(numv(c.x,0),0,numv(c.z,0)); cg.rotation.y=ry; g.add(cg); dragMap["co:"+i]=cg;
+ });
+
+ // ───── DXF オーバーレイ（1/1000等のスケールで配置）─────
+ if(U.dxf.ents&&!L){
+  const sc=numv(U.dxf.scale,0.001);
+  const lg=new THREE.Group(); lg.position.set(sdx+numv(U.dxf.dx,0),0.2,sdz+numv(U.dxf.dz,0)); lg.userData.dragKey="dxf";
+  const colFor=(lay)=>{const li=U.dxf.layers[lay]; return (li&&li.color!=null)?li.color:0x3a4a63;};
+  (U.dxf.ents.entities||[]).forEach(ent=>{
+   const lay=ent.layer||"0"; const li=U.dxf.layers[lay];
+   if(li&&li.show===false)return;
+   const m=new THREE.LineBasicMaterial({color:colFor(lay)});
+   const toXZ=(p)=>[ (p.x||0)*sc, 0, -(p.y||0)*sc ];  // DXFのY→Three.jsの-Z
+   if((ent.type==="LINE"||ent.type==="LWPOLYLINE"||ent.type==="POLYLINE")&&ent.vertices&&ent.vertices.length){
+    const pts=[]; ent.vertices.forEach(v=>pts.push(...toXZ(v)));
+    if(ent.shape&&ent.vertices.length>2)pts.push(...toXZ(ent.vertices[0]));
+    const geo=new THREE.BufferGeometry(); geo.setAttribute("position",new THREE.BufferAttribute(new Float32Array(pts),3));
+    lg.add(new THREE.Line(geo,m));
+   }else if(ent.type==="CIRCLE"&&ent.center){
+    const seg=40,pts=[]; for(let a=0;a<=seg;a++){const th=a/seg*Math.PI*2;pts.push((ent.center.x+Math.cos(th)*ent.radius)*sc,0,-(ent.center.y+Math.sin(th)*ent.radius)*sc);}
+    const geo=new THREE.BufferGeometry(); geo.setAttribute("position",new THREE.BufferAttribute(new Float32Array(pts),3));
+    lg.add(new THREE.Line(geo,m));
+   }else if(ent.type==="ARC"&&ent.center){
+    const seg=24,pts=[],a0=ent.startAngle||0,a1=ent.endAngle||Math.PI*2; for(let a=0;a<=seg;a++){const th=a0+(a1-a0)*a/seg;pts.push((ent.center.x+Math.cos(th)*ent.radius)*sc,0,-(ent.center.y+Math.sin(th)*ent.radius)*sc);}
+    const geo=new THREE.BufferGeometry(); geo.setAttribute("position",new THREE.BufferAttribute(new Float32Array(pts),3));
+    lg.add(new THREE.Line(geo,m));
+   }
+  });
+  g.add(lg); dragMap.dxf=lg;
+ }
+
+ // ───── 寸法線ツール ─────
+ if(U.dim.a&&!L){
+  const A=U.dim.a, B=U.dim.b;
+  const dot=(p,c)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.4,10,10),new THREE.MeshBasicMaterial({color:c}));m.position.set(p.x,0.4,p.z);g.add(m);};
+  dot(A,0xF2A33C);
+  if(B){dot(B,0xF2A33C);
+   const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.BufferAttribute(new Float32Array([A.x,0.4,A.z,B.x,0.4,B.z]),3));
+   g.add(new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xF2A33C})));
+   const dist=Math.hypot(B.x-A.x,B.z-A.z);
+   U._dimDist=dist;
+  } else U._dimDist=null;
+ } else U._dimDist=null;
+
+ scene.add(g);model=g;
+ ctrl.ty=Math.max(builtH,H*.6)*.45;
+ renderTitle();
+}
+
+// ───── 案件データの保存・読込 (JSON) ─────
+function saveProjectJSON(){
+ const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="sel")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
+ const blob=new Blob([JSON.stringify(saveState,null,2)],{type:"application/json"});
+ const a=document.createElement("a");
+ const dateStr=new Date().toISOString().slice(0,10).replace(/-/g,"");
+ a.href=URL.createObjectURL(blob);
+ a.download=`${U.p.name||"volume"}_${dateStr}.json`;
+ a.click();
+}
+function loadProjectJSON(file){
+ if(!file)return;
+ const reader=new FileReader();
+ reader.onload=(e)=>{
+  try{
+   const parsed=JSON.parse(e.target.result);
+   const cuTex=U.under.tex,cuRaw=U.under.raw,cuPages=U.under.pages,cuPage=U.under.page,cpTex=U.photo.tex;
+   Object.assign(U,parsed);
+   U.under.tex=cuTex;U.under.raw=cuRaw;U.under.pages=cuPages;U.under.page=cuPage;U.photo.tex=cpTex;
+   if(!U.road)U.road={w:8,side:"none"};
+   if(!U.poles)U.poles={n:3,pitch:18,far:true,dx:0,dz:0,ry:0};
+   if(!U.guide)U.guide={show:false,road:1.25,nbor:1.25};
+   if(!U.sun)U.sun={az:135,alt:55};
+   if(!U.appMode)U.appMode="quick";
+   if(!U.grid)U.grid={show:false,size:1};
+   if(!U.roadcond)U.roadcond={lane:6,walk:2.5,side:"front"};
+   if(!U.cobj)U.cobj=[];
+   if(!U.dim)U.dim={on:false,a:null,b:null};
+   if(!U.dxf)U.dxf={ents:null,layers:{},scale:0.001,dx:0,dz:0,raw:null};
+   if(!U.cost)U.cost={unit:32,show:true};
+   if(!U.demo)U.demo={w:22,d:14,h:9,dx:0,dz:0,ry:0};
+   (U.blocks||[]).forEach(b=>{if(b.w==null){const A=posv(b.area,200),r=posv(b.ratio,1.5);b.w=+Math.sqrt(A*r).toFixed(1);b.d=+Math.sqrt(A/r).toFixed(1);}if(b.ry==null)b.ry=0;});
+   (U.nbs||[]).forEach(n=>{if(n.ry==null)n.ry=0;});
+   rebuild();renderPanel();U.auto=false;renderBar();
+   alert("案件データを読み込みました。");
+  }catch(err){alert("JSON読み込み失敗。ファイル形式を確認してください。");}
+ };
+ reader.readAsText(file);
+}
+window.saveProjectJSON=saveProjectJSON;window.loadProjectJSON=loadProjectJSON;
+
+// ───── DXF 読込（dxf-parser・ビルド工程なし）─────
+function loadDXF(file){
+ if(!file)return;
+ if(typeof DxfParser==="undefined"){alert("DXFパーサが読み込まれていません（オフライン版では同梱、開発版ではCDN）。");return;}
+ const rd=new FileReader();
+ rd.onload=(e)=>{
+  try{
+   const parser=new DxfParser();
+   const dxf=parser.parseSync(e.target.result);
+   U.dxf.ents=dxf;
+   // レイヤー一覧を抽出（テーブル優先、無ければエンティティから）
+   const layers={};
+   if(dxf.tables&&dxf.tables.layer&&dxf.tables.layer.layers){
+    Object.keys(dxf.tables.layer.layers).forEach(k=>{const l=dxf.tables.layer.layers[k];layers[k]={show:true,color:(l.color!=null?l.color:0x3a4a63)};});
+   }
+   (dxf.entities||[]).forEach(en=>{const k=en.layer||"0";if(!layers[k])layers[k]={show:true,color:0x3a4a63};});
+   U.dxf.layers=layers;
+   rebuild();renderPanel();
+   alert("DXFを読み込みました（"+Object.keys(layers).length+"レイヤー / "+(dxf.entities||[]).length+"要素）。スケールと位置は『下敷き』調整と同様に合わせてください。");
+  }catch(err){alert("DXF解析に失敗しました: "+err.message);}
+ };
+ rd.readAsText(file);
+}
+window.loadDXF=loadDXF;
+window.toggleDxfLayer=(k,v)=>{if(U.dxf.layers[k]){U.dxf.layers[k].show=v;rebuild();}};
+window.clearDXF=()=>{U.dxf.ents=null;U.dxf.layers={};rebuild();renderPanel();};
+
+// ───── 設計概要の自動読取（β）─────
+async function parsePdfSummary(){
+ if(!U.under.raw){alert("先に「下敷き」タブでPDFを読み込んでください。");return;}
+ const pdf=await pdfjsLib.getDocument({data:U.under.raw.slice(0)}).promise;
+ let txt="";
+ for(let p=1;p<=pdf.numPages;p++){const pg=await pdf.getPage(p);const tc=await pg.getTextContent();txt+=tc.items.map(i=>i.str).join(" ")+"\n";}
+ const z=txt.replace(/[０-９．]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/，|,/g,"");
+ if(z.replace(/\s/g,"").length<30){alert("このPDFからテキストを取得できませんでした（スキャン画像のPDFは読取不可）。数値は手入力してください。");return;}
+ const num1=(re)=>{const m=z.match(re);return m?parseFloat(m[1]):null;};
+ const found={};
+ found["延床面積"]=num1(/延べ?\s*床?\s*面積[^0-9]{0,15}([0-9]+(?:\.[0-9]+)?)/);
+ found["建築面積"]=num1(/建築\s*面積[^0-9]{0,15}([0-9]+(?:\.[0-9]+)?)/);
+ found["敷地面積"]=num1(/敷地\s*面積[^0-9]{0,15}([0-9]+(?:\.[0-9]+)?)/);
+ found["地上階数"]=num1(/地上\s*([0-9]+)\s*階/)||num1(/([0-9]+)\s*階\s*建/);
+ found["高さm"]=num1(/(?:最高|建物)\s*(?:の)?\s*高さ[^0-9]{0,12}([0-9]+(?:\.[0-9]+)?)/)||num1(/高さ[^0-9]{0,12}([0-9]+(?:\.[0-9]+)?)/);
+ found["戸数"]=num1(/([0-9]+)\s*戸/);
+ found["構造"]=/SRC|鉄骨鉄筋/.test(z)?"SRC":(/RC|鉄筋コンクリート/.test(z)?"RC":(/鉄骨造|S造/.test(z)?"S":null));
+ const lines=Object.entries(found).filter(([k,v])=>v!=null).map(([k,v])=>"・"+k+"： "+v);
+ if(!lines.length){alert("設計概要らしき数値を見つけられませんでした（β）。手入力してください。");return;}
+ if(!confirm("PDFから読み取りました（β版・必ず原本と照合してください）\n\n"+lines.join("\n")+"\n\nこの値を諸元へ反映しますか？"))return;
+ if(found["延床面積"])U.p.tArea=found["延床面積"];
+ if(found["地上階数"])U.p.floors=found["地上階数"];
+ if(found["高さm"]&&found["高さm"]>3&&found["高さm"]<250)U.p.height=found["高さm"];
+ if(found["構造"])U.p.struct=found["構造"];
+ if(found["建築面積"]){const b=U.blocks[0];const r=posv(b.w,12)/Math.max(1,posv(b.d,10));b.w=+Math.sqrt(found["建築面積"]*r).toFixed(1);b.d=+Math.sqrt(found["建築面積"]/r).toFixed(1);}
+ if(found["敷地面積"]){const r=posv(U.site.w,30)/Math.max(1,posv(U.site.d,18));U.site.w=+Math.sqrt(found["敷地面積"]*r).toFixed(1);U.site.d=+Math.sqrt(found["敷地面積"]/r).toFixed(1);}
+ rebuild();renderPanel();
+}
+window.parsePdfSummary=parsePdfSummary;
+
+// ───── PDF / 画像 読込 ─────
+async function loadUnderFile(file){
+ if(!file)return;
+ if(file.type==="application/pdf"){
+  const buf=await file.arrayBuffer();
+  U.under.raw=buf;
+  const pdf=await pdfjsLib.getDocument({data:buf.slice(0)}).promise;
+  U.under.pages=pdf.numPages;U.under.page=Math.min(U.under.page,pdf.numPages);
+  await renderPdfPage();
+ }else{
+  const url=URL.createObjectURL(file);
+  new THREE.TextureLoader().load(url,t=>{if(U.under.tex)U.under.tex.dispose();U.under.tex=t;U.under.raw=null;U.under.pages=1;rebuild();renderPanel();});
+ }
+}
+async function renderPdfPage(){
+ if(!U.under.raw)return;
+ const pdf=await pdfjsLib.getDocument({data:U.under.raw.slice(0)}).promise;
+ const page=await pdf.getPage(Math.min(Math.max(1,Math.round(U.under.page)),pdf.numPages));
+ const vp=page.getViewport({scale:1});
+ const scale=1800/vp.width;
+ const v2=page.getViewport({scale});
+ const cv=document.createElement("canvas");cv.width=v2.width;cv.height=v2.height;
+ await page.render({canvasContext:cv.getContext("2d"),viewport:v2}).promise;
+ if(U.under.tex)U.under.tex.dispose();
+ const tex=new THREE.CanvasTexture(cv);tex.anisotropy=4;
+ U.under.tex=tex;rebuild();renderPanel();
+}
+function loadPhotoFile(file){
+ if(!file)return;
+ const url=URL.createObjectURL(file);
+ new THREE.TextureLoader().load(url,t=>{if(U.photo.tex)U.photo.tex.dispose();U.photo.tex=t;rebuild();renderPanel();});
+}
+
+// ───── UI ─────
+const F=(l,v,fn,t="number",step)=>`<label class="f"><span>${l}</span><input type="${t}" ${step?`step="${step}"`:""} value="${v}" oninput="(${fn})(this.value)"></label>`;
+const SL=(l,v,fn,mn,mx,st=1)=>`<label class="f"><span>${l}：<b style="font-family:ui-monospace">${v}</b></span><input type="range" min="${mn}" max="${mx}" step="${st}" value="${v}" oninput="(${fn})(parseFloat(this.value));this.previousElementSibling.querySelector('b').textContent=this.value"></label>`;
+const CK=(l,v,fn)=>`<label class="chk"><input type="checkbox" ${v?"checked":""} onchange="(${fn})(this.checked)">${l}</label>`;
+window.S=(path,v,re=true)=>{const ks=path.split(".");let o=U;while(ks.length>1)o=o[ks.shift()];o[ks[0]]=v;if(re)rebuild();};
+window.SB=(id,k,v)=>{const b=U.blocks.find(x=>x.id===id);if(b){b[k]=v;rebuild();}};
+window.SN=(i,k,v)=>{if(U.nbs[i]){U.nbs[i][k]=v;rebuild();}};
+window.SH=(i,v)=>{U.site.h[i]=v;rebuild();};
+window.delB=(id)=>{if(U.blocks.length>1){U.blocks=U.blocks.filter(b=>b.id!==id);rebuild();renderPanel();}};
+window.addB=()=>{U.blocks.push({id:Date.now(),label:"ブロック",f1:1,f2:2,w:15,d:10,dx:0,dz:8});rebuild();renderPanel();};
+window.delN=(i)=>{U.nbs.splice(i,1);rebuild();renderPanel();};
+window.addN=()=>{U.nbs.push({x:25,z:15,w:10,d:10,h:12,ry:0});rebuild();renderPanel();};
+window.setMode=(m)=>{U.tw.mode=m;rebuild();renderPanel();};
+window.addCO=(type)=>{const t=COBJ_TYPES[type]||COBJ_TYPES.dump;const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);U.cobj.push({type,x:numv(U.site.dx,0),z:sdz2+sd2/2+6,w:t.w,d:t.d,h:t.h,ry:0});rebuild();renderPanel();};
+window.delCO=(i)=>{U.cobj.splice(i,1);rebuild();renderPanel();};
+window.setPage=async(v)=>{U.under.page=v;await renderPdfPage();};
+
+function renderPanel(){
+ const tabs=["諸元","形状","敷地・地形","下敷き","近隣","仮設","施工/CAD"];
+ $("#tabs").innerHTML=tabs.map(t=>`<div class="${U.tab===t?"on":""}" onclick="U.tab='${t}';renderPanel()">${t}</div>`).join("");
+ let h="";
+ if(U.tab==="諸元"){
+  h=`<label class="f"><span>物件名</span><input type="text" value="${U.p.name.replace(/"/g,"&quot;")}" oninput="S('p.name',this.value,false);renderTitle()"></label>
+  <label class="f"><span>用途（ファサード連動）</span><select onchange="S('p.use',this.value)">${USES.map(o=>`<option ${U.p.use===o?"selected":""}>${o}</option>`).join("")}</select></label>
+  <div class="grid2">
+   <label class="f"><span>地上階数</span><input type="number" value="${U.p.floors}" oninput="S('p.floors',this.value)"></label>
+   <label class="f"><span>建物高さ m</span><input type="number" value="${U.p.height}" oninput="S('p.height',this.value)"></label>
+   <label class="f"><span>延床面積 m²</span><input type="number" value="${U.p.tArea}" oninput="S('p.tArea',this.value,false);renderTitle()"></label>
+   <label class="f"><span>構造</span><select onchange="S('p.struct',this.value,false);renderTitle()">${["RC","SRC","S"].map(o=>`<option ${U.p.struct===o?"selected":""}>${o}</option>`).join("")}</select></label>
+  </div>
+  <div class="hint">形は「形状」、敷地の大きさ・高低差は「敷地・地形」タブで。</div>
+  <div style="border-top:1px solid var(--line);margin:8px 0 4px"></div>
+  ${SL("概算単価（万円/㎡）",U.cost.unit,"(v)=>{S('cost.unit',v,false);renderTitle();}",15,80,1)}
+  <div class="hint">概算モードのとき、延床×単価で右下に概算工事費を表示します（RC共同住宅は30〜40万/㎡が一般的な目安）。</div>`;
+ }
+ if(U.tab==="形状"){
+  h=U.blocks.map(b=>`<div class="card">
+   <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+    <input type="text" value="${b.label}" style="width:110px;font-weight:700;padding:4px 7px" oninput="SB(${b.id},'label',this.value)">
+    ${U.blocks.length>1?`<button class="del" onclick="delB(${b.id})">削除</button>`:""}
+   </div>
+   <div class="grid2">
+    <label class="f"><span>開始階</span><input type="number" value="${b.f1}" oninput="SB(${b.id},'f1',this.value)"></label>
+    <label class="f"><span>終了階</span><input type="number" value="${b.f2}" oninput="SB(${b.id},'f2',this.value)"></label>
+    <label class="f"><span>間口 m</span><input type="number" step="0.1" value="${b.w}" oninput="SB(${b.id},'w',this.value)"></label>
+    <label class="f"><span>奥行 m</span><input type="number" step="0.1" value="${b.d}" oninput="SB(${b.id},'d',this.value)"></label>
+   </div>
+   <div class="hint" style="margin:0 0 4px">床面積 ≒ <b>${(posv(b.w,10)*posv(b.d,10)).toFixed(1)} m²</b>（間口×奥行）</div>
+   ${SL("位置 左右",b.dx,`(v)=>SB(${b.id},'dx',v)`,-30,30,0.5)}
+   ${SL("位置 前後",b.dz,`(v)=>SB(${b.id},'dz',v)`,-30,30,0.5)}
+  </div>`).join("")+`<button class="addbtn" onclick="addB()">＋ ブロックを追加（低層部など）</button><div class="hint">建物ブロックは画面上でドラッグ＝移動／<b>Ctrl＋ドラッグ＝平面の回転</b>。</div>`;
+ }
+ if(U.tab==="敷地・地形"){
+  h=`<div class="grid2">
+   <label class="f"><span>敷地 間口 m</span><input type="number" value="${U.site.w}" oninput="S('site.w',this.value)"></label>
+   <label class="f"><span>敷地 奥行 m</span><input type="number" value="${U.site.d}" oninput="S('site.d',this.value)"></label>
+  </div>
+  ${SL("敷地位置 左右",U.site.dx,"(v)=>S('site.dx',v)",-40,40,0.5)}
+  ${SL("敷地位置 前後",U.site.dz,"(v)=>S('site.dz',v)",-40,40,0.5)}
+  ${SL("建物GL（設計地盤）m",U.site.gl,"(v)=>S('site.gl',v)",-3,4,0.1)}
+  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:6px 0 2px">敷地の高低差（四隅の地盤高 m）</div>
+  ${SL("前面・左",U.site.h[0],"(v)=>SH(0,v)",-4,4,0.1)}
+  ${SL("前面・右",U.site.h[1],"(v)=>SH(1,v)",-4,4,0.1)}
+  ${SL("奥・左",U.site.h[2],"(v)=>SH(2,v)",-4,4,0.1)}
+  ${SL("奥・右",U.site.h[3],"(v)=>SH(3,v)",-4,4,0.1)}
+  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:8px 0 2px">道路・電柱</div>
+  ${SL("前面道路 幅員 m",U.road.w,"(v)=>S('road.w',v)",4,20,0.5)}
+  <label class="f"><span>側道</span><select onchange="S('road.side',this.value)"><option value="none" ${U.road.side==="none"?"selected":""}>なし</option><option value="left" ${U.road.side==="left"?"selected":""}>左側</option><option value="right" ${U.road.side==="right"?"selected":""}>右側</option></select></label>
+  ${SL("電柱 本数",U.poles.n,"(v)=>S('poles.n',v)",0,8,1)}
+  ${SL("電柱 間隔 m",U.poles.pitch,"(v)=>S('poles.pitch',v)",8,40,1)}
+  ${CK("電柱を道路の向こう側に",U.poles.far,"(v)=>S('poles.far',v)")}
+  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:8px 0 2px">斜線制限ガイド</div>
+  ${CK("道路斜線・隣地斜線ガイドを表示",U.guide.show,"(v)=>S('guide.show',v)")}
+  ${U.guide.show?`${SL("道路斜線 勾配",U.guide.road,"(v)=>S('guide.road',v)",1,2,0.05)}${SL("隣地斜線 勾配",U.guide.nbor,"(v)=>S('guide.nbor',v)",1,2.5,0.05)}<div class="hint">橙の半透明面が斜線制限の目安です。建物がこの面を突き抜けていないか視覚確認できます（簡易表示・正式判定は設計でご確認ください）。住居系は1.25、商業系は1.5が一般的な目安です。</div>`:""}
+  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:8px 0 2px">日当たり・日影検討</div>
+  ${SL("太陽の方位 °（0=北 90=東 180=南）",U.sun.az,"(v)=>S('sun.az',v)",0,360,5)}
+  ${SL("太陽高度 °",U.sun.alt,"(v)=>S('sun.alt',v)",8,85,1)}
+  <div class="hint">影の落ち方で近隣への日影影響をざっくり確認できます。電柱は画面上でドラッグ移動も可。敷地もドラッグ移動できます（道路は固定）。傾斜地は四隅の高さ、据え付けはGLで調整。</div>`;
+ }
+ if(U.tab==="下敷き"){
+  h=`<div class="hint" style="margin:0 0 8px">配置図・設計概要図の<b>PDFまたは画像</b>を敷地に下敷き表示。視点「真上(配置)」で縮尺と位置を合わせ、ブロックを重ねます。</div>
+  <input type="file" accept="application/pdf,image/*" style="font-size:11px;width:100%;margin-bottom:8px" onchange="loadUnderFile(this.files[0])">
+  ${U.under.raw?`<button class="addbtn" style="margin-bottom:8px" onclick="parsePdfSummary()">📄 設計概要を自動読取（β）→ 諸元へ反映</button>`:""}
+  ${U.under.pages>1?`<label class="f"><span>PDFページ（全${U.under.pages}p）</span><input type="number" min="1" max="${U.under.pages}" value="${U.under.page}" oninput="setPage(this.value)"></label>`:""}
+  ${CK("下敷きを表示",U.under.show,"(v)=>S('under.show',v)")}
+  ${SL("図面の幅 = 実寸 m",U.under.width,"(v)=>S('under.width',v)",5,200,1)}
+  ${SL("回転 °",U.under.rot,"(v)=>S('under.rot',v)",-180,180,1)}
+  ${SL("透過度",U.under.opacity,"(v)=>S('under.opacity',v)",0.1,1,0.05)}
+  <div class="hint">図面はドラッグで位置合わせできます。PDFは1ページ目から表示（ページ指定可）。</div>`;
+ }
+ if(U.tab==="近隣"){
+  h=`<div class="hint" style="margin:0 0 8px">該当住所の<b>Googleマップ航空写真のスクリーンショット</b>を読み込み、広域の下敷きにします（社内検討用・出典明記）。距離ツールで測った幅を「写真の幅」に入れると縮尺が合います。</div>
+  <input type="file" accept="image/*" style="font-size:11px;width:100%;margin-bottom:8px" onchange="loadPhotoFile(this.files[0])">
+  ${CK("周辺写真を表示",U.photo.show,"(v)=>S('photo.show',v)")}
+  ${SL("写真の幅 = 実寸 m",U.photo.width,"(v)=>S('photo.width',v)",30,600,5)}
+  ${SL("回転 °",U.photo.rot,"(v)=>S('photo.rot',v)",-180,180,1)}
+  ${SL("透過度",U.photo.opacity,"(v)=>S('photo.opacity',v)",0.1,1,0.05)}
+  <div style="border-top:1px solid var(--line);margin:8px 0"></div>
+  <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:4px">近隣建物ボリューム（ドラッグで配置）</div>
+  ${U.nbs.map((n,i)=>`<div class="card"><div style="display:flex;justify-content:space-between"><b style="font-size:12px">近隣 ${i+1}</b><button class="del" onclick="delN(${i})">削除</button></div>
+   <div class="grid3">
+    <label class="f"><span>間口m</span><input type="number" value="${n.w}" oninput="SN(${i},'w',this.value)"></label>
+    <label class="f"><span>奥行m</span><input type="number" value="${n.d}" oninput="SN(${i},'d',this.value)"></label>
+    <label class="f"><span>高さm</span><input type="number" value="${n.h}" oninput="SN(${i},'h',this.value)"></label>
+   </div></div>`).join("")}
+  <button class="addbtn" onclick="addN()">＋ 近隣建物を追加</button>
+  <div class="hint">写真の上に近隣ボリュームを置けば、日当たり・見え方・揚重範囲の近隣説明に使えます。ドラッグ＝移動／Ctrl＋ドラッグ＝回転。</div>`;
+ }
+ if(U.tab==="仮設"){
+  h=`<div style="display:flex;gap:5px;margin-bottom:9px">
+   <button class="btn ${U.tw.mode==="plan"?"active":""}" style="flex:1;padding:7px 4px;font-size:11px" onclick="setMode('plan')">完成</button>
+   <button class="btn ${U.tw.mode==="demo"?"active":""}" style="flex:1;padding:7px 4px;font-size:11px" onclick="setMode('demo')">既存解体</button>
+   <button class="btn ${U.tw.mode==="build"?"active":""}" style="flex:1;padding:7px 4px;font-size:11px" onclick="setMode('build')">施工中</button></div>`;
+  if(U.tw.mode==="demo"){
+   h+=`<div class="hint" style="margin:0 0 8px">解体予定の既存建物（赤×印）を表示。重機をドラッグ配置して解体計画を検討できます。新築ボリュームは非表示になります。</div>`
+   +`<div style="font-size:11px;font-weight:700;color:var(--mut);margin:4px 0 2px">既存建物（解体予定）</div>`
+   +`<div class="grid3">
+     <label class="f"><span>間口 m</span><input type="number" step="0.5" value="${U.demo.w}" oninput="S('demo.w',this.value)"></label>
+     <label class="f"><span>奥行 m</span><input type="number" step="0.5" value="${U.demo.d}" oninput="S('demo.d',this.value)"></label>
+     <label class="f"><span>高さ m</span><input type="number" step="0.5" value="${U.demo.h}" oninput="S('demo.h',this.value)"></label>
+    </div>`
+   +`<div style="border-top:1px solid var(--line);margin:8px 0"></div>`
+   +CK("ラフタークレーン（ドラッグ可）",U.tw.rough,"(v)=>S('tw.rough',v)")
+   +CK("仮囲い（ゲート付き）",U.tw.fence,"(v)=>S('tw.fence',v)")
+   +CK("生コン車／ダンプ（ドラッグ可）",U.tw.mixer,"(v)=>S('tw.mixer',v)")
+   +`<div class="hint">Ctrl＋ドラッグで重機の向きを回転できます。</div>`;
+  }
+  else if(U.tw.mode==="build"){
+   h+=SL("躯体の進捗（〜階）",U.tw.step,"(v)=>S('tw.step',v)",1,Math.max(1,Math.round(posv(U.p.floors,14))),1)
+   +`<div style="border-top:1px solid var(--line);margin:8px 0"></div>`
+   +CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")
+   +(U.tw.crane?`<div style="padding-left:10px">${SL("ジブ長 m",U.tw.craneJib,"(v)=>S('tw.craneJib',v)",12,55,1)}${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}${CK("作業半径の円",U.tw.radius,"(v)=>S('tw.radius',v)")}</div>`:"")
+   +CK("ロングスパンEV（ドラッグ可）",U.tw.ev,"(v)=>S('tw.ev',v)")
+   +CK("外部足場＋養生シート",U.tw.scaffold,"(v)=>S('tw.scaffold',v)")
+   +CK("仮囲い（ゲート付き）",U.tw.fence,"(v)=>S('tw.fence',v)")
+   +CK("生コン車（ドラッグ可）",U.tw.mixer,"(v)=>S('tw.mixer',v)")
+   +CK("ラフタークレーン（ドラッグ可）",U.tw.rough,"(v)=>S('tw.rough',v)");
+  }
+  h+=CK("電柱・架線（前面道路）",U.tw.poles,"(v)=>S('tw.poles',v)")
+  +`<div class="hint">ドラッグ＝移動／<b>Ctrl＋ドラッグ＝向き回転</b>。作業半径円で揚重範囲を確認できます。</div>`;
+ }
+ if(U.tab==="施工/CAD"){
+  // 施工オブジェクト
+  h=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin:0 0 4px">施工オブジェクトを追加</div>
+  <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">`
+  +Object.keys(COBJ_TYPES).map(t=>`<button class="btn" style="font-size:10.5px;padding:6px 7px" onclick="addCO('${t}')">＋${COBJ_TYPES[t].label}</button>`).join("")
+  +`</div>`;
+  if(U.cobj.length){h+=U.cobj.map((c,i)=>`<div class="card" style="${c._warn?'border-color:#D64545;background:#FDF1F1':''}">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+     <b style="font-size:11.5px">${COBJ_TYPES[c.type]?COBJ_TYPES[c.type].label:c.type}${c._warn?' <span style="color:#D64545">⚠歩行帯と干渉</span>':''}</b>
+     <button class="del" onclick="delCO(${i})">削除</button></div>
+    <div style="font-size:10px;color:var(--mut);font-family:ui-monospace">基準点から X=${numv(c.x,0).toFixed(1)}m  Z=${numv(c.z,0).toFixed(1)}m  ${numv(c.ry,0)}°</div>
+   </div>`).join("");}
+  else h+=`<div class="hint">ボタンで重機・車両・警備員・歩行帯を配置。画面上でドラッグ＝移動／Ctrl＋ドラッグ＝回転。歩行帯に重機が重なると赤く警告します。</div>`;
+  // 寸法線
+  h+=`<div style="border-top:1px solid var(--line);margin:10px 0 6px"></div>
+   <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:4px">寸法線ツール</div>
+   ${CK("寸法計測モード（地面を2点クリック）",U.dim.on,"(v)=>{S('dim.on',v,false);if(!v){U.dim.a=null;U.dim.b=null;}rebuild();renderBar();}")}
+   ${U._dimDist!=null?`<div style="font-family:ui-monospace;font-size:14px;font-weight:700;color:var(--navy)">距離 = ${U._dimDist.toFixed(2)} m</div>`:(U.dim.on?`<div class="hint">1点目→2点目の順にクリックしてください。</div>`:"")}`;
+  // グリッド
+  h+=`<div style="border-top:1px solid var(--line);margin:10px 0 6px"></div>
+   ${CK("グリッド表示",U.grid.show,"(v)=>S('grid.show',v)")}
+   ${U.grid.show?SL("グリッド間隔 m",U.grid.size,"(v)=>S('grid.size',v)",0.5,10,0.5):""}`;
+  // 道路条件
+  h+=`<div style="border-top:1px solid var(--line);margin:10px 0 6px"></div>
+   <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:2px">道路条件（歩行帯・干渉判定）</div>
+   ${SL("車道 幅員 m",U.roadcond.lane,"(v)=>{S('roadcond.lane',v,false);S('road.w',v);}",4,20,0.5)}
+   ${SL("歩道 幅員 m",U.roadcond.walk,"(v)=>S('roadcond.walk',v)",0,6,0.5)}
+   <div class="hint">緑の歩行帯が自動生成され、重機が重なると赤く警告します。</div>`;
+  // DXF
+  h+=`<div style="border-top:1px solid var(--line);margin:10px 0 6px"></div>
+   <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:4px">CAD図面（DXF）読込</div>
+   <input type="file" accept=".dxf" style="font-size:11px;width:100%;margin-bottom:6px" onchange="loadDXF(this.files[0])">`;
+  if(U.dxf.ents){
+   h+=SL("スケール（DXF単位→m）",U.dxf.scale,"(v)=>S('dxf.scale',v)",0.0005,0.01,0.0005).replace('ui-monospace">','ui-monospace">×')
+   +`<div style="font-size:10px;color:var(--mut);margin-bottom:4px">図面がmm作図なら0.001（1/1000）が目安。位置は右上「敷地/下敷き移動」ONでドラッグ。</div>
+   <div style="font-size:11px;font-weight:700;color:var(--mut);margin:6px 0 3px">レイヤー表示</div>`
+   +Object.keys(U.dxf.layers).map(k=>`<label class="chk" style="font-size:11px"><input type="checkbox" ${U.dxf.layers[k].show!==false?"checked":""} onchange="toggleDxfLayer('${k.replace(/'/g,"\\\\'")}',this.checked)">${k}</label>`).join("")
+   +`<button class="btn" style="margin-top:6px;color:#B0433A;border:1px solid #E3B5B5" onclick="clearDXF()">DXFをクリア</button>`;
+  }else h+=`<div class="hint">DXF（LINE/POLYLINE/CIRCLE/ARC）を線画として重ねます。配置図・平面図のトレース下地に。文字・寸法線・ハッチングは簡略表示です。</div>`;
+ }
+ $("#body").innerHTML=h;
+}
+function renderTitle(){
+ const modeLabel={build:`仮設計画イメージ（${Math.min(U.p.floors,U.tw.step)}階 躯体時）`,demo:"既存解体フェーズ ― 重機配置検討",plan:"VOLUME STUDY ― ボリューム検討図"}[U.tw.mode]||"VOLUME STUDY";
+ const st=U._stats||{floorArea:0,maxFloors:0};
+ const site=posv(U.site.w,30)*posv(U.site.d,18);
+ // 建築面積≒最大階の床面積（各ブロックの1F相当を合算）
+ let bcArea=0; U.blocks.forEach(b=>{const f1=Math.max(1,Math.round(posv(b.f1,1)));if(f1===1){const W=posv(b.w,Math.sqrt(posv(b.area,200)*posv(b.ratio,1.5)));const D=posv(b.d,Math.sqrt(posv(b.area,200)/posv(b.ratio,1.5)));bcArea+=W*D;}});
+ const far=site>0?(st.floorArea/site*100):0, bcr=site>0?(bcArea/site*100):0;
+ const barColor=(v,limit)=>v>limit?"#B0433A":"#2E7D5B";
+ const cost=(st.floorArea*numv(U.cost.unit,32)); // 万円
+ const costStr=cost>=10000?`${(cost/10000).toFixed(2)} 億円`:`${cost.toFixed(0)} 万円`;
+ const costRow=(U.appMode==="quick"&&U.cost.show)?`<div style="display:flex;justify-content:space-between;margin-top:3px;padding-top:3px;border-top:1px dotted var(--line)"><span style="color:var(--mut);font-size:10px">概算工事費 @${numv(U.cost.unit,32)}万/㎡</span><b style="font-family:ui-monospace;font-size:12px;color:var(--amber)">${costStr}</b></div>`:"";
+ const dash=U.tw.mode==="demo"?"":`<div style="margin-top:6px;border-top:1px dashed var(--line);padding-top:5px">
+   <div style="display:flex;justify-content:space-between"><span style="color:var(--mut);font-size:10px">延床面積(概算)</span><b style="font-family:ui-monospace;font-size:11px">${st.floorArea.toFixed(0)} m²</b></div>
+   <div style="display:flex;justify-content:space-between"><span style="color:var(--mut);font-size:10px">建築面積(1F相当)</span><b style="font-family:ui-monospace;font-size:11px">${bcArea.toFixed(0)} m²</b></div>
+   <div style="display:flex;justify-content:space-between"><span style="color:var(--mut);font-size:10px">建蔽率</span><b style="font-family:ui-monospace;font-size:11px;color:${barColor(bcr,60)}">${bcr.toFixed(0)} %</b></div>
+   <div style="display:flex;justify-content:space-between"><span style="color:var(--mut);font-size:10px">容積率</span><b style="font-family:ui-monospace;font-size:11px;color:${barColor(far,300)}">${far.toFixed(0)} %</b></div>${costRow}
+   <div style="font-size:8.5px;color:var(--mut);margin-top:2px">敷地${site.toFixed(0)}m²に対する概算値（設計値ではありません）</div></div>`;
+ $("#title").innerHTML=`<div class="h">${modeLabel}</div><div class="b">
+  <div style="font-weight:700;font-size:12px;border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:4px">${U.p.name||"（物件名未入力）"}</div>
+  <table><tr><td>用途・構造</td><td>${U.p.use}・${U.p.struct}造</td></tr>
+  <tr><td>規模</td><td>地上${Math.round(posv(U.p.floors,0))}階　H=${posv(U.p.height,0)}m</td></tr>
+  <tr><td>構成</td><td>${U.blocks.map(b=>`${b.label}${b.f1}-${b.f2}F`).join("＋")}</td></tr></table>${dash}
+  <div style="margin-top:5px;font-size:9px;color:var(--mut)">※検討用イメージであり実際の建物・施工計画とは異なります</div></div>`;
+}
+function syncBtns(){renderBar();}
+function view(k){const H=posv(U.p.height,42);
+ if(k==="bird"){ctrl.phi=.9;ctrl.r=Math.max(H*2.2,130);}
+ if(k==="eye"){ctrl.phi=1.45;ctrl.r=Math.max(H*1.7,95);}
+ if(k==="front"){ctrl.theta=Math.PI/2;ctrl.phi=1.35;ctrl.r=Math.max(H*2,115);}
+ if(k==="top"){ctrl.phi=.14;ctrl.r=Math.max(H*2,130);}
+ U.auto=false;renderBar();}
+function savePNG(){const a=document.createElement("a");
+ a.href=renderer.domElement.toDataURL("image/png");
+ a.download=`${U.p.name||"volume"}_${U.tw.mode==="build"?"仮設計画":U.line?"線画下絵":"ボリューム"}.png`;a.click();}
+function renderBar(){
+ $("#bar").innerHTML=`
+  <button class="btn" style="background:${U.appMode==="quick"?"var(--amber)":"#fff"};font-weight:700" onclick="U.appMode='quick';rebuild();renderBar();renderPanel()">概算モード</button>
+  <button class="btn" style="background:${U.appMode==="detail"?"var(--slate)":"#fff"};color:${U.appMode==="detail"?"#fff":"var(--navy)"};font-weight:700" onclick="U.appMode='detail';rebuild();renderBar();renderPanel()">詳細検証</button>
+  <button class="btn" onclick="view('bird')">鳥瞰</button>
+  <button class="btn" onclick="view('front')">正面</button>
+  <button class="btn" onclick="view('eye')">アイレベル</button>
+  <button class="btn" onclick="view('top')">真上(配置)</button>
+  <button class="btn ${U.auto?"active":""}" onclick="U.auto=!U.auto;renderBar()">${U.auto?"回転中":"自動回転"}</button>
+  <button class="btn ${U.grid.show?"active":""}" onclick="U.grid.show=!U.grid.show;rebuild();renderBar()">グリッド</button>
+  <button class="btn ${U.moveLayers?"active":""}" onclick="U.moveLayers=!U.moveLayers;renderBar()">${U.moveLayers?"移動モード中":"敷地/下敷き移動"}</button>
+  <button class="btn ${U.line?"active":""}" onclick="U.line=!U.line;rebuild();renderBar()">${U.line?"通常表示":"線画(AI下絵)"}</button>
+  <button class="btn" onclick="saveProjectJSON()" style="border:1.5px solid var(--amber)">設定保存</button>
+  <button class="btn" onclick="document.getElementById('json-file').click()" style="border:1.5px solid var(--amber)">設定読込</button>
+  <input type="file" id="json-file" accept=".json" style="display:none" onchange="loadProjectJSON(this.files[0]); this.value=''">
+  <button class="btn primary" onclick="savePNG()">PNG保存</button>`;
+}
+$("#phead").addEventListener("click",()=>{const w=$("#pwrap");const off=w.style.display==="none";w.style.display=off?"":"none";$("#parr").textContent=off?"▲":"▼";});
+renderBar();renderPanel();rebuild();
+setTimeout(()=>{const d=$("#drag");if(d)d.style.display="none";},9000);
