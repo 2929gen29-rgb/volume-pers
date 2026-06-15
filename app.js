@@ -9,9 +9,9 @@ const posv=(v,fb)=>{const n=parseFloat(v);return isFinite(n)&&n>0?n:fb};
 
 // ───── 状態 ─────
 const U={
- p:{name:"(仮称)北区上十条3丁目賃貸レジデンス計画",use:"共同住宅（賃貸）",struct:"RC",floors:14,height:42.45,tArea:2710.07},
- site:{w:30,d:18,dx:0,dz:0,gl:0,h:[0,0,0,0]}, // h: 前左,前右,奥左,奥右
- blocks:[{id:1,label:"高層部",f1:1,f2:14,w:19.2,d:12.0,dx:0,dz:-4,ry:0},{id:2,label:"低層部",f1:1,f2:2,w:25.0,d:11.3,dx:0,dz:6,ry:0}],
+ p:{name:"サンプル計画（架空）",use:"事務所",struct:"RC",floors:3,height:12.0,tArea:600,addr:""},
+ site:{w:25,d:20,dx:0,dz:0,gl:0,h:[0,0,0,0]}, // 敷地面積≒500㎡
+ blocks:[{id:1,label:"建物",f1:1,f2:3,w:20.0,d:10.0,dx:0,dz:0,ry:0}],
  road:{w:8,side:"none"},
  poles:{n:3,pitch:18,far:true,dx:0,dz:0,ry:0},
  demo:{w:22,d:14,h:9,dx:0,dz:0,ry:0},
@@ -28,17 +28,57 @@ const U={
  dim:{on:false, a:null, b:null}, // 寸法線ツール（2点間）
  dxf:{ents:null, layers:{}, scale:0.001, dx:0, dz:0, raw:null}, // DXF読込（1/1000）
  cost:{unit:32, show:true},  // 概算単価（万円/㎡）
+ geo:{elev:null, name:"", status:""},  // 住所→標高・地形
+ snap:true,                  // スナップ（道路・敷鉄板へ吸着）
  sel:null,                   // 選択中オブジェクトキー
 };
 // 施工オブジェクトの種類定義
+// 施工オブジェクト定義：各タイプに sizes（クラス展開）を持たせる
+//  各クラス: {key,label, w全幅, d全長, h全高, out アウトリガー張出幅(m,任意), tail テールスイング半径(m,任意), work 作業半径(m,任意)}
 const COBJ_TYPES={
- bg:{label:"BG機械（杭打機）",color:0xE8731A,w:4.5,d:5.5,h:18},
- pump:{label:"コンクリポンプ車",color:0x4F7CC4,w:2.5,d:10,h:3.6},
- guard:{label:"警備員",color:0xCFA94A,w:0.6,d:0.6,h:1.7},
- walkzone:{label:"歩行帯",color:0x6EA46E,w:2,d:12,h:0.05},
- dump:{label:"ダンプトラック",color:0x9AA2AF,w:2.5,d:8,h:3.2},
- office:{label:"現場事務所",color:0xD9C9A8,w:5.4,d:3,h:2.8},
+ mixer:{label:"ミキサー車（生コン）",color:0x5A7FAE,sizes:[
+   {key:"3t",label:"3t（小型）",w:2.0,d:5.8,h:2.8},
+   {key:"8t",label:"8t（中型）",w:2.5,d:7.5,h:3.5},
+   {key:"10t",label:"10t（大型）",w:2.5,d:8.5,h:3.6},
+ ]},
+ truck:{label:"トラック（ダンプ/平）",color:0x9AA2AF,sizes:[
+   {key:"2t",label:"2t",w:1.9,d:4.7,h:2.2},
+   {key:"4t",label:"4t",w:2.2,d:6.2,h:2.6},
+   {key:"10t",label:"10t",w:2.5,d:8.5,h:3.2},
+   {key:"semi",label:"セミトレーラー",w:2.5,d:16.5,h:3.8},
+ ]},
+ rough:{label:"ラフタークレーン",color:0xE8B820,sizes:[
+   {key:"13t",label:"13t吊",w:2.3,d:8.5,h:3.2,out:4.6,tail:3.2,work:18},
+   {key:"25t",label:"25t吊",w:2.75,d:11.5,h:3.4,out:5.8,tail:3.7,work:26},
+   {key:"50t",label:"50t吊",w:3.0,d:12.5,h:3.6,out:7.0,tail:4.2,work:34},
+   {key:"70t",label:"70t吊",w:3.0,d:13.5,h:3.7,out:7.8,tail:4.5,work:40},
+ ]},
+ pump:{label:"コンクリポンプ車",color:0x4F7CC4,sizes:[
+   {key:"s2t",label:"小型(2t)",w:2.0,d:6.5,h:3.2,out:4.0,work:16},
+   {key:"m4t",label:"中型(4t)",w:2.3,d:9.0,h:3.6,out:5.2,work:24},
+   {key:"l8t",label:"大型(8t)",w:2.5,d:11.5,h:3.8,out:6.4,work:32},
+ ]},
+ backhoe:{label:"バックホウ（ユンボ）",color:0xE8731A,sizes:[
+   {key:"01",label:"0.1m³(ミニ)",w:1.7,d:3.8,h:2.6,tail:1.4,work:5},
+   {key:"02",label:"0.2m³",w:2.0,d:5.2,h:2.9,tail:1.7,work:6.5},
+   {key:"045",label:"0.45m³",w:2.5,d:7.0,h:3.0,tail:2.2,work:9},
+   {key:"08",label:"0.8m³",w:2.9,d:9.5,h:3.3,tail:2.8,work:11},
+ ]},
+ found:{label:"基礎・解体機械",color:0xD06A2A,sizes:[
+   {key:"bg",label:"BG機械（杭打機）",w:4.5,d:6.0,h:20,tail:3.5,work:6},
+   {key:"puller",label:"既存杭引抜機",w:4.0,d:5.5,h:16,tail:3.2,work:5},
+ ]},
+ temp:{label:"仮設材・設備",color:0xD9C9A8,sizes:[
+   {key:"gate",label:"仮囲いゲート",w:6.0,d:0.4,h:3.0},
+   {key:"hut",label:"プレハブ詰所",w:5.4,d:3.0,h:2.8},
+   {key:"plate",label:"敷鉄板",w:1.5,d:6.0,h:0.05},
+   {key:"asagao",label:"朝顔(落下防止)",w:8.0,d:1.8,h:0.2},
+ ]},
+ guard:{label:"警備員",color:0xCFA94A,sizes:[{key:"std",label:"標準",w:0.6,d:0.6,h:1.7}]},
+ walkzone:{label:"歩行帯",color:0x6EA46E,sizes:[{key:"std",label:"標準(幅2m)",w:2,d:12,h:0.05}]},
 };
+// 指定タイプ・クラスの寸法を引く
+function cobjSize(type,sizeKey){const t=COBJ_TYPES[type];if(!t)return null;const arr=t.sizes;return arr.find(s=>s.key===sizeKey)||arr[0];}
 const USES=["共同住宅（賃貸）","共同住宅（分譲）","ホテル","事務所","店舗"];
 
 // ───── three 初期化 ─────
@@ -135,9 +175,21 @@ const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;
   if(k==="site"){U.site.dx=+x.toFixed(1);U.site.dz=+z.toFixed(1);rebuild();}
   if(k.startsWith("nb:")){const n=U.nbs[+k.slice(3)];if(n){n.x=+x.toFixed(1);n.z=+z.toFixed(1);}}
   if(k.startsWith("blk:")){const b=U.blocks[+k.slice(4)];if(b){b.dx=+(x-numv(U.site.dx,0)).toFixed(1);b.dz=+(z-numv(U.site.dz,0)).toFixed(1);}}
-  if(k.startsWith("co:")){const c=U.cobj[+k.slice(3)];if(c){c.x=+x.toFixed(1);c.z=+z.toFixed(1);}}
+  if(k.startsWith("co:")){const c=U.cobj[+k.slice(3)];if(c){
+    let nx=+x.toFixed(1), nz=+z.toFixed(1);
+    // スナップ：前面道路の歩行帯/敷鉄板ラインに近ければZを吸着、角度は道路平行(0°)へ寄せる
+    if(U.snap!==false){
+     const roadZ=numv(U.site.dz,0)+posv(U.site.d,18)/2+1.6+Math.min(20,Math.max(4,numv(U.road.w,8)))/2;
+     if(Math.abs(nz-roadZ)<1.5){nz=+roadZ.toFixed(1);}              // 道路中心へ吸着
+     // 近くの敷鉄板に平行寄せ
+     U.cobj.forEach((o,oi)=>{if(o!==c&&o.type==="temp"&&o.size==="plate"){
+       if(Math.hypot(numv(o.x,0)-nx,numv(o.z,0)-nz)<3){c.ry=numv(o.ry,0);}}});
+    }
+    c.x=nx;c.z=nz;}}
   dragObj=null;renderPanel();}
- else if(dragObj&&rotMode){dragObj=null;rotMode=false;renderPanel();}
+ else if(dragObj&&rotMode){
+   if(U.snap){const k=dragObj.userData.dragKey;const cur=getRy(k);setRy(k,Math.round(cur/15)*15);rebuild();}
+   dragObj=null;rotMode=false;renderPanel();}
 };
 el.addEventListener("pointerup",endPtr);el.addEventListener("pointercancel",endPtr);
 el.addEventListener("wheel",(e)=>{e.preventDefault();
@@ -392,15 +444,10 @@ function rebuild(){
   boom.geometry.translate(0,bl/2,0);boom.position.set(0,2.2,-1);boom.rotation.x=.55;boom.castShadow=!L;rg.add(boom);
   rg.position.set(numv(U.tw.rufX,14),0,numv(U.tw.rufZ,-2));rg.rotation.y=numv(U.tw.rufRy,0)*Math.PI/180;g.add(rg);dragMap.rough=rg;}
 
- // 添景（完成時）
+ // 添景（スケール感のための人物のみ・植栽は配置しない）
  if(!L&&U.tw.mode==="plan"){
-  const trM=new THREE.MeshLambertMaterial({color:0x7a6048}),lfM=new THREE.MeshLambertMaterial({color:0x6e8f6a});
-  [[-sw/2+4,sd/2-3],[sw/2-4,sd/2-3],[-sw/2+4,-sd/2+4]].forEach(([x,z])=>{
-   const y=terrainH(x,z,sw,sd,hh);
-   const tr=new THREE.Mesh(new THREE.CylinderGeometry(.25,.35,3),trM);tr.position.set(sdx+x,y+1.5,sdz+z);tr.castShadow=true;g.add(tr);
-   const lf=new THREE.Mesh(new THREE.SphereGeometry(2.4,10,8),lfM);lf.position.set(sdx+x,y+4.6,sdz+z);lf.castShadow=true;g.add(lf);});
   const hum=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,1.7,8),new THREE.MeshLambertMaterial({color:0x35435e}));
-  hum.position.set(6,.85,sdz+sd/2+5.5);hum.castShadow=true;g.add(hum);}
+  hum.position.set(sdx+6,.85,sdz+sd/2+5.5);hum.castShadow=true;g.add(hum);}
 
  // ───── 施工オブジェクト（constructionObjects）─────
  function aabb(cx,cz,w,d,ry){ // 回転考慮の概算外接（軸並行近似）
@@ -410,8 +457,9 @@ function rebuild(){
  }
  function overlap(A,B){return A.x0<B.x1&&A.x1>B.x0&&A.z0<B.z1&&A.z1>B.z0;}
  U.cobj.forEach((c,i)=>{
-  const t=COBJ_TYPES[c.type]||COBJ_TYPES.dump;
-  const w=posv(c.w,t.w), d=posv(c.d,t.d), hgt=posv(c.h,t.h);
+  const t=COBJ_TYPES[c.type]||COBJ_TYPES.truck;
+  const sz=cobjSize(c.type,c.size)||t.sizes[0];
+  const w=posv(c.w,sz.w), d=posv(c.d,sz.d), hgt=posv(c.h,sz.h);
   const ry=numv(c.ry,0)*Math.PI/180;
   // 歩行帯との干渉判定 → 警告色
   let warn=false;
@@ -420,25 +468,61 @@ function rebuild(){
    if(c.type!=="walkzone"&&overlap(cb,wb))warn=true;}
   c._warn=warn;
   const cg=new THREE.Group(); cg.userData.dragKey="co:"+i;
-  const col=warn?0xD64545:t.color;
+  const seld=(U.sel==="co:"+i);
+  const col=warn?0xD64545:(seld?0xF2A33C:t.color);
   const baseMat=L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:col});
-  if(c.type==="guard"){ // 警備員：人＋三角コーン色
+  if(c.type==="guard"){
    const body=new THREE.Mesh(new THREE.CylinderGeometry(.22,.26,1.5,8),baseMat);body.position.y=.75;body.castShadow=!L;cg.add(body);
    const head=new THREE.Mesh(new THREE.SphereGeometry(.22,8,8),baseMat);head.position.y=1.6;cg.add(head);
    const vest=new THREE.Mesh(new THREE.CylinderGeometry(.27,.27,.5,8),new THREE.MeshLambertMaterial({color:warn?0xD64545:0xF2C14E}));vest.position.y=1.0;cg.add(vest);
-  }else if(c.type==="walkzone"){ // 歩行帯：薄い緑帯＋点線縁
-   const z=new THREE.Mesh(new THREE.BoxGeometry(w,0.05,d),new THREE.MeshLambertMaterial({color:warn?0xD64545:0x6EA46E,transparent:true,opacity:.6}));z.position.y=.06;cg.add(z);
-   const ee=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w,0.05,d)),new THREE.LineBasicMaterial({color:0x3f7a3f}));ee.position.y=.06;cg.add(ee);
-  }else if(c.type==="bg"){ // BG機械：本体＋リーダー（鉛直マスト）
-   const base=new THREE.Mesh(new THREE.BoxGeometry(w,1.4,d),baseMat);base.position.y=.7;base.castShadow=!L;cg.add(base);
-   const mast=new THREE.Mesh(new THREE.BoxGeometry(.6,hgt,.6),baseMat);mast.position.set(0,hgt/2,d*0.3);mast.castShadow=!L;cg.add(mast);
+  }else if(c.type==="walkzone"||(c.type==="temp"&&c.size==="plate")){ // 帯・敷鉄板：薄板
+   const cc=c.type==="walkzone"?(warn?0xD64545:0x6EA46E):0x7a808a;
+   const z=new THREE.Mesh(new THREE.BoxGeometry(w,Math.max(0.05,hgt),d),new THREE.MeshLambertMaterial({color:cc,transparent:c.type==="walkzone",opacity:c.type==="walkzone"?.6:1}));z.position.y=Math.max(0.05,hgt)/2+.02;z.castShadow=!L&&c.type!=="walkzone";cg.add(z);
+   const ee=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w,Math.max(0.05,hgt),d)),new THREE.LineBasicMaterial({color:c.type==="walkzone"?0x3f7a3f:0x4a4f57}));ee.position.y=z.position.y;cg.add(ee);
+  }else if(c.type==="found"){ // 基礎機械：本体＋鉛直マスト
+   const base=new THREE.Mesh(new THREE.BoxGeometry(w,1.6,d),baseMat);base.position.y=.8;base.castShadow=!L;cg.add(base);
+   const mast=new THREE.Mesh(new THREE.BoxGeometry(.6,hgt,.6),baseMat);mast.position.set(0,hgt/2,d*0.25);mast.castShadow=!L;cg.add(mast);
    if(L){const ee=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(.6,hgt,.6)),new THREE.LineBasicMaterial({color:0x16243d}));ee.position.copy(mast.position);cg.add(ee);}
-  }else if(c.type==="pump"){ // ポンプ車：車体＋ブーム
+  }else if(c.type==="pump"){
    const body=new THREE.Mesh(new THREE.BoxGeometry(w,2.2,d),baseMat);body.position.y=1.4;body.castShadow=!L;cg.add(body);
    const boom=new THREE.Mesh(new THREE.BoxGeometry(.4,.4,d*1.4),new THREE.MeshLambertMaterial({color:warn?0xD64545:0x33425a}));boom.position.set(0,3.2,d*.2);boom.rotation.x=-.5;cg.add(boom);
-  }else{ // ダンプ・事務所など箱形
-   const body=new THREE.Mesh(new THREE.BoxGeometry(w,hgt,d),baseMat);body.position.y=hgt/2;body.castShadow=!L;cg.add(body);
-   if(c.type==="dump"){const cab=new THREE.Mesh(new THREE.BoxGeometry(w,1.6,d*.25),baseMat);cab.position.set(0,1.6,-d*.34);cg.add(cab);}
+  }else if(c.type==="rough"){ // ラフター：車体＋ブーム
+   const body=new THREE.Mesh(new THREE.BoxGeometry(w,hgt*0.55,d),baseMat);body.position.y=hgt*0.3;body.castShadow=!L;cg.add(body);
+   const cab=new THREE.Mesh(new THREE.BoxGeometry(w*0.9,1.6,d*0.22),baseMat);cab.position.set(0,hgt*0.55+0.8,d*0.3);cg.add(cab);
+   const boomL=Math.max(8,(sz.work||16)*0.7);
+   const boom=new THREE.Mesh(new THREE.BoxGeometry(.5,.5,boomL),new THREE.MeshLambertMaterial({color:warn?0xD64545:0xC99A1A}));
+   boom.position.set(0,hgt*0.55+0.6+boomL*0.18,-d*0.1);boom.rotation.x=-0.7;boom.geometry.translate(0,0,boomL/2);cg.add(boom);
+  }else if(c.type==="backhoe"){ // バックホウ：履帯＋旋回体＋アーム
+   const track=new THREE.Mesh(new THREE.BoxGeometry(w,0.8,d),baseMat);track.position.y=.4;track.castShadow=!L;cg.add(track);
+   const turret=new THREE.Mesh(new THREE.BoxGeometry(w*0.8,1.3,d*0.6),baseMat);turret.position.set(0,1.4,-d*0.1);cg.add(turret);
+   const arm=new THREE.Mesh(new THREE.BoxGeometry(.35,.35,d*0.7),new THREE.MeshLambertMaterial({color:warn?0xD64545:0xC2611F}));arm.position.set(0,2.0,d*0.35);arm.rotation.x=-0.9;cg.add(arm);
+  }else if(c.type==="temp"){ // 仮設材
+   if(c.size==="gate"){ // ゲート：2本柱＋上枠
+    [-w/2+0.2,w/2-0.2].forEach(x=>{const p=new THREE.Mesh(new THREE.BoxGeometry(0.3,hgt,0.3),baseMat);p.position.set(x,hgt/2,0);cg.add(p);});
+    const top=new THREE.Mesh(new THREE.BoxGeometry(w,0.4,0.3),baseMat);top.position.y=hgt;cg.add(top);
+   }else if(c.size==="asagao"){ // 朝顔：傾いた板
+    const b=new THREE.Mesh(new THREE.BoxGeometry(w,0.12,d),new THREE.MeshLambertMaterial({color:warn?0xD64545:0xC9A14A}));b.position.y=hgt;b.rotation.x=-0.35;b.castShadow=!L;cg.add(b);
+   }else{ // 詰所など箱
+    const body=new THREE.Mesh(new THREE.BoxGeometry(w,hgt,d),baseMat);body.position.y=hgt/2;body.castShadow=!L;cg.add(body);
+    const ee=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w,hgt,d)),new THREE.LineBasicMaterial({color:0x8a7f5f}));ee.position.y=hgt/2;cg.add(ee);
+   }
+  }else{ // ミキサー・トラック：車体＋運転台（＋ドラム）
+   const body=new THREE.Mesh(new THREE.BoxGeometry(w,hgt*0.7,d),baseMat);body.position.y=hgt*0.45;body.castShadow=!L;cg.add(body);
+   const cab=new THREE.Mesh(new THREE.BoxGeometry(w,hgt*0.6,d*0.22),baseMat);cab.position.set(0,hgt*0.5,-d*0.36);cg.add(cab);
+   if(c.type==="mixer"){const drum=new THREE.Mesh(new THREE.CylinderGeometry(w*0.45,w*0.32,d*0.5,12),new THREE.MeshLambertMaterial({color:warn?0xD64545:0xC8CCD2}));drum.position.set(0,hgt*0.7,d*0.08);drum.rotation.x=Math.PI/2-0.25;drum.castShadow=!L;cg.add(drum);}
+  }
+  // ───── 干渉チェックガイド（重機選択時・画像出力時は非表示）─────
+  if(seld&&!L&&!U._exporting){
+   const ringMat=(cc,op)=>new THREE.MeshBasicMaterial({color:cc,transparent:true,opacity:op,side:THREE.DoubleSide});
+   // A. アウトリガー最大張出（矩形ガイド）
+   if(sz.out){const ow=sz.out, od=Math.max(sz.out,d*0.8);
+    const g4=new THREE.Mesh(new THREE.PlaneGeometry(ow*2,od*2),ringMat(0xF2A33C,0.10));g4.rotation.x=-Math.PI/2;g4.position.y=0.05;cg.add(g4);
+    const eg=new THREE.EdgesGeometry(new THREE.PlaneGeometry(ow*2,od*2));const el2=new THREE.LineSegments(eg,new THREE.LineBasicMaterial({color:0xE8731A}));el2.rotation.x=-Math.PI/2;el2.position.y=0.06;cg.add(el2);
+   }
+   // B. テールスイング（後端旋回半径）の円
+   if(sz.tail){const ring=new THREE.Mesh(new THREE.RingGeometry(sz.tail-0.25,sz.tail,48),ringMat(0xD64545,0.5));ring.rotation.x=-Math.PI/2;ring.position.set(0,0.08,-d*0.2);cg.add(ring);}
+   // C. 作業半径の目安円
+   if(sz.work){const ring=new THREE.Mesh(new THREE.RingGeometry(sz.work-0.4,sz.work,64),ringMat(0x3B82C4,0.35));ring.rotation.x=-Math.PI/2;ring.position.y=0.04;cg.add(ring);}
   }
   cg.position.set(numv(c.x,0),0,numv(c.z,0)); cg.rotation.y=ry; g.add(cg); dragMap["co:"+i]=cg;
  });
@@ -491,7 +575,7 @@ function rebuild(){
 
 // ───── 案件データの保存・読込 (JSON) ─────
 function saveProjectJSON(){
- const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="sel")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
+ const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="sel")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
  const blob=new Blob([JSON.stringify(saveState,null,2)],{type:"application/json"});
  const a=document.createElement("a");
  const dateStr=new Date().toISOString().slice(0,10).replace(/-/g,"");
@@ -519,6 +603,10 @@ function loadProjectJSON(file){
    if(!U.dim)U.dim={on:false,a:null,b:null};
    if(!U.dxf)U.dxf={ents:null,layers:{},scale:0.001,dx:0,dz:0,raw:null};
    if(!U.cost)U.cost={unit:32,show:true};
+   if(!U.geo)U.geo={elev:null,name:"",status:""};
+   if(U.snap==null)U.snap=true;
+   (U.cobj||[]).forEach(c=>{if(c.size==null){const t=COBJ_TYPES[c.type];if(t)c.size=t.sizes[0].key;}});
+   if(U.p.addr==null)U.p.addr="";
    if(!U.demo)U.demo={w:22,d:14,h:9,dx:0,dz:0,ry:0};
    (U.blocks||[]).forEach(b=>{if(b.w==null){const A=posv(b.area,200),r=posv(b.ratio,1.5);b.w=+Math.sqrt(A*r).toFixed(1);b.d=+Math.sqrt(A/r).toFixed(1);}if(b.ry==null)b.ry=0;});
    (U.nbs||[]).forEach(n=>{if(n.ry==null)n.ry=0;});
@@ -556,6 +644,41 @@ function loadDXF(file){
 window.loadDXF=loadDXF;
 window.toggleDxfLayer=(k,v)=>{if(U.dxf.layers[k]){U.dxf.layers[k].show=v;rebuild();}};
 window.clearDXF=()=>{U.dxf.ents=null;U.dxf.layers={};rebuild();renderPanel();};
+
+// ───── 計画地住所 → 標高・地形・ハザードマップ検索 ─────
+async function fetchGeo(){
+ const addr=(U.p.addr||"").trim();
+ if(!addr){alert("計画地住所を入力してください。");return;}
+ U.geo.status="検索中…"; renderPanel();
+ try{
+  // 1) 住所→緯度経度（国土地理院ジオコーディング・CORS可）
+  const gres=await fetch("https://msearch.gsi.go.jp/address-search/AddressSearch?q="+encodeURIComponent(addr));
+  const gjson=await gres.json();
+  if(!gjson||!gjson.length){U.geo.status="住所が見つかりませんでした。市区町村名から入れ直してください。";renderPanel();return;}
+  const [lon,lat]=gjson[0].geometry.coordinates;
+  U.geo.name=gjson[0].properties&&gjson[0].properties.title?gjson[0].properties.title:addr;
+  // 2) 緯度経度→標高（国土地理院標高API）
+  let elevTxt="取得できず";
+  try{
+   const eres=await fetch(`https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?lon=${lon}&lat=${lat}&outtype=JSON`);
+   const ejson=await eres.json();
+   if(ejson&&ejson.elevation!=null&&ejson.elevation!=="-----"){U.geo.elev=ejson.elevation;elevTxt=ejson.elevation+" m（"+(ejson.hsrc||"")+"）";}
+  }catch(_){}
+  // 地形分類のざっくり判定（標高ベースの目安）
+  let landform="";
+  if(U.geo.elev!=null){const e=+U.geo.elev;
+   landform = e<5?"低地（沖積平野の可能性。軟弱地盤・液状化に注意）":e<20?"台地〜低地の境界（要地盤調査）":e<60?"台地・段丘（比較的良好なことが多い）":"丘陵・山地（切盛造成は個別確認）";}
+  U.geo.status=`緯度経度: ${lat.toFixed(5)}, ${lon.toFixed(5)}\n標高: ${elevTxt}\n地形目安: ${landform||"標高取得後に判定"}`;
+  renderPanel();
+ }catch(err){
+  U.geo.status="取得失敗（ネットワーク制限／CORSの可能性）。下のリンクから手動でご確認ください。";
+  renderPanel();
+ }
+}
+window.fetchGeo=fetchGeo;
+// 市区町村名をざっくり抽出（ハザード検索リンク用）
+function cityFromAddr(a){const m=(a||"").match(/(.+?[都道府県])?(.+?[市区町村])/);return m?((m[1]||"")+(m[2]||"")):a;}
+window.fetchGeo=fetchGeo;window.cityFromAddr=cityFromAddr;
 
 // ───── 設計概要の自動読取（β）─────
 async function parsePdfSummary(){
@@ -633,8 +756,10 @@ window.addB=()=>{U.blocks.push({id:Date.now(),label:"ブロック",f1:1,f2:2,w:1
 window.delN=(i)=>{U.nbs.splice(i,1);rebuild();renderPanel();};
 window.addN=()=>{U.nbs.push({x:25,z:15,w:10,d:10,h:12,ry:0});rebuild();renderPanel();};
 window.setMode=(m)=>{U.tw.mode=m;rebuild();renderPanel();};
-window.addCO=(type)=>{const t=COBJ_TYPES[type]||COBJ_TYPES.dump;const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);U.cobj.push({type,x:numv(U.site.dx,0),z:sdz2+sd2/2+6,w:t.w,d:t.d,h:t.h,ry:0});rebuild();renderPanel();};
-window.delCO=(i)=>{U.cobj.splice(i,1);rebuild();renderPanel();};
+window.addCO=(type)=>{const t=COBJ_TYPES[type]||COBJ_TYPES.truck;const sz=t.sizes[0];const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);U.cobj.push({type,size:sz.key,x:numv(U.site.dx,0),z:sdz2+sd2/2+6,w:sz.w,d:sz.d,h:sz.h,ry:0});U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();};
+window.delCO=(i)=>{U.cobj.splice(i,1);if(U.sel==="co:"+i)U.sel=null;rebuild();renderPanel();};
+window.setCOSize=(i,key)=>{const c=U.cobj[i];if(!c)return;const sz=cobjSize(c.type,key);if(sz){c.size=key;c.w=sz.w;c.d=sz.d;c.h=sz.h;}rebuild();renderPanel();};
+window.selCO=(i)=>{U.sel="co:"+i;rebuild();renderPanel();};
 window.setPage=async(v)=>{U.under.page=v;await renderPdfPage();};
 
 function renderPanel(){
@@ -673,7 +798,21 @@ function renderPanel(){
   </div>`).join("")+`<button class="addbtn" onclick="addB()">＋ ブロックを追加（低層部など）</button><div class="hint">建物ブロックは画面上でドラッグ＝移動／<b>Ctrl＋ドラッグ＝平面の回転</b>。</div>`;
  }
  if(U.tab==="敷地・地形"){
-  h=`<div class="grid2">
+  const city=cityFromAddr(U.p.addr||"");
+  const ge=encodeURIComponent;
+  h=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin:0 0 3px">計画地住所（公共データ照会）</div>
+  <input type="text" value="${(U.p.addr||"").replace(/"/g,"&quot;")}" placeholder="例：東京都北区上十条3丁目" oninput="S('p.addr',this.value,false)" style="margin-bottom:6px">
+  <button class="addbtn" style="margin-bottom:6px" onclick="fetchGeo()">📍 地盤・標高情報を取得</button>`;
+  if(U.geo.status){h+=`<div style="background:#EEF3FA;border-radius:7px;padding:7px 9px;font-size:11px;line-height:1.7;color:#1E3A5F;white-space:pre-wrap;margin-bottom:6px">${U.geo.name?("📍 "+U.geo.name+"\n"):""}${U.geo.status}</div>`;}
+  if(U.p.addr){h+=`<div style="font-size:10.5px;color:var(--mut);margin-bottom:3px">▼ ${city||"計画地"}の公開情報を検索（別タブ）</div>
+   <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px">
+    <a href="https://www.google.com/search?q=${ge(city+" 都市計画情報 用途地域")}" target="_blank" rel="noopener" style="font-size:11.5px;color:#2552A0">🔎 都市計画・用途地域</a>
+    <a href="https://www.google.com/search?q=${ge(city+" ハザードマップ")}" target="_blank" rel="noopener" style="font-size:11.5px;color:#2552A0">🔎 ハザードマップ</a>
+    <a href="https://disaportal.gsi.go.jp/" target="_blank" rel="noopener" style="font-size:11.5px;color:#2552A0">🔎 重ねるハザードマップ（国交省）</a>
+    <a href="https://www.google.com/search?q=${ge(city+" 地盤 ボーリング 柱状図")}" target="_blank" rel="noopener" style="font-size:11.5px;color:#2552A0">🔎 周辺の地盤・ボーリングデータ</a>
+   </div>`;}
+  h+=`<div style="border-top:1px solid var(--line);margin:4px 0 8px"></div>
+  <div class="grid2">
    <label class="f"><span>敷地 間口 m</span><input type="number" value="${U.site.w}" oninput="S('site.w',this.value)"></label>
    <label class="f"><span>敷地 奥行 m</span><input type="number" value="${U.site.d}" oninput="S('site.d',this.value)"></label>
   </div>
@@ -767,13 +906,22 @@ function renderPanel(){
   <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">`
   +Object.keys(COBJ_TYPES).map(t=>`<button class="btn" style="font-size:10.5px;padding:6px 7px" onclick="addCO('${t}')">＋${COBJ_TYPES[t].label}</button>`).join("")
   +`</div>`;
-  if(U.cobj.length){h+=U.cobj.map((c,i)=>`<div class="card" style="${c._warn?'border-color:#D64545;background:#FDF1F1':''}">
+  if(U.cobj.length){h+=U.cobj.map((c,i)=>{
+    const t=COBJ_TYPES[c.type]; const sz=cobjSize(c.type,c.size)||{};
+    const seld=(U.sel==="co:"+i);
+    const opts=(t&&t.sizes.length>1)?`<select style="padding:4px 6px;font-size:11px;margin:4px 0" onchange="setCOSize(${i},this.value)">${t.sizes.map(s=>`<option value="${s.key}" ${c.size===s.key?"selected":""}>${s.label}（${s.w}×${s.d}m）</option>`).join("")}</select>`:"";
+    const guide=[];
+    if(sz.out)guide.push(`張出${sz.out}m`); if(sz.tail)guide.push(`尾部旋回${sz.tail}m`); if(sz.work)guide.push(`作業半径${sz.work}m`);
+    return `<div class="card" style="${c._warn?'border-color:#D64545;background:#FDF1F1':(seld?'border-color:#F2A33C;background:#FFFBF0':'')}" onclick="selCO(${i})">
     <div style="display:flex;justify-content:space-between;align-items:center">
-     <b style="font-size:11.5px">${COBJ_TYPES[c.type]?COBJ_TYPES[c.type].label:c.type}${c._warn?' <span style="color:#D64545">⚠歩行帯と干渉</span>':''}</b>
-     <button class="del" onclick="delCO(${i})">削除</button></div>
-    <div style="font-size:10px;color:var(--mut);font-family:ui-monospace">基準点から X=${numv(c.x,0).toFixed(1)}m  Z=${numv(c.z,0).toFixed(1)}m  ${numv(c.ry,0)}°</div>
-   </div>`).join("");}
-  else h+=`<div class="hint">ボタンで重機・車両・警備員・歩行帯を配置。画面上でドラッグ＝移動／Ctrl＋ドラッグ＝回転。歩行帯に重機が重なると赤く警告します。</div>`;
+     <b style="font-size:11.5px">${seld?"▸ ":""}${t?t.label:c.type}${c._warn?' <span style="color:#D64545">⚠歩行帯と干渉</span>':''}</b>
+     <button class="del" onclick="event.stopPropagation();delCO(${i})">削除</button></div>
+    ${opts}
+    <div style="font-size:10px;color:var(--mut);font-family:ui-monospace">基準点 X=${numv(c.x,0).toFixed(1)}m Z=${numv(c.z,0).toFixed(1)}m ${numv(c.ry,0)}°</div>
+    ${guide.length?`<div style="font-size:10px;color:#2552A0;margin-top:2px">ガイド: ${guide.join(" / ")}${seld?"（表示中）":"（選択で表示）"}</div>`:""}
+   </div>`;}).join("");}
+  else h+=`<div class="hint">ボタンで重機・車両・仮設材を配置。<b>クリックで選択</b>すると干渉ガイド（張出・旋回・作業半径）が表示され、サイズも変更できます。ドラッグ＝移動／Ctrl＋ドラッグ＝回転。歩行帯に重機が重なると赤警告します。</div>`;
+  h+=`<div style="margin-top:6px">${CK("スナップ（道路・敷鉄板に吸着／15°刻み回転）",U.snap,"(v)=>S('snap',v,false)")}</div>`;
   // 寸法線
   h+=`<div style="border-top:1px solid var(--line);margin:10px 0 6px"></div>
    <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:4px">寸法線ツール</div>
@@ -804,7 +952,7 @@ function renderPanel(){
  $("#body").innerHTML=h;
 }
 function renderTitle(){
- const modeLabel={build:`仮設計画イメージ（${Math.min(U.p.floors,U.tw.step)}階 躯体時）`,demo:"既存解体フェーズ ― 重機配置検討",plan:"VOLUME STUDY ― ボリューム検討図"}[U.tw.mode]||"VOLUME STUDY";
+ const modeLabel={build:`仮設計画イメージ（${Math.min(U.p.floors,U.tw.step)}階 躯体時）`,demo:"既存解体フェーズ ― 重機配置検討",plan:"BuildSight ― 営業概算BIM"}[U.tw.mode]||"BuildSight";
  const st=U._stats||{floorArea:0,maxFloors:0};
  const site=posv(U.site.w,30)*posv(U.site.d,18);
  // 建築面積≒最大階の床面積（各ブロックの1F相当を合算）
@@ -820,7 +968,7 @@ function renderTitle(){
    <div style="display:flex;justify-content:space-between"><span style="color:var(--mut);font-size:10px">建蔽率</span><b style="font-family:ui-monospace;font-size:11px;color:${barColor(bcr,60)}">${bcr.toFixed(0)} %</b></div>
    <div style="display:flex;justify-content:space-between"><span style="color:var(--mut);font-size:10px">容積率</span><b style="font-family:ui-monospace;font-size:11px;color:${barColor(far,300)}">${far.toFixed(0)} %</b></div>${costRow}
    <div style="font-size:8.5px;color:var(--mut);margin-top:2px">敷地${site.toFixed(0)}m²に対する概算値（設計値ではありません）</div></div>`;
- $("#title").innerHTML=`<div class="h">${modeLabel}</div><div class="b">
+ $("#title").innerHTML=`<div class="h" style="display:flex;justify-content:space-between;align-items:center"><span>${modeLabel}</span><span id="title-toggle" style="cursor:pointer;padding:0 4px;font-size:13px" onclick="U._titleMin=!U._titleMin;renderTitle()">${U._titleMin?"＋":"−"}</span></div><div class="b" style="${U._titleMin?"display:none":""}">
   <div style="font-weight:700;font-size:12px;border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:4px">${U.p.name||"（物件名未入力）"}</div>
   <table><tr><td>用途・構造</td><td>${U.p.use}・${U.p.struct}造</td></tr>
   <tr><td>規模</td><td>地上${Math.round(posv(U.p.floors,0))}階　H=${posv(U.p.height,0)}m</td></tr>
@@ -834,9 +982,26 @@ function view(k){const H=posv(U.p.height,42);
  if(k==="front"){ctrl.theta=Math.PI/2;ctrl.phi=1.35;ctrl.r=Math.max(H*2,115);}
  if(k==="top"){ctrl.phi=.14;ctrl.r=Math.max(H*2,130);}
  U.auto=false;renderBar();}
-function savePNG(){const a=document.createElement("a");
- a.href=renderer.domElement.toDataURL("image/png");
- a.download=`${U.p.name||"volume"}_${U.tw.mode==="build"?"仮設計画":U.line?"線画下絵":"ボリューム"}.png`;a.click();}
+function savePNG(){
+ // クリーン出力：UI（パネル・バー・表題・ヒント）とグリッドを一時非表示にして純粋な3Dのみ出力
+ const ui=["#panel","#bar","#title","#drag"].map(s=>$(s)).filter(Boolean);
+ const prevDisp=ui.map(e=>e.style.display);
+ const prevGrid=U.grid.show;
+ U._exporting=true;
+ ui.forEach(e=>e.style.display="none");
+ if(U.grid.show){U.grid.show=false;}
+ rebuild();  // ガイド非表示・グリッド非表示で再構築
+ renderer.render(scene,camera);
+ const url=renderer.domElement.toDataURL("image/png");
+ // 復帰
+ U._exporting=false;
+ U.grid.show=prevGrid; rebuild();
+ ui.forEach((e,i)=>e.style.display=prevDisp[i]);
+ const a=document.createElement("a");
+ a.href=url;
+ a.download=`${U.p.name||"BuildSight"}_${U.tw.mode==="build"?"仮設計画":U.tw.mode==="demo"?"既存解体":U.line?"線画下絵":"パース"}.png`;
+ a.click();
+}
 function renderBar(){
  $("#bar").innerHTML=`
   <button class="btn" style="background:${U.appMode==="quick"?"var(--amber)":"#fff"};font-weight:700" onclick="U.appMode='quick';rebuild();renderBar();renderPanel()">概算モード</button>
@@ -855,5 +1020,6 @@ function renderBar(){
   <button class="btn primary" onclick="savePNG()">PNG保存</button>`;
 }
 $("#phead").addEventListener("click",()=>{const w=$("#pwrap");const off=w.style.display==="none";w.style.display=off?"":"none";$("#parr").textContent=off?"▲":"▼";});
+U._titleMin = (window.innerWidth < 720);  // モバイルは初期最小化
 renderBar();renderPanel();rebuild();
 setTimeout(()=>{const d=$("#drag");if(d)d.style.display="none";},9000);
