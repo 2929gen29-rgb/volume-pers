@@ -15,7 +15,7 @@ const U={
  road:{w:8,side:"none"},
  poles:{n:3,pitch:18,far:true,dx:0,dz:0,ry:0},
  demo:{w:22,d:14,h:9,dx:0,dz:0,ry:0},
- tw:{mode:"plan",step:8,crane:true,craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,scaffold:true,poles:true,mixer:true,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
+ tw:{mode:"plan",step:8,crane:true,craneModel:"JCL022", craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,scaffold:true,poles:true,mixer:true,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
  under:{tex:null,show:true,width:40,opacity:.65,rot:0,dx:0,dz:0,pages:1,page:1,raw:null},
  photo:{tex:null,show:true,width:160,opacity:.8,rot:0,dx:0,dz:0},
  nbs:[], line:false, auto:true, tab:"諸元", moveLayers:false,
@@ -26,6 +26,8 @@ const U={
  roadcond:{lane:6, walk:2.5, side:"front"}, // 道路条件（車道・歩道幅員）
  cobj:[],                    // 施工オブジェクト配列（constructionObjects）
  dim:{on:false, a:null, b:null}, // 寸法線ツール（2点間）
+ polyInput:{on:false, pts:[], target:null}, // 多角形入力モード
+ calib:{on:false, a:null, b:null}, // 下絵スケール補正（2点）
  dxf:{ents:null, layers:{}, scale:0.001, dx:0, dz:0, raw:null}, // DXF読込（1/1000）
  cost:{unit:32, show:true},  // 概算単価（万円/㎡）
  geo:{elev:null, name:"", status:""},  // 住所→標高・地形
@@ -79,6 +81,19 @@ const COBJ_TYPES={
 };
 // 指定タイプ・クラスの寸法を引く
 function cobjSize(type,sizeKey){const t=COBJ_TYPES[type];if(!t)return null;const arr=t.sizes;return arr.find(s=>s.key===sizeKey)||arr[0];}
+// タワークレーン カタログ仕様（昭和 RENTAL CATALOGUE 2018より・営業概算用）
+//  work=作業半径(m), cap=定格荷重(t), tail=尾部旋回半径(m), jib=ジブ長(m)
+const CRANE_SPECS={
+ JCL008C:{label:"昭和 JCL008C（ジブ10m/0.8t）",jib:10,work:10,cap:0.8,tail:2.1},
+ JCL010:{label:"昭和 JCL010Ⅱ（ジブ10m/1.0t）",jib:10,work:10,cap:1.0,tail:2.59},
+ JCL015:{label:"昭和 JCL015Ⅱ（ジブ15m/1.0t）",jib:15,work:15,cap:1.0,tail:2.38},
+ JCL07175:{label:"昭和 JCL07175Ⅱ（ジブ17.5m/0.7t）",jib:17.5,work:17.5,cap:0.7,tail:2.38},
+ JCL021:{label:"昭和 JCL021C・Ⅱ（ジブ21m/1.0t）",jib:21,work:21,cap:1.0,tail:2.95},
+ JCL022:{label:"昭和 JCL022Ⅱ（ジブ22m/1.0t）",jib:22,work:22,cap:1.0,tail:2.58},
+ JCL030:{label:"昭和 JCL030Ⅱ（ジブ30m/1.0t）",jib:30,work:30,cap:1.0,tail:2.865},
+ JCL040:{label:"昭和 JCL040Ⅱ（ジブ40m/1.0t）",jib:40,work:40,cap:1.0,tail:5.8},
+};
+function craneSpec(k){return CRANE_SPECS[k]||CRANE_SPECS.JCL022;}
 const USES=["共同住宅（賃貸）","共同住宅（分譲）","ホテル","事務所","店舗"];
 
 // ───── three 初期化 ─────
@@ -143,6 +158,21 @@ function setRy(k,deg){const r=objRyKey(k);if(!r)return;deg=((deg%360)+360)%360;
  else if(r[0]==="co"){if(U.cobj[r[1]])U.cobj[r[1]].ry=+deg.toFixed(0);}}
 el.addEventListener("pointerdown",(e)=>{
  ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);el.setPointerCapture(e.pointerId);
+ // 多角形入力モード：地面クリックで頂点追加
+ if(U.polyInput.on&&ctrl.ptrs.size===1){const gp=groundPoint(e);
+  U.polyInput.pts.push({x:+(gp.x-numv(U.site.dx,0)).toFixed(2),z:+(gp.z-numv(U.site.dz,0)).toFixed(2)});
+  rebuild();renderPanel();return;}
+ // 下絵スケール補正：2点クリック
+ if(U.calib.on&&ctrl.ptrs.size===1){const gp=groundPoint(e);
+  if(!U.calib.a){U.calib.a={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};U.calib.b=null;}
+  else if(!U.calib.b){U.calib.b={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};
+   const px=Math.hypot(U.calib.b.x-U.calib.a.x,U.calib.b.z-U.calib.a.z);
+   const ans=prompt("この2点間の実際の距離（m）を入力してください：\n（現在の画面上の距離: "+px.toFixed(2)+"m）");
+   const real=parseFloat(ans);
+   if(isFinite(real)&&real>0&&px>0.01){U.under.width=+(numv(U.under.width,40)*(real/px)).toFixed(2);U.calib.on=false;U.calib.a=null;U.calib.b=null;alert("下絵スケールを補正しました。図面幅 ≒ "+U.under.width+"m");}
+  }
+  else {U.calib.a={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};U.calib.b=null;}
+  rebuild();renderPanel();return;}
  // 寸法線ツール：地面の2点を順にクリック
  if(U.dim.on&&ctrl.ptrs.size===1){const gp=groundPoint(e);
   if(!U.dim.a){U.dim.a={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};U.dim.b=null;}
@@ -192,10 +222,16 @@ const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;
    dragObj=null;rotMode=false;renderPanel();}
 };
 el.addEventListener("pointerup",endPtr);el.addEventListener("pointercancel",endPtr);
-el.addEventListener("wheel",(e)=>{e.preventDefault();
- if((e.ctrlKey||e.metaKey)&&dragObj){setRy(dragObj.userData.dragKey,getRy(dragObj.userData.dragKey)+(e.deltaY>0?5:-5));rebuild();return;}
+el.addEventListener("wheel",(e)=>{e.preventDefault(); if((e.ctrlKey||e.metaKey)&&dragObj){setRy(dragObj.userData.dragKey,getRy(dragObj.userData.dragKey)+(e.deltaY>0?5:-5));rebuild();return;}
  ctrl.r=Math.min(800,Math.max(20,ctrl.r*(1+e.deltaY*.001)));},{passive:false});
 function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
+el.addEventListener("dblclick",(e)=>{
+ if(U.polyInput.on&&U.polyInput.pts.length>=3){
+  U.blocks.push({id:Date.now(),label:"多角形",f1:1,f2:Math.max(1,Math.round(posv(U.p.floors,3))),shape:"poly",poly:U.polyInput.pts.slice(),dx:0,dz:0,ry:0});
+  U.polyInput.on=false;U.polyInput.pts=[];
+  rebuild();renderPanel();renderBar();
+ }
+});
 addEventListener("resize",resize);resize();
 (function loop(){requestAnimationFrame(loop);if(U.auto)ctrl.theta+=.0035;
  camera.position.set(ctrl.r*Math.sin(ctrl.phi)*Math.cos(ctrl.theta),ctrl.ty+ctrl.r*Math.cos(ctrl.phi),ctrl.r*Math.sin(ctrl.phi)*Math.sin(ctrl.theta));
@@ -291,6 +327,30 @@ function rebuild(){
   const f1=Math.max(1,Math.round(posv(b.f1,1)));
   const f2=Math.min(floorsAll,Math.max(f1,Math.round(posv(b.f2,f1))));
   const nFfull=f2-f1+1;
+  // ───── 自由多角形ブロック ─────
+  if(b.shape==="poly" && Array.isArray(b.poly) && b.poly.length>=3){
+   const pts=b.poly; // [{x,z}...] m単位（敷地原点基準）
+   // 多角形面積（シューレース公式・x-z平面）
+   let area2=0; for(let i=0;i<pts.length;i++){const p=pts[i],q=pts[(i+1)%pts.length];area2+=p.x*q.z-q.x*p.z;}
+   const area=Math.abs(area2)/2;
+   sumFloorArea+=area*nFfull; maxFloors=Math.max(maxFloors,f2);
+   const bTo=Math.min(f2,built); if(bTo<f1)return;
+   const nF=bTo-f1+1, bh=nF*fh, y0=gl+(f1-1)*fh;
+   const shape=new THREE.Shape();
+   shape.moveTo(pts[0].x, -pts[0].z);  // x-z → x-(-z)でThree.jsの向きに
+   for(let i=1;i<pts.length;i++)shape.lineTo(pts[i].x, -pts[i].z);
+   shape.closePath();
+   const eg=new THREE.ExtrudeGeometry(shape,{depth:bh,bevelEnabled:false});
+   eg.rotateX(-Math.PI/2);  // XY押し出し → Y方向の高さに
+   const ox=sdx+numv(b.dx,0), oz=sdz+numv(b.dz,0);
+   const pm=new THREE.Mesh(eg, L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0xcfd3d9}));
+   pm.position.set(ox,y0+0.12,oz); pm.castShadow=!L; pm.receiveShadow=!L;
+   pm.userData.dragKey="blk:"+bi; g.add(pm); dragMap["blk:"+bi]=pm;
+   if(L){const ee=new THREE.LineSegments(new THREE.EdgesGeometry(eg,12),new THREE.LineBasicMaterial({color:0x16243d}));ee.position.set(ox,y0+0.12,oz);g.add(ee);}
+   // 屋上パラペット相当（簡易）
+   if(bTo===f2&&U.tw.mode==="plan"&&!L){const cap=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:0.8,bevelEnabled:false}),new THREE.MeshLambertMaterial({color:0xcfd3d9}));cap.geometry.rotateX(-Math.PI/2);cap.position.set(ox,y0+bh+0.12,oz);g.add(cap);}
+   return;
+  }
   const W=posv(b.w, Math.sqrt(posv(b.area,200)*posv(b.ratio,1.5)));
   const D=posv(b.d, Math.sqrt(posv(b.area,200)/posv(b.ratio,1.5)));
   sumFloorArea+=W*D*nFfull; maxFloors=Math.max(maxFloors,f2);
@@ -384,9 +444,10 @@ function rebuild(){
   mk(sw/2-4,-sw/4-2,sd/2,0);mk(sw/2-4,sw/4+2,sd/2,0);
   fG.position.set(sdx,0,sdz);g.add(fG);}
 
- // タワークレーン（ドラッグ可）
+ // タワークレーン（ドラッグ可・カタログ仕様連動）
  if(U.tw.crane&&U.tw.mode==="build"){
-  const mh=builtH+16, jib=posv(U.tw.craneJib,28);
+  const spec=craneSpec(U.tw.craneModel);
+  const mh=builtH+16, jib=spec.jib, work=spec.work;
   const cg=new THREE.Group();cg.userData.dragKey="crane";
   const cm=mat(0xe8731a);
   const a=(geo,x,y,z)=>{const m=new THREE.Mesh(geo,cm);m.position.set(x,y,z);m.castShadow=!L;cg.add(m);if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:0x16243d}));e.position.set(x,y,z);cg.add(e);}};
@@ -396,7 +457,12 @@ function rebuild(){
   a(new THREE.BoxGeometry(.5,4.5,.5),0,mh+4.4,0);
   const drop=Math.max(4,mh-builtH-4);
   a(new THREE.BoxGeometry(.07,drop,.07),jib*.72,mh+2-drop/2,0);a(new THREE.BoxGeometry(.9,.9,.9),jib*.72,mh+2-drop,0);
-  if(U.tw.radius&&!L){const ring=new THREE.Mesh(new THREE.RingGeometry(jib-.4,jib,64),new THREE.MeshBasicMaterial({color:0xe8731a,transparent:true,opacity:.45,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.1;cg.add(ring);}
+  // 作業半径ガイド（カタログ作業半径・選択時/設定時のみ・画像出力時は非表示）
+  if(U.tw.radius&&!L&&!U._exporting){
+   const ring=new THREE.Mesh(new THREE.RingGeometry(work-0.5,work,72),new THREE.MeshBasicMaterial({color:0xe8731a,transparent:true,opacity:.30,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.1;cg.add(ring);
+   // 尾部旋回半径
+   const tring=new THREE.Mesh(new THREE.RingGeometry(spec.tail-0.25,spec.tail,48),new THREE.MeshBasicMaterial({color:0xD64545,transparent:true,opacity:.5,side:THREE.DoubleSide}));tring.rotation.x=-Math.PI/2;tring.position.y=.12;cg.add(tring);
+  }
   cg.position.set(numv(U.tw.craneX,16),.1,numv(U.tw.craneZ,0));
   cg.rotation.y=numv(U.tw.craneRot,0)*Math.PI/180;
   g.add(cg);dragMap.crane=cg;}
@@ -555,6 +621,17 @@ function rebuild(){
   g.add(lg); dragMap.dxf=lg;
  }
 
+ // ───── 多角形入力中のプレビュー ─────
+ if(U.polyInput.on&&U.polyInput.pts.length&&!L){
+  const pp=U.polyInput.pts;
+  pp.forEach(p=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.5,10,10),new THREE.MeshBasicMaterial({color:0xF2A33C}));m.position.set(sdx+p.x,0.5,sdz+p.z);g.add(m);});
+  if(pp.length>=2){const lp=[];pp.forEach(p=>lp.push(sdx+p.x,0.4,sdz+p.z));
+   const lg=new THREE.BufferGeometry();lg.setAttribute("position",new THREE.BufferAttribute(new Float32Array(lp),3));
+   g.add(new THREE.Line(lg,new THREE.LineBasicMaterial({color:0xF2A33C})));}
+ }
+ // ───── スケール補正の点 ─────
+ if(U.calib.a&&!L){const dot=(p)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.5,10,10),new THREE.MeshBasicMaterial({color:0x2552A0}));m.position.set(p.x,0.5,p.z);g.add(m);};dot(U.calib.a);if(U.calib.b)dot(U.calib.b);}
+
  // ───── 寸法線ツール ─────
  if(U.dim.a&&!L){
   const A=U.dim.a, B=U.dim.b;
@@ -575,7 +652,7 @@ function rebuild(){
 
 // ───── 案件データの保存・読込 (JSON) ─────
 function saveProjectJSON(){
- const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="sel")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
+ const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="sel"||k==="polyInput"||k==="calib")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
  const blob=new Blob([JSON.stringify(saveState,null,2)],{type:"application/json"});
  const a=document.createElement("a");
  const dateStr=new Date().toISOString().slice(0,10).replace(/-/g,"");
@@ -601,6 +678,9 @@ function loadProjectJSON(file){
    if(!U.roadcond)U.roadcond={lane:6,walk:2.5,side:"front"};
    if(!U.cobj)U.cobj=[];
    if(!U.dim)U.dim={on:false,a:null,b:null};
+   if(!U.polyInput)U.polyInput={on:false,pts:[],target:null};
+   if(!U.calib)U.calib={on:false,a:null,b:null};
+   if(U.tw&&!U.tw.craneModel)U.tw.craneModel="JCL022";
    if(!U.dxf)U.dxf={ents:null,layers:{},scale:0.001,dx:0,dz:0,raw:null};
    if(!U.cost)U.cost={unit:32,show:true};
    if(!U.geo)U.geo={elev:null,name:"",status:""};
@@ -781,7 +861,10 @@ function renderPanel(){
   <div class="hint">概算モードのとき、延床×単価で右下に概算工事費を表示します（RC共同住宅は30〜40万/㎡が一般的な目安）。</div>`;
  }
  if(U.tab==="形状"){
-  h=U.blocks.map(b=>`<div class="card">
+  h=U.blocks.map((b,bi)=>{
+   const isPoly=(b.shape==="poly"&&Array.isArray(b.poly));
+   let polyArea=0; if(isPoly){let a2=0;for(let i=0;i<b.poly.length;i++){const p=b.poly[i],q=b.poly[(i+1)%b.poly.length];a2+=p.x*q.z-q.x*p.z;}polyArea=Math.abs(a2)/2;}
+   return `<div class="card">
    <div style="display:flex;justify-content:space-between;margin-bottom:5px">
     <input type="text" value="${b.label}" style="width:110px;font-weight:700;padding:4px 7px" oninput="SB(${b.id},'label',this.value)">
     ${U.blocks.length>1?`<button class="del" onclick="delB(${b.id})">削除</button>`:""}
@@ -789,13 +872,20 @@ function renderPanel(){
    <div class="grid2">
     <label class="f"><span>開始階</span><input type="number" value="${b.f1}" oninput="SB(${b.id},'f1',this.value)"></label>
     <label class="f"><span>終了階</span><input type="number" value="${b.f2}" oninput="SB(${b.id},'f2',this.value)"></label>
-    <label class="f"><span>間口 m</span><input type="number" step="0.1" value="${b.w}" oninput="SB(${b.id},'w',this.value)"></label>
-    <label class="f"><span>奥行 m</span><input type="number" step="0.1" value="${b.d}" oninput="SB(${b.id},'d',this.value)"></label>
+    ${isPoly?"":`<label class="f"><span>間口 m</span><input type="number" step="0.1" value="${b.w}" oninput="SB(${b.id},'w',this.value)"></label>
+    <label class="f"><span>奥行 m</span><input type="number" step="0.1" value="${b.d}" oninput="SB(${b.id},'d',this.value)"></label>`}
    </div>
-   <div class="hint" style="margin:0 0 4px">床面積 ≒ <b>${(posv(b.w,10)*posv(b.d,10)).toFixed(1)} m²</b>（間口×奥行）</div>
+   ${isPoly?`<div class="hint" style="margin:0 0 4px">自由多角形（${b.poly.length}頂点）　1層面積 ≒ <b>${polyArea.toFixed(1)} m²</b></div>`:`<div class="hint" style="margin:0 0 4px">床面積 ≒ <b>${(posv(b.w,10)*posv(b.d,10)).toFixed(1)} m²</b>（間口×奥行）</div>`}
    ${SL("位置 左右",b.dx,`(v)=>SB(${b.id},'dx',v)`,-30,30,0.5)}
    ${SL("位置 前後",b.dz,`(v)=>SB(${b.id},'dz',v)`,-30,30,0.5)}
-  </div>`).join("")+`<button class="addbtn" onclick="addB()">＋ ブロックを追加（低層部など）</button><div class="hint">建物ブロックは画面上でドラッグ＝移動／<b>Ctrl＋ドラッグ＝平面の回転</b>。</div>`;
+  </div>`;}).join("")
+  +`<button class="addbtn" onclick="addB()">＋ 矩形ブロックを追加</button>`
+  +`<div style="border-top:1px solid var(--line);margin:10px 0 6px"></div>
+   <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:3px">形状タイプ：自由多角形（L字・雁行など）</div>`
+  +(U.polyInput.on
+    ? `<div style="background:#FFF3DD;border:1.5px dashed var(--amber);border-radius:8px;padding:8px 10px;font-size:11.5px;line-height:1.7"><b>多角形入力モード中</b><br>下絵・敷地の上をクリックして頂点を打ち、<b>ダブルクリックで閉じる</b>と建物になります。<br>現在 ${U.polyInput.pts.length} 点${U.polyInput.pts.length>=3?"（閉じられます）":"（あと"+(3-U.polyInput.pts.length)+"点以上）"}<br><button class="btn" style="margin-top:6px" onclick="U.polyInput.pts.pop();rebuild();renderPanel()">1つ戻す</button> <button class="btn" style="margin-top:6px;color:#B0433A" onclick="U.polyInput.on=false;U.polyInput.pts=[];rebuild();renderPanel();renderBar()">中止</button></div>`
+    : `<button class="addbtn" onclick="U.polyInput.on=true;U.polyInput.pts=[];renderPanel();renderBar()">✏️ 多角形入力を開始（頂点クリック→ダブルクリックで閉じる）</button><div class="hint">配置図PDFを下敷きにして外周をなぞると、正確な平面形状と延床面積が得られます。</div>`)
+  +`<div class="hint">建物はドラッグ＝移動／<b>Ctrl＋ドラッグ＝回転</b>。</div>`;
  }
  if(U.tab==="敷地・地形"){
   const city=cityFromAddr(U.p.addr||"");
@@ -844,10 +934,15 @@ function renderPanel(){
   ${U.under.raw?`<button class="addbtn" style="margin-bottom:8px" onclick="parsePdfSummary()">📄 設計概要を自動読取（β）→ 諸元へ反映</button>`:""}
   ${U.under.pages>1?`<label class="f"><span>PDFページ（全${U.under.pages}p）</span><input type="number" min="1" max="${U.under.pages}" value="${U.under.page}" oninput="setPage(this.value)"></label>`:""}
   ${CK("下敷きを表示",U.under.show,"(v)=>S('under.show',v)")}
-  ${SL("図面の幅 = 実寸 m",U.under.width,"(v)=>S('under.width',v)",5,200,1)}
-  ${SL("回転 °",U.under.rot,"(v)=>S('under.rot',v)",-180,180,1)}
+  <div style="border-top:1px solid var(--line);margin:8px 0 4px"></div>
+  <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:3px">キャリブレーション（正確な縮尺合わせ）</div>
+  ${U.calib.on
+    ? `<div style="background:#EEF3FA;border:1.5px dashed #2552A0;border-radius:8px;padding:8px 10px;font-size:11.5px;line-height:1.7"><b>スケール補正モード中</b><br>下絵上の「実寸が分かる2点」（例：通り芯間や既知の寸法線の端点）をクリックすると、実際の距離を入力する画面が出ます。<br>${U.calib.a?"1点目を取得。2点目をクリック…":"1点目をクリック…"}<br><button class="btn" style="margin-top:6px;color:#B0433A" onclick="U.calib.on=false;U.calib.a=null;U.calib.b=null;rebuild();renderPanel()">中止</button></div>`
+    : `<button class="addbtn" onclick="U.calib.on=true;U.calib.a=null;U.calib.b=null;renderPanel()">📐 2点で実寸を指定して縮尺を自動補正</button>`}
+  ${SL("図面の幅 = 実寸 m",U.under.width,"(v)=>S('under.width',v)",5,200,0.5)}
+  ${SL("回転 °（建物の傾きを軸に合わせる）",U.under.rot,"(v)=>S('under.rot',v)",0,360,1)}
   ${SL("透過度",U.under.opacity,"(v)=>S('under.opacity',v)",0.1,1,0.05)}
-  <div class="hint">図面はドラッグで位置合わせできます。PDFは1ページ目から表示（ページ指定可）。</div>`;
+  <div class="hint">図面はドラッグで位置合わせ。スケール補正→回転→位置の順に合わせると正確になぞれます。PDFは1ページ目から表示（ページ指定可）。</div>`;
  }
  if(U.tab==="近隣"){
   h=`<div class="hint" style="margin:0 0 8px">該当住所の<b>Googleマップ航空写真のスクリーンショット</b>を読み込み、広域の下敷きにします（社内検討用・出典明記）。距離ツールで測った幅を「写真の幅」に入れると縮尺が合います。</div>
@@ -890,7 +985,7 @@ function renderPanel(){
    h+=SL("躯体の進捗（〜階）",U.tw.step,"(v)=>S('tw.step',v)",1,Math.max(1,Math.round(posv(U.p.floors,14))),1)
    +`<div style="border-top:1px solid var(--line);margin:8px 0"></div>`
    +CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")
-   +(U.tw.crane?`<div style="padding-left:10px">${SL("ジブ長 m",U.tw.craneJib,"(v)=>S('tw.craneJib',v)",12,55,1)}${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}${CK("作業半径の円",U.tw.radius,"(v)=>S('tw.radius',v)")}</div>`:"")
+   +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${CRANE_SPECS[k].label}</option>`).join("")}</select></label><div style="font-size:10px;color:#2552A0;margin:-2px 0 4px">作業半径 ${craneSpec(U.tw.craneModel).work}m ／ 定格 ${craneSpec(U.tw.craneModel).cap}t ／ 尾部 ${craneSpec(U.tw.craneModel).tail}m</div>${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}${CK("作業半径・尾部旋回の円",U.tw.radius,"(v)=>S('tw.radius',v)")}</div>`:"")
    +CK("ロングスパンEV（ドラッグ可）",U.tw.ev,"(v)=>S('tw.ev',v)")
    +CK("外部足場＋養生シート",U.tw.scaffold,"(v)=>S('tw.scaffold',v)")
    +CK("仮囲い（ゲート付き）",U.tw.fence,"(v)=>S('tw.fence',v)")
