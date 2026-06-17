@@ -12,7 +12,7 @@ const U={
  p:{name:"サンプル計画（架空）",use:"事務所",struct:"RC",floors:3,height:12.0,tArea:600,addr:""},
  site:{w:25,d:20,dx:0,dz:0,gl:0,h:[0,0,0,0]}, // 敷地面積≒500㎡
  blocks:[{id:1,label:"建物",f1:1,f2:3,w:20.0,d:10.0,dx:0,dz:0,ry:0}],
- road:{w:8,side:"none",dx:0,dz:0,ry:0},
+ road:{w:8,side:"none"},
  poles:{n:3,pitch:18,far:true,dx:0,dz:0,ry:0},
  demo:{w:22,d:14,h:9,dx:0,dz:0,ry:0},
  tw:{mode:"plan",step:8,crane:true,craneModel:"JCL022", craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,scaffold:true,poles:true,mixer:true,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
@@ -120,7 +120,7 @@ function groundPoint(e){
  const t=-ray.ray.origin.y/ray.ray.direction.y;
  return ray.ray.origin.clone().add(ray.ray.direction.clone().multiplyScalar(t));
 }
-function dragCandidates(){const small=["crane","ev","mixer","rough","poles","demo","road"];const out=[];
+function dragCandidates(){const small=["crane","ev","mixer","rough","poles","demo"];const out=[];
  for(const[k,o]of Object.entries(dragMap)){
   if(small.includes(k)||k.startsWith("nb:")||k.startsWith("blk:")||k.startsWith("co:"))out.push(o);
   else if((k==="site"||k==="under"||k==="photo"||k==="dxf")&&U.moveLayers)out.push(o);}
@@ -139,7 +139,6 @@ function objRyKey(k){
  if(k==="crane")return ["tw","craneRot"]; if(k==="ev")return ["tw","evRy"];
  if(k==="mixer")return ["tw","mixRy"]; if(k==="rough")return ["tw","rufRy"];
  if(k==="poles")return ["poles","ry"]; if(k==="demo")return ["demo","ry"];
- if(k==="road")return ["road","ry"];
  if(k.startsWith("nb:"))return ["nb",+k.slice(3)];
  if(k.startsWith("blk:"))return ["blk",+k.slice(4)];
  if(k.startsWith("co:"))return ["co",+k.slice(3)];
@@ -147,7 +146,6 @@ function objRyKey(k){
 }
 function getRy(k){const r=objRyKey(k);if(!r)return 0;
  if(r[0]==="tw")return numv(U.tw[r[1]],0); if(r[0]==="poles")return numv(U.poles.ry,0); if(r[0]==="demo")return numv(U.demo.ry,0);
- if(r[0]==="road")return numv(U.road.ry,0);
  if(r[0]==="nb")return numv((U.nbs[r[1]]||{}).ry,0); if(r[0]==="blk")return numv((U.blocks[r[1]]||{}).ry,0);
  if(r[0]==="co")return numv((U.cobj[r[1]]||{}).ry,0);
  return 0;}
@@ -155,7 +153,6 @@ function setRy(k,deg){const r=objRyKey(k);if(!r)return;deg=((deg%360)+360)%360;
  if(r[0]==="tw")U.tw[r[1]]=+deg.toFixed(0);
  else if(r[0]==="poles")U.poles.ry=+deg.toFixed(0);
  else if(r[0]==="demo")U.demo.ry=+deg.toFixed(0);
- else if(r[0]==="road")U.road.ry=+deg.toFixed(0);
  else if(r[0]==="nb"){if(U.nbs[r[1]])U.nbs[r[1]].ry=+deg.toFixed(0);}
  else if(r[0]==="blk"){if(U.blocks[r[1]])U.blocks[r[1]].ry=+deg.toFixed(0);}
  else if(r[0]==="co"){if(U.cobj[r[1]])U.cobj[r[1]].ry=+deg.toFixed(0);}}
@@ -201,7 +198,6 @@ const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;
   if(k==="ev"){U.tw.evX=+x.toFixed(1);U.tw.evZ=+z.toFixed(1);}
   if(k==="mixer"){U.tw.mixX=+x.toFixed(1);U.tw.mixZ=+z.toFixed(1);}
   if(k==="rough"){U.tw.rufX=+x.toFixed(1);U.tw.rufZ=+z.toFixed(1);}
-  if(k==="road"){U.road.dx=+x.toFixed(1);U.road.dz=+z.toFixed(1);}
   if(k==="poles"){U.poles.dx=+(x-numv(U.site.dx,0)).toFixed(1);U.poles.dz=+(z-numv(U.site.dz,0)).toFixed(1);}
   if(k==="demo"){U.demo.dx=+(x-numv(U.site.dx,0)).toFixed(1);U.demo.dz=+(z-numv(U.site.dz,0)).toFixed(1);}
   if(k==="under"){U.under.dx=+x.toFixed(1);U.under.dz=+z.toFixed(1);}
@@ -213,8 +209,8 @@ const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;
     let nx=+x.toFixed(1), nz=+z.toFixed(1);
     // スナップ：前面道路の歩行帯/敷鉄板ラインに近ければZを吸着、角度は道路平行(0°)へ寄せる
     if(U.snap!==false){
-     const snapRoadZ=numv(U.site.dz,0)+posv(U.site.d,18)/2+1.6+Math.min(20,Math.max(4,numv(U.road.w,8)))/2;
-     if(Math.abs(nz-snapRoadZ)<1.5){nz=+snapRoadZ.toFixed(1);}              // 道路中心へ吸着
+     const roadZ=numv(U.site.dz,0)+posv(U.site.d,18)/2+1.6+Math.min(20,Math.max(4,numv(U.road.w,8)))/2;
+     if(Math.abs(nz-roadZ)<1.5){nz=+roadZ.toFixed(1);}              // 道路中心へ吸着
      // 近くの敷鉄板に平行寄せ
      U.cobj.forEach((o,oi)=>{if(o!==c&&o.type==="temp"&&o.size==="plate"){
        if(Math.hypot(numv(o.x,0)-nx,numv(o.z,0)-nz)<3){c.ry=numv(o.ry,0);}}});
@@ -273,22 +269,15 @@ function rebuild(){
  const gnd=new THREE.Mesh(new THREE.PlaneGeometry(1200,1200),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0xb9bec7}));
  gnd.rotation.x=-Math.PI/2;gnd.position.y=-0.07;gnd.receiveShadow=!L;g.add(gnd);
  const rw=Math.min(20,Math.max(4,numv(U.road.w,8)));
- const roadDx=numv(U.road.dx,0), roadDz=numv(U.road.dz,0), roadRy=numv(U.road.ry,0)*Math.PI/180;
- const roadBaseZ=sdz+sd/2+1.6+rw/2;
- const roadZ=roadBaseZ+roadDz;
- // 道路群をGroupにまとめてドラッグ可能にする
- const roadG=new THREE.Group(); roadG.userData.dragKey="road";
- roadG.position.set(roadDx, 0, roadDz); roadG.rotation.y=roadRy;
- const rbx=(pw,ph,pd,pc,px,py,pz,o={})=>{const geo=new THREE.BoxGeometry(pw,ph,pd);const m=new THREE.Mesh(geo,o.mat||mat(pc,o));m.position.set(px,py,pz);m.receiveShadow=!L;roadG.add(m);return m;};
- rbx(sw+60,0.1,rw,0x8d929b,sdx,0.05,roadBaseZ,{shadow:false});
- if(!L){rbx(sw+60,0.12,1.6,0xe8eaee,sdx,0.07,sdz+sd/2+0.8,{shadow:false});
-  if(rw>=6)rbx(sw+60,0.02,0.25,0xf2f4f6,sdx,0.12,roadBaseZ,{shadow:false});}
+ const roadZ=sdz+sd/2+1.6+rw/2;
+ box(g,sw+60,0.1,rw,0x8d929b,sdx,0.05,roadZ,{shadow:false});
+ if(!L){box(g,sw+60,0.12,1.6,0xe8eaee,sdx,0.07,sdz+sd/2+0.8,{shadow:false});
+  if(rw>=6)box(g,sw+60,0.02,0.25,0xf2f4f6,sdx,0.12,roadZ,{shadow:false});}
  if(U.road.side==="left"||U.road.side==="right"){
   const sgn=(U.road.side==="left"?-1:1);
-  rbx(rw,0.1,sd+rw+24,0x8d929b,sdx+sgn*(sw/2+1.6+rw/2),0.05,sdz+rw/2,{shadow:false});
-  if(!L)rbx(1.6,0.12,sd,0xe8eaee,sdx+sgn*(sw/2+0.8),0.07,sdz,{shadow:false});
+  box(g,rw,0.1,sd+rw+24,0x8d929b,sdx+sgn*(sw/2+1.6+rw/2),0.05,sdz+rw/2,{shadow:false});
+  if(!L)box(g,1.6,0.12,sd,0xe8eaee,sdx+sgn*(sw/2+0.8),0.07,sdz,{shadow:false});
  }
- g.add(roadG); dragMap.road=roadG;
  // グリッド表示
  if(U.grid.show&&!L){
   const gh=new THREE.GridHelper(200, Math.round(200/Math.max(0.5,numv(U.grid.size,1))), 0x9aa4b4, 0xc8cfd9);
@@ -302,6 +291,7 @@ function rebuild(){
   walkZone={x:sdx,z:wz,w:sw+60,d:ww};
   box(g,sw+60,0.04,ww,0x6EA46E,sdx,0.09,wz,{shadow:false});
  }
+
  // 敷地（地形メッシュ・ドラッグ可）
  const siteG=new THREE.Group();siteG.userData.dragKey="site";siteG.position.set(sdx,0,sdz);
  {const seg=12,vts=[],idx=[];
@@ -353,13 +343,7 @@ function rebuild(){
    const eg=new THREE.ExtrudeGeometry(shape,{depth:bh,bevelEnabled:false});
    eg.rotateX(-Math.PI/2);  // XY押し出し → Y方向の高さに
    const ox=sdx+numv(b.dx,0), oz=sdz+numv(b.dz,0);
-   // 用途別マテリアル（矩形ブロックと統一）
-   let polyMat;
-   if(L){polyMat=new THREE.MeshBasicMaterial({color:0xffffff});}
-   else if(isApt){polyMat=new THREE.MeshLambertMaterial({color:0xcfd3d9});}
-   else if(isOff){polyMat=new THREE.MeshLambertMaterial({color:0x3a587a,transparent:true,opacity:0.6});}
-   else{polyMat=new THREE.MeshLambertMaterial({color:0xcfd3d9});}
-   const pm=new THREE.Mesh(eg, polyMat);
+   const pm=new THREE.Mesh(eg, L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0xcfd3d9}));
    pm.position.set(ox,y0+0.12,oz); pm.castShadow=!L; pm.receiveShadow=!L;
    pm.userData.dragKey="blk:"+bi; g.add(pm); dragMap["blk:"+bi]=pm;
    if(L){const ee=new THREE.LineSegments(new THREE.EdgesGeometry(eg,12),new THREE.LineBasicMaterial({color:0x16243d}));ee.position.set(ox,y0+0.12,oz);g.add(ee);}
@@ -514,7 +498,7 @@ function rebuild(){
   box(mg,2.4,1,7,0xe9ebee,0,1.3,0);box(mg,2.2,1.7,2.2,0x5a7fae,0,1.9,-3.1);
   cylm(mg,1.25,.8,4.4,0xf2f4f6,0,2.6,.8,{rx:Math.PI/2-.2,seg:14});
   [-2.3,0,2.3].forEach(o=>{cylm(mg,.55,.55,.4,0x2c2f33,-1.05,.55,o,{rz:Math.PI/2});cylm(mg,.55,.55,.4,0x2c2f33,1.05,.55,o,{rz:Math.PI/2});});
-  mg.position.set(numv(U.tw.mixX,-12),0,U.tw.mixZ==null?roadBaseZ:numv(U.tw.mixZ,0));mg.rotation.y=numv(U.tw.mixRy,0)*Math.PI/180;
+  mg.position.set(numv(U.tw.mixX,-12),0,U.tw.mixZ==null?roadZ:numv(U.tw.mixZ,0));mg.rotation.y=numv(U.tw.mixRy,0)*Math.PI/180;
   g.add(mg);dragMap.mixer=mg;}
 
  // ラフタークレーン（ドラッグ可）
@@ -666,14 +650,27 @@ function rebuild(){
  renderTitle();
 }
 
-// ───── 案件データの保存・読込 (JSON) ─────
+// ───── 案件データの保存・読込 (JSON / AES暗号化対応) ─────
 function saveProjectJSON(){
  const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="sel"||k==="polyInput"||k==="calib")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
- const blob=new Blob([JSON.stringify(saveState,null,2)],{type:"application/json"});
- const a=document.createElement("a");
+ const jsonStr=JSON.stringify(saveState,null,2);
  const dateStr=new Date().toISOString().slice(0,10).replace(/-/g,"");
+ const baseName=`${U.p.name||"volume"}_${dateStr}`;
+ // パスワード設定の確認
+ const pw=(prompt("パスワードを設定しますか？\n設定する場合は入力してください。\n（空欄のままOKを押すと暗号化なしで保存します）")||"").trim();
+ let outStr, ext;
+ if(pw){
+  if(typeof CryptoJS==="undefined"){alert("CryptoJSが読み込まれていません。暗号化なしで保存します。");outStr=jsonStr;ext=".json";}
+  else{
+   const encrypted=CryptoJS.AES.encrypt(jsonStr,pw).toString();
+   outStr=JSON.stringify({encrypted:true,v:1,data:encrypted});
+   ext=".bsjson";  // 暗号化済みファイルは拡張子で判別しやすくする
+  }
+ }else{outStr=jsonStr;ext=".json";}
+ const blob=new Blob([outStr],{type:"application/json"});
+ const a=document.createElement("a");
  a.href=URL.createObjectURL(blob);
- a.download=`${U.p.name||"volume"}_${dateStr}.json`;
+ a.download=baseName+ext;
  a.click();
 }
 function loadProjectJSON(file){
@@ -681,14 +678,32 @@ function loadProjectJSON(file){
  const reader=new FileReader();
  reader.onload=(e)=>{
   try{
-   const parsed=JSON.parse(e.target.result);
+   const raw=e.target.result;
+   let parsed;
+   // 暗号化ファイルの判定
+   const wrapper=JSON.parse(raw);
+   if(wrapper&&wrapper.encrypted===true&&wrapper.data){
+    // 暗号化ファイル → パスワード入力
+    if(typeof CryptoJS==="undefined"){alert("CryptoJSが読み込まれていません。暗号化ファイルを読み込めません。");return;}
+    const pw=(prompt("このファイルはパスワードで保護されています。\nパスワードを入力してください：")||"").trim();
+    if(!pw){alert("パスワードが入力されませんでした。読み込みを中断します。");return;}
+    let decrypted;
+    try{
+     const bytes=CryptoJS.AES.decrypt(wrapper.data,pw);
+     decrypted=bytes.toString(CryptoJS.enc.Utf8);
+     if(!decrypted||decrypted.length<2)throw new Error("empty");
+    }catch(_){alert("パスワードが間違っているか、ファイルが破損しています。");return;}
+    try{parsed=JSON.parse(decrypted);}
+    catch(_){alert("パスワードが間違っているか、ファイルが破損しています。");return;}
+   }else{
+    // 通常ファイル（暗号化なし）
+    parsed=wrapper;
+   }
+   // ─── 以下は共通の展開処理 ───
    const cuTex=U.under.tex,cuRaw=U.under.raw,cuPages=U.under.pages,cuPage=U.under.page,cpTex=U.photo.tex;
    Object.assign(U,parsed);
    U.under.tex=cuTex;U.under.raw=cuRaw;U.under.pages=cuPages;U.under.page=cuPage;U.photo.tex=cpTex;
-   if(!U.road)U.road={w:8,side:"none",dx:0,dz:0,ry:0};
-   if(U.road.dx==null)U.road.dx=0;
-   if(U.road.dz==null)U.road.dz=0;
-   if(U.road.ry==null)U.road.ry=0;
+   if(!U.road)U.road={w:8,side:"none"};
    if(!U.poles)U.poles={n:3,pitch:18,far:true,dx:0,dz:0,ry:0};
    if(!U.guide)U.guide={show:false,road:1.25,nbor:1.25};
    if(!U.sun)U.sun={az:135,alt:55};
@@ -796,16 +811,6 @@ async function parsePdfSummary(){
  found["高さm"]=num1(/(?:最高|建物)\s*(?:の)?\s*高さ[^0-9]{0,12}([0-9]+(?:\.[0-9]+)?)/)||num1(/高さ[^0-9]{0,12}([0-9]+(?:\.[0-9]+)?)/);
  found["戸数"]=num1(/([0-9]+)\s*戸/);
  found["構造"]=/SRC|鉄骨鉄筋/.test(z)?"SRC":(/RC|鉄筋コンクリート/.test(z)?"RC":(/鉄骨造|S造/.test(z)?"S":null));
- // 拡張：建蔽率・容積率・用途
- found["建蔽率"]=num1(/建蔽率[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)/);
- found["容積率"]=num1(/容積率[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)/);
- // 用途キーワードの抽出（先にマッチしたものを採用）
- const useMap=[
-  {re:/共同住宅/,val:"共同住宅（賃貸）"},{re:/分譲/,val:"共同住宅（分譲）"},
-  {re:/ホテル|旅館/,val:"ホテル"},{re:/事務所|オフィス/,val:"事務所"},{re:/店舗|商業/,val:"店舗"}
- ];
- found["用途"]=null;
- for(const{re,val}of useMap){if(re.test(z)){found["用途"]=val;break;}}
  const lines=Object.entries(found).filter(([k,v])=>v!=null).map(([k,v])=>"・"+k+"： "+v);
  if(!lines.length){alert("設計概要らしき数値を見つけられませんでした（β）。手入力してください。");return;}
  if(!confirm("PDFから読み取りました（β版・必ず原本と照合してください）\n\n"+lines.join("\n")+"\n\nこの値を諸元へ反映しますか？"))return;
@@ -813,7 +818,6 @@ async function parsePdfSummary(){
  if(found["地上階数"])U.p.floors=found["地上階数"];
  if(found["高さm"]&&found["高さm"]>3&&found["高さm"]<250)U.p.height=found["高さm"];
  if(found["構造"])U.p.struct=found["構造"];
- if(found["用途"])U.p.use=found["用途"];
  if(found["建築面積"]){const b=U.blocks[0];const r=posv(b.w,12)/Math.max(1,posv(b.d,10));b.w=+Math.sqrt(found["建築面積"]*r).toFixed(1);b.d=+Math.sqrt(found["建築面積"]/r).toFixed(1);}
  if(found["敷地面積"]){const r=posv(U.site.w,30)/Math.max(1,posv(U.site.d,18));U.site.w=+Math.sqrt(found["敷地面積"]*r).toFixed(1);U.site.d=+Math.sqrt(found["敷地面積"]/r).toFixed(1);}
  rebuild();renderPanel();
@@ -1034,7 +1038,7 @@ function renderPanel(){
   if(U.cobj.length){h+=U.cobj.map((c,i)=>{
     const t=COBJ_TYPES[c.type]; const sz=cobjSize(c.type,c.size)||{};
     const seld=(U.sel==="co:"+i);
-    const opts=(t&&t.sizes.length>1)?`<select style="padding:4px 6px;font-size:11px;margin:4px 0" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onchange="setCOSize(${i},this.value)">${t.sizes.map(s=>`<option value="${s.key}" ${c.size===s.key?"selected":""}>${s.label}（${s.w}×${s.d}m）</option>`).join("")}</select>`:"";
+    const opts=(t&&t.sizes.length>1)?`<select style="padding:4px 6px;font-size:11px;margin:4px 0" onchange="setCOSize(${i},this.value)">${t.sizes.map(s=>`<option value="${s.key}" ${c.size===s.key?"selected":""}>${s.label}（${s.w}×${s.d}m）</option>`).join("")}</select>`:"";
     const guide=[];
     if(sz.out)guide.push(`張出${sz.out}m`); if(sz.tail)guide.push(`尾部旋回${sz.tail}m`); if(sz.work)guide.push(`作業半径${sz.work}m`);
     return `<div class="card" style="${c._warn?'border-color:#D64545;background:#FDF1F1':(seld?'border-color:#F2A33C;background:#FFFBF0':'')}" onclick="selCO(${i})">
@@ -1107,26 +1111,8 @@ function view(k){const H=posv(U.p.height,42);
  if(k==="front"){ctrl.theta=Math.PI/2;ctrl.phi=1.35;ctrl.r=Math.max(H*2,115);}
  if(k==="top"){ctrl.phi=.14;ctrl.r=Math.max(H*2,130);}
  U.auto=false;renderBar();}
-// ───── BIM連携 OBJエクスポート ─────
-function exportOBJ(){
- if(typeof THREE.OBJExporter==="undefined"){
-  alert("OBJExporterが読み込まれていません。\nindex.htmlの<head>内に以下を追加してください：\n<script src=\"https://unpkg.com/three@0.128.0/examples/js/exporters/OBJExporter.js\"><\/script>");
-  return;
- }
- try{
-  const exporter=new THREE.OBJExporter();
-  const objStr=exporter.parse(scene);
-  const blob=new Blob([objStr],{type:"text/plain"});
-  const a=document.createElement("a");
-  const dateStr=new Date().toISOString().slice(0,10).replace(/-/g,"");
-  a.href=URL.createObjectURL(blob);
-  a.download=`${U.p.name||"BuildSight"}_BIM_${dateStr}.obj`;
-  a.click();
- }catch(err){alert("OBJエクスポートに失敗しました: "+err.message);}
-}
-window.exportOBJ=exportOBJ;
-
 function savePNG(){
+ // クリーン出力：UI（パネル・バー・表題・ヒント）とグリッドを一時非表示にして純粋な3Dのみ出力
  const ui=["#panel","#bar","#title","#drag"].map(s=>$(s)).filter(Boolean);
  const prevDisp=ui.map(e=>e.style.display);
  const prevGrid=U.grid.show;
@@ -1159,9 +1145,8 @@ function renderBar(){
   <button class="btn ${U.line?"active":""}" onclick="U.line=!U.line;rebuild();renderBar()">${U.line?"通常表示":"線画(AI下絵)"}</button>
   <button class="btn" onclick="saveProjectJSON()" style="border:1.5px solid var(--amber)">設定保存</button>
   <button class="btn" onclick="document.getElementById('json-file').click()" style="border:1.5px solid var(--amber)">設定読込</button>
-  <input type="file" id="json-file" accept=".json" style="display:none" onchange="loadProjectJSON(this.files[0]); this.value=''">
-  <button class="btn primary" onclick="savePNG()">PNG保存</button>
-  <button class="btn" onclick="exportOBJ()" style="border:1.5px solid #2E7D5B;color:#2E7D5B;font-weight:700" title="GLOOBEなどBIMソフトへ渡すOBJファイルを出力">BIMへ出力(OBJ)</button>`;
+  <input type="file" id="json-file" accept=".json,.bsjson" style="display:none" onchange="loadProjectJSON(this.files[0]); this.value=''">
+  <button class="btn primary" onclick="savePNG()">PNG保存</button>`;
 }
 $("#phead").addEventListener("click",()=>{const w=$("#pwrap");const off=w.style.display==="none";w.style.display=off?"":"none";$("#parr").textContent=off?"▲":"▼";});
 U._titleMin = (window.innerWidth < 720);  // モバイルは初期最小化
