@@ -9,7 +9,15 @@ const posv=(v,fb)=>{const n=parseFloat(v);return isFinite(n)&&n>0?n:fb};
 
 // ───── 状態 ─────
 const U={
- p:{name:"サンプル計画（架空）",use:"事務所",struct:"RC",floors:3,height:12.0,tArea:600,addr:""},
+ p:{name:"サンプル計画（架空）",use:"事務所",struct:"RC",floors:3,height:12.0,
+    addr:"",                     // 建物住所
+    siteArea:"",                 // 敷地面積 m²（実測値・空欄なら形状から算出）
+    bldgArea:"",                 // 建築面積 m²（実測値・空欄なら1F相当から算出）
+    tArea:600,                   // 延床面積 m²
+    consArea:"",                 // 施工床面積 m²（容積対象外含む総施工面積）
+    privArea:"",                 // 専有面積 m²（分譲・賃貸の専有合計）
+    units:"",                    // 戸数・室数
+    note:""},                    // その他・備考
  site:{w:25,d:20,dx:0,dz:0,gl:0,h:[0,0,0,0]}, // 敷地面積≒500㎡
  blocks:[{id:1,label:"建物",f1:1,f2:3,w:20.0,d:10.0,dx:0,dz:0,ry:0}],
  road:{w:8,side:"none",dx:0,dz:0,ry:0,
@@ -32,7 +40,6 @@ const U={
  polyInput:{on:false, pts:[], target:null}, // 多角形入力モード
  calib:{on:false, a:null, b:null}, // 下絵スケール補正（2点）
  dxf:{ents:null, layers:{}, scale:0.001, dx:0, dz:0, raw:null}, // DXF読込（1/1000）
- cost:{unit:32, show:true},  // 概算単価（万円/㎡）
  geo:{elev:null, name:"", status:""},  // 住所→標高・地形
  snap:true,                  // スナップ（道路・敷鉄板へ吸着）
  sel:null,                   // 選択中オブジェクトキー
@@ -829,11 +836,13 @@ function loadProjectJSON(file){
    if(!U.calib)U.calib={on:false,a:null,b:null};
    if(U.tw&&!U.tw.craneModel)U.tw.craneModel="JCL022";
    if(!U.dxf)U.dxf={ents:null,layers:{},scale:0.001,dx:0,dz:0,raw:null};
-   if(!U.cost)U.cost={unit:32,show:true};
+   if(U.cost)delete U.cost;  // 旧バージョンの概算単価データを破棄
    if(!U.geo)U.geo={elev:null,name:"",status:""};
    if(U.snap==null)U.snap=true;
    (U.cobj||[]).forEach(c=>{if(c.size==null){const t=COBJ_TYPES[c.type];if(t)c.size=t.sizes[0].key;}});
    if(U.p.addr==null)U.p.addr="";
+   // 詳細諸元フィールドの後方互換
+   ["siteArea","bldgArea","consArea","privArea","units","note"].forEach(k=>{if(U.p[k]==null)U.p[k]="";});
    if(!U.demo)U.demo={w:22,d:14,h:9,dx:0,dz:0,ry:0};
    (U.blocks||[]).forEach(b=>{if(b.w==null){const A=posv(b.area,200),r=posv(b.ratio,1.5);b.w=+Math.sqrt(A*r).toFixed(1);b.d=+Math.sqrt(A/r).toFixed(1);}if(b.ry==null)b.ry=0;});
    (U.nbs||[]).forEach(n=>{if(n.ry==null)n.ry=0;});
@@ -941,9 +950,11 @@ async function parsePdfSummary(){
  if(found["高さm"]&&found["高さm"]>3&&found["高さm"]<250)U.p.height=found["高さm"];
  if(found["構造"])U.p.struct=found["構造"];
  if(found["用途"])U.p.use=found["用途"];
- if(found["建築面積"]){const b=U.blocks[0];const r=posv(b.w,12)/Math.max(1,posv(b.d,10));b.w=+Math.sqrt(found["建築面積"]*r).toFixed(1);b.d=+Math.sqrt(found["建築面積"]/r).toFixed(1);}
- if(found["敷地面積"]){const r=posv(U.site.w,30)/Math.max(1,posv(U.site.d,18));U.site.w=+Math.sqrt(found["敷地面積"]*r).toFixed(1);U.site.d=+Math.sqrt(found["敷地面積"]/r).toFixed(1);}
- rebuild();renderPanel();
+ if(found["戸数"])U.p.units=found["戸数"];
+ // 面積は諸元の実測値フィールドにも記録（ダッシュボード・BIM出力で優先使用）
+ if(found["建築面積"]){U.p.bldgArea=found["建築面積"];const b=U.blocks[0];const r=posv(b.w,12)/Math.max(1,posv(b.d,10));b.w=+Math.sqrt(found["建築面積"]*r).toFixed(1);b.d=+Math.sqrt(found["建築面積"]/r).toFixed(1);}
+ if(found["敷地面積"]){U.p.siteArea=found["敷地面積"];const r=posv(U.site.w,30)/Math.max(1,posv(U.site.d,18));U.site.w=+Math.sqrt(found["敷地面積"]*r).toFixed(1);U.site.d=+Math.sqrt(found["敷地面積"]/r).toFixed(1);}
+ rebuild();renderPanel();renderTitle();
 }
 window.parsePdfSummary=parsePdfSummary;
 
@@ -999,23 +1010,74 @@ window.setCOSize=(i,key)=>{const c=U.cobj[i];if(!c)return;const sz=cobjSize(c.ty
 window.selCO=(i)=>{U.sel="co:"+i;rebuild();renderPanel();};
 window.setPage=async(v)=>{U.under.page=v;await renderPdfPage();};
 
+// 諸元タブの自動算出チップだけを部分更新（入力フォーカスを保つ）
+function updateShoshiChips(){
+ const box=$("#shoshi-auto"); if(!box)return;
+ const siteA = posv(U.p.siteArea,0) || siteArea();
+ const tA = posv(U.p.tArea,0), bA = posv(U.p.bldgArea,0), prA = posv(U.p.privArea,0), un = Math.round(posv(U.p.units,0));
+ const farCalc = siteA>0 && tA>0 ? (tA/siteA*100) : null;
+ const bcrCalc = siteA>0 && bA>0 ? (bA/siteA*100) : null;
+ const effRate = tA>0 && prA>0 ? (prA/tA*100) : null;
+ const perUnit = un>0 && prA>0 ? (prA/un) : null;
+ const chip=(label,val,unit2,col)=> val==null?"":`<div style="flex:1;min-width:78px;background:#f3f5f8;border:1px solid var(--line);border-radius:7px;padding:5px 8px"><div style="font-size:9px;color:var(--mut)">${label}</div><div style="font-family:ui-monospace;font-size:13px;font-weight:700;color:${col||"var(--navy)"}">${val}<span style="font-size:9px;font-weight:400"> ${unit2}</span></div></div>`;
+ box.innerHTML = [
+   chip("容積率(自動)", farCalc!=null?farCalc.toFixed(0):null, "%", farCalc>300?"#B0433A":"#2E7D5B"),
+   chip("建蔽率(自動)", bcrCalc!=null?bcrCalc.toFixed(0):null, "%", bcrCalc>60?"#B0433A":"#2E7D5B"),
+   chip("専有率", effRate!=null?effRate.toFixed(1):null, "%"),
+   chip("戸あたり", perUnit!=null?perUnit.toFixed(1):null, "m²/戸"),
+ ].join("");
+}
+window.updateShoshiChips=updateShoshiChips;
+
 function renderPanel(){
  const tabs=["諸元","形状","敷地・地形","下敷き","近隣","仮設","施工/CAD"];
  $("#tabs").innerHTML=tabs.map(t=>`<div class="${U.tab===t?"on":""}" onclick="U.tab='${t}';renderPanel()">${t}</div>`).join("");
  let h="";
  if(U.tab==="諸元"){
-  h=`<label class="f"><span>物件名</span><input type="text" value="${U.p.name.replace(/"/g,"&quot;")}" oninput="S('p.name',this.value,false);renderTitle()"></label>
+  // 自動算出プレビュー用の値
+  const siteA = posv(U.p.siteArea,0) || siteArea();
+  const tA = posv(U.p.tArea,0);
+  const bA = posv(U.p.bldgArea,0);
+  const prA = posv(U.p.privArea,0);
+  const un = Math.round(posv(U.p.units,0));
+  const farCalc = siteA>0 && tA>0 ? (tA/siteA*100) : null;       // 容積率
+  const bcrCalc = siteA>0 && bA>0 ? (bA/siteA*100) : null;       // 建蔽率
+  const effRate = tA>0 && prA>0 ? (prA/tA*100) : null;           // 専有率（レンタブル比）
+  const perUnit = un>0 && prA>0 ? (prA/un) : null;               // 戸あたり専有面積
+  const chip=(label,val,unit2,col)=> val==null?"":`<div style="flex:1;min-width:78px;background:#f3f5f8;border:1px solid var(--line);border-radius:7px;padding:5px 8px"><div style="font-size:9px;color:var(--mut)">${label}</div><div style="font-family:ui-monospace;font-size:13px;font-weight:700;color:${col||"var(--navy)"}">${val}<span style="font-size:9px;font-weight:400"> ${unit2}</span></div></div>`;
+  const auto = [
+    chip("容積率(自動)", farCalc!=null?farCalc.toFixed(0):null, "%", farCalc>300?"#B0433A":"#2E7D5B"),
+    chip("建蔽率(自動)", bcrCalc!=null?bcrCalc.toFixed(0):null, "%", bcrCalc>60?"#B0433A":"#2E7D5B"),
+    chip("専有率", effRate!=null?effRate.toFixed(1):null, "%"),
+    chip("戸あたり", perUnit!=null?perUnit.toFixed(1):null, "m²/戸"),
+  ].join("");
+  const autoBox = `<div id="shoshi-auto" style="display:flex;flex-wrap:wrap;gap:5px;margin:8px 0">${auto}</div>`;
+
+  h=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin:2px 0 4px">基本情報</div>
+  <label class="f"><span>物件名</span><input type="text" value="${(U.p.name||"").replace(/"/g,"&quot;")}" oninput="S('p.name',this.value,false);renderTitle()"></label>
+  <label class="f"><span>建物住所</span><input type="text" placeholder="例：愛知県名古屋市中区…" value="${(U.p.addr||"").replace(/"/g,"&quot;")}" oninput="S('p.addr',this.value,false);renderTitle()"></label>
   <label class="f"><span>用途（ファサード連動）</span><select onchange="S('p.use',this.value)">${USES.map(o=>`<option ${U.p.use===o?"selected":""}>${o}</option>`).join("")}</select></label>
   <div class="grid2">
    <label class="f"><span>地上階数</span><input type="number" value="${U.p.floors}" oninput="S('p.floors',this.value)"></label>
    <label class="f"><span>建物高さ m</span><input type="number" value="${U.p.height}" oninput="S('p.height',this.value)"></label>
-   <label class="f"><span>延床面積 m²</span><input type="number" value="${U.p.tArea}" oninput="S('p.tArea',this.value,false);renderTitle()"></label>
-   <label class="f"><span>構造</span><select onchange="S('p.struct',this.value,false);renderTitle()">${["RC","SRC","S"].map(o=>`<option ${U.p.struct===o?"selected":""}>${o}</option>`).join("")}</select></label>
+   <label class="f"><span>構造</span><select onchange="S('p.struct',this.value,false);renderTitle()">${["RC","SRC","S","W","CFT"].map(o=>`<option ${U.p.struct===o?"selected":""}>${o}</option>`).join("")}</select></label>
+   <label class="f"><span>戸数・室数</span><input type="number" placeholder="戸" value="${U.p.units}" oninput="S('p.units',this.value,false);renderTitle();updateShoshiChips()"></label>
   </div>
-  <div class="hint">形は「形状」、敷地の大きさ・高低差は「敷地・地形」タブで。</div>
-  <div style="border-top:1px solid var(--line);margin:8px 0 4px"></div>
-  ${SL("概算単価（万円/㎡）",U.cost.unit,"(v)=>{S('cost.unit',v,false);renderTitle();}",15,80,1)}
-  <div class="hint">概算モードのとき、延床×単価で右下に概算工事費を表示します（RC共同住宅は30〜40万/㎡が一般的な目安）。</div>`;
+
+  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:10px 0 4px">面積（数値は実測値を優先・空欄は形状から自動）</div>
+  <div class="grid2">
+   <label class="f"><span>敷地面積 m²</span><input type="number" placeholder="空欄=形状から" value="${U.p.siteArea}" oninput="S('p.siteArea',this.value,false);renderTitle();updateShoshiChips()"></label>
+   <label class="f"><span>建築面積 m²</span><input type="number" placeholder="空欄=1F相当" value="${U.p.bldgArea}" oninput="S('p.bldgArea',this.value,false);renderTitle();updateShoshiChips()"></label>
+   <label class="f"><span>延床面積 m²</span><input type="number" value="${U.p.tArea}" oninput="S('p.tArea',this.value,false);renderTitle();updateShoshiChips()"></label>
+   <label class="f"><span>施工床面積 m²</span><input type="number" placeholder="容積対象外含む" value="${U.p.consArea}" oninput="S('p.consArea',this.value,false);renderTitle();updateShoshiChips()"></label>
+   <label class="f"><span>専有面積 m²</span><input type="number" placeholder="分譲/賃貸の専有計" value="${U.p.privArea}" oninput="S('p.privArea',this.value,false);renderTitle();updateShoshiChips()"></label>
+  </div>
+  ${autoBox}
+  <div class="hint">敷地面積を空欄にすると敷地形状から、建築面積を空欄にすると1F相当から自動計算します。容積率・建蔽率・専有率・戸あたり面積はリアルタイムで算出されます。</div>
+
+  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:10px 0 4px">その他・備考</div>
+  <label class="f" style="align-items:flex-start"><span>メモ</span><textarea rows="2" style="resize:vertical;font-family:inherit" placeholder="特記事項・地区計画・条件など" oninput="S('p.note',this.value,false);renderTitle()">${(U.p.note||"").replace(/</g,"&lt;")}</textarea></label>
+  <div class="hint">形は「形状」、敷地の大きさ・高低差は「敷地・地形」タブで調整できます。ここで入力した諸元はPNG右上のタイトルカードとBIM出力(.bim.json)に反映されます。</div>`;
  }
  if(U.tab==="形状"){
   h=U.blocks.map((b,bi)=>{
@@ -1221,25 +1283,40 @@ function renderPanel(){
 function renderTitle(){
  const modeLabel={build:`仮設計画イメージ（${Math.min(U.p.floors,U.tw.step)}階 躯体時）`,demo:"既存解体フェーズ ― 重機配置検討",plan:"BuildSight ― 営業概算BIM"}[U.tw.mode]||"BuildSight";
  const st=U._stats||{floorArea:0,maxFloors:0};
- const site=siteArea();
- // 建築面積≒最大階の床面積（各ブロックの1F相当を合算）
- let bcArea=0; U.blocks.forEach(b=>{const f1=Math.max(1,Math.round(posv(b.f1,1)));if(f1===1){const W=posv(b.w,Math.sqrt(posv(b.area,200)*posv(b.ratio,1.5)));const D=posv(b.d,Math.sqrt(posv(b.area,200)/posv(b.ratio,1.5)));bcArea+=W*D;}});
- const far=site>0?(st.floorArea/site*100):0, bcr=site>0?(bcArea/site*100):0;
+ // 敷地面積・建築面積は実測値（諸元入力）を優先、空欄なら形状から算出
+ const site = posv(U.p.siteArea,0) || siteArea();
+ let bcArea = posv(U.p.bldgArea,0);
+ if(!bcArea){ U.blocks.forEach(b=>{const f1=Math.max(1,Math.round(posv(b.f1,1)));if(f1===1){const W=posv(b.w,Math.sqrt(posv(b.area,200)*posv(b.ratio,1.5)));const D=posv(b.d,Math.sqrt(posv(b.area,200)/posv(b.ratio,1.5)));bcArea+=W*D;}}); }
+ // 延床は実測値（諸元）を優先、空欄なら形状概算
+ const tFloor = posv(U.p.tArea,0) || st.floorArea;
+ const far=site>0?(tFloor/site*100):0, bcr=site>0?(bcArea/site*100):0;
  const barColor=(v,limit)=>v>limit?"#B0433A":"#2E7D5B";
- const cost=(st.floorArea*numv(U.cost.unit,32)); // 万円
- const costStr=cost>=10000?`${(cost/10000).toFixed(2)} 億円`:`${cost.toFixed(0)} 万円`;
- const costRow=(U.appMode==="quick"&&U.cost.show)?`<div style="display:flex;justify-content:space-between;margin-top:3px;padding-top:3px;border-top:1px dotted var(--line)"><span style="color:var(--mut);font-size:10px">概算工事費 @${numv(U.cost.unit,32)}万/㎡</span><b style="font-family:ui-monospace;font-size:12px;color:var(--amber)">${costStr}</b></div>`:"";
+ // 追加指標
+ const prA=posv(U.p.privArea,0), un=Math.round(posv(U.p.units,0)), consA=posv(U.p.consArea,0);
+ const effRate = tFloor>0&&prA>0 ? (prA/tFloor*100) : null;
+ const perUnit = un>0&&prA>0 ? (prA/un) : null;
+ const row=(label,val)=>`<div style="display:flex;justify-content:space-between"><span style="color:var(--mut);font-size:10px">${label}</span><b style="font-family:ui-monospace;font-size:11px">${val}</b></div>`;
+ const rowC=(label,val,col)=>`<div style="display:flex;justify-content:space-between"><span style="color:var(--mut);font-size:10px">${label}</span><b style="font-family:ui-monospace;font-size:11px;color:${col}">${val}</b></div>`;
+ const extra =
+   (consA>0?row("施工床面積",consA.toFixed(0)+" m²"):"")
+   +(prA>0?row("専有面積",prA.toFixed(0)+" m²"):"")
+   +(effRate!=null?row("専有率",effRate.toFixed(1)+" %"):"")
+   +(un>0?row("戸数・室数",un+" 戸"):"")
+   +(perUnit!=null?row("戸あたり専有",perUnit.toFixed(1)+" m²"):"");
  const dash=U.tw.mode==="demo"?"":`<div style="margin-top:6px;border-top:1px dashed var(--line);padding-top:5px">
-   <div style="display:flex;justify-content:space-between"><span style="color:var(--mut);font-size:10px">延床面積(概算)</span><b style="font-family:ui-monospace;font-size:11px">${st.floorArea.toFixed(0)} m²</b></div>
-   <div style="display:flex;justify-content:space-between"><span style="color:var(--mut);font-size:10px">建築面積(1F相当)</span><b style="font-family:ui-monospace;font-size:11px">${bcArea.toFixed(0)} m²</b></div>
-   <div style="display:flex;justify-content:space-between"><span style="color:var(--mut);font-size:10px">建蔽率</span><b style="font-family:ui-monospace;font-size:11px;color:${barColor(bcr,60)}">${bcr.toFixed(0)} %</b></div>
-   <div style="display:flex;justify-content:space-between"><span style="color:var(--mut);font-size:10px">容積率</span><b style="font-family:ui-monospace;font-size:11px;color:${barColor(far,300)}">${far.toFixed(0)} %</b></div>${costRow}
-   <div style="font-size:8.5px;color:var(--mut);margin-top:2px">敷地${site.toFixed(0)}m²に対する概算値（設計値ではありません）</div></div>`;
+   ${row("延床面積"+(posv(U.p.tArea,0)?"":"(概算)"), tFloor.toFixed(0)+" m²")}
+   ${row("建築面積"+(posv(U.p.bldgArea,0)?"":"(1F相当)"), bcArea.toFixed(0)+" m²")}
+   ${rowC("建蔽率", bcr.toFixed(0)+" %", barColor(bcr,60))}
+   ${rowC("容積率", far.toFixed(0)+" %", barColor(far,300))}
+   ${extra}
+   <div style="font-size:8.5px;color:var(--mut);margin-top:2px">敷地${site.toFixed(0)}m²${posv(U.p.siteArea,0)?"(入力値)":"(形状から)"}に対する値${posv(U.p.tArea,0)?"":"・延床は形状概算"}</div></div>`;
  $("#title").innerHTML=`<div class="h" style="display:flex;justify-content:space-between;align-items:center"><span>${modeLabel}</span><span id="title-toggle" style="cursor:pointer;padding:0 4px;font-size:13px" onclick="U._titleMin=!U._titleMin;renderTitle()">${U._titleMin?"＋":"−"}</span></div><div class="b" style="${U._titleMin?"display:none":""}">
   <div style="font-weight:700;font-size:12px;border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:4px">${U.p.name||"（物件名未入力）"}</div>
   <table><tr><td>用途・構造</td><td>${U.p.use}・${U.p.struct}造</td></tr>
-  <tr><td>規模</td><td>地上${Math.round(posv(U.p.floors,0))}階　H=${posv(U.p.height,0)}m</td></tr>
+  ${U.p.addr?`<tr><td>所在地</td><td>${U.p.addr.replace(/</g,"&lt;")}</td></tr>`:""}
+  <tr><td>規模</td><td>地上${Math.round(posv(U.p.floors,0))}階　H=${posv(U.p.height,0)}m${un>0?`　${un}戸`:""}</td></tr>
   <tr><td>構成</td><td>${U.blocks.map(b=>`${b.label}${b.f1}-${b.f2}F`).join("＋")}</td></tr></table>${dash}
+  ${U.p.note?`<div style="margin-top:5px;font-size:9.5px;color:var(--mut);border-top:1px dotted var(--line);padding-top:4px">${U.p.note.replace(/</g,"&lt;").replace(/\n/g,"<br>")}</div>`:""}
   <div style="margin-top:5px;font-size:9px;color:var(--mut)">※検討用イメージであり実際の建物・施工計画とは異なります</div></div>`;
 }
 function syncBtns(){renderBar();}
@@ -1258,21 +1335,33 @@ function _dl(filename, text, mime){
 function buildBIMMeta(){
  const floorsAll=Math.min(60,Math.max(1,Math.round(posv(U.p.floors,14))));
  const H=posv(U.p.height,42), fh=+(H/floorsAll).toFixed(3);
- const site=siteArea();
+ const site = posv(U.p.siteArea,0) || siteArea();
  const st=U._stats||{floorArea:0,maxFloors:0};
- let bcArea=0; U.blocks.forEach(b=>{const f1=Math.max(1,Math.round(posv(b.f1,1)));if(f1===1){
-   if(b.shape==="poly"&&Array.isArray(b.poly)){let a2=0;for(let i=0;i<b.poly.length;i++){const p=b.poly[i],q=b.poly[(i+1)%b.poly.length];a2+=p.x*q.z-q.x*p.z;}bcArea+=Math.abs(a2)/2;}
-   else{const W=posv(b.w,12),D=posv(b.d,10);bcArea+=W*D;}}});
+ let bcAuto=0; U.blocks.forEach(b=>{const f1=Math.max(1,Math.round(posv(b.f1,1)));if(f1===1){
+   if(b.shape==="poly"&&Array.isArray(b.poly)){let a2=0;for(let i=0;i<b.poly.length;i++){const p=b.poly[i],q=b.poly[(i+1)%b.poly.length];a2+=p.x*q.z-q.x*p.z;}bcAuto+=Math.abs(a2)/2;}
+   else{const W=posv(b.w,12),D=posv(b.d,10);bcAuto+=W*D;}}});
+ const bcArea = posv(U.p.bldgArea,0) || bcAuto;
+ const tFloor = posv(U.p.tArea,0) || st.floorArea;
+ const prA=posv(U.p.privArea,0), consA=posv(U.p.consArea,0), un=Math.round(posv(U.p.units,0));
  return {
   generator:"BuildSight", schema:"bsbim-1", exportedAt:new Date().toISOString(),
-  project:{name:U.p.name, use:U.p.use, structure:U.p.struct, address:U.p.addr||""},
+  project:{name:U.p.name, use:U.p.use, structure:U.p.struct, address:U.p.addr||"", note:U.p.note||""},
   building:{floorsAbove:floorsAll, totalHeight_m:H, typicalFloorHeight_m:fh,
-            totalFloorArea_m2:+st.floorArea.toFixed(1), buildingArea_m2:+bcArea.toFixed(1)},
+            totalFloorArea_m2:+tFloor.toFixed(1), buildingArea_m2:+bcArea.toFixed(1),
+            constructionFloorArea_m2:consA>0?+consA.toFixed(1):null,
+            privateArea_m2:prA>0?+prA.toFixed(1):null,
+            units:un>0?un:null,
+            efficiencyRatio_pct:(tFloor>0&&prA>0)?+(prA/tFloor*100).toFixed(1):null,
+            areaPerUnit_m2:(un>0&&prA>0)?+(prA/un).toFixed(1):null,
+            floorArea_source:posv(U.p.tArea,0)?"input":"estimated",
+            buildingArea_source:posv(U.p.bldgArea,0)?"input":"estimated"},
   site:{width_m:posv(U.site.w,30), depth_m:posv(U.site.d,18), area_m2:+site.toFixed(1),
+        area_source:posv(U.p.siteArea,0)?"input":"geometry",
+        polygon_m:Array.isArray(U.site.poly)?U.site.poly:null,
         groundLevel_m:numv(U.site.gl,0), cornerLevels_m:U.site.h.map(v=>numv(v,0)),
         origin:{dx:numv(U.site.dx,0), dz:numv(U.site.dz,0)}},
   legal:{buildingCoverage_pct:site>0?+(bcArea/site*100).toFixed(1):null,
-         floorAreaRatio_pct:site>0?+(st.floorArea/site*100).toFixed(1):null},
+         floorAreaRatio_pct:site>0?+(tFloor/site*100).toFixed(1):null},
   road:{width_m:posv(U.road.w,8), side:U.road.side},
   geo:{elevation_m:U.geo&&U.geo.elev!=null?U.geo.elev:null, label:U.geo?U.geo.name:""},
   blocks:U.blocks.map(b=>({label:b.label, fromFloor:b.f1, toFloor:b.f2,
