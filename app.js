@@ -25,6 +25,8 @@ const U={
        walkDz:0,walkW:1.6,            // 前面歩道：前後位置・幅
        sideDx:0,sideDz:0,             // 側道：左右・前後の微調整
        splitWalk:false},              // true=歩道を道路と独立して動かす
+ roadwork:{mixerSize:"8t",pumpSize:"m4t",mountUp:0,        // 縦列検討の車種・歩道乗り上げ幅(m)
+           permitPolice:"",permitRoad:"",permitOffice:""}, // 道路使用条件メモ（警察/道路局/建設事務所）
  poles:{n:3,pitch:18,far:true,dx:0,dz:0,ry:0},
  demo:{w:22,d:14,h:9,dx:0,dz:0,ry:0},
  tw:{mode:"plan",step:8,crane:true,craneModel:"JCL022", craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceAll:false,scaffold:true,poles:true,mixer:true,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
@@ -114,6 +116,35 @@ function siteArea(){
  return posv(U.site.w,30)*posv(U.site.d,18);
 }
 const USES=["共同住宅（賃貸）","共同住宅（分譲）","ホテル","事務所","店舗","倉庫・物流","病院・医療"];
+
+// 前面道路での施工計画の検討（縦列収まり・残車道幅）
+function roadworkCalc(){
+ const rw=roadworkVehDims();
+ const mix=rw.mix, pmp=rw.pmp;
+ const front=posv(U.site.w,30);            // 敷地間口
+ const roadW=posv(U.road.w,8);             // 道路幅員
+ const mount=Math.max(0,numv(U.roadwork.mountUp,0)); // 歩道乗り上げ幅
+ // 縦列（前後に並べる）：全長＝両車の奥行(d)＋車間2m
+ const lineLen = mix.d + pmp.d + 2.0;
+ const fitFront = front>0 ? front>=lineLen : null;   // 間口に縦列が収まるか
+ // 横並び（幅方向）：両車の幅＋間隔0.5m
+ const sideBySide = mix.w + pmp.w + 0.5;
+ // 歩道乗り上げ時の残車道：道路幅 −（車幅 − 乗り上げ分）。広い方の車で評価
+ const vehW = Math.max(mix.w, pmp.w);
+ const occupy = Math.max(0, vehW - mount);           // 車道側に残る占有幅
+ const remain = roadW - occupy;                       // 反対側に残る車道幅
+ const emgOK = remain >= 4.0;                          // 緊急車両4m基準
+ const passOK = remain >= 3.0;                         // 一般車すれ違い目安3m
+ return {mix,pmp,front,roadW,mount,lineLen:+lineLen.toFixed(1),fitFront,
+         sideBySide:+sideBySide.toFixed(1),vehW,occupy:+occupy.toFixed(1),
+         remain:+remain.toFixed(1),emgOK,passOK};
+}
+function roadworkVehDims(){
+ const mt=COBJ_TYPES.mixer, pt=COBJ_TYPES.pump;
+ const mix=(mt.sizes.find(s=>s.key===U.roadwork.mixerSize)||mt.sizes[1]);
+ const pmp=(pt.sizes.find(s=>s.key===U.roadwork.pumpSize)||pt.sizes[1]);
+ return {mix,pmp};
+}
 
 // ───── three 初期化 ─────
 const mount=$("#view");
@@ -882,6 +913,7 @@ function loadProjectJSON(file){
    if(!U.road)U.road={w:8,side:"none"};
    if(U.road.dx==null)U.road.dx=0; if(U.road.dz==null)U.road.dz=0; if(U.road.ry==null)U.road.ry=0;
    if(U.road.walkDz==null)U.road.walkDz=0; if(U.road.walkW==null)U.road.walkW=1.6;
+   if(!U.roadwork)U.roadwork={mixerSize:"8t",pumpSize:"m4t",mountUp:0,permitPolice:"",permitRoad:"",permitOffice:""};
    if(U.road.sideDx==null)U.road.sideDx=0; if(U.road.sideDz==null)U.road.sideDz=0;
    if(!U.poles)U.poles={n:3,pitch:18,far:true,dx:0,dz:0,ry:0};
    if(!U.guide)U.guide={show:false,road:1.25,nbor:1.25};
@@ -1143,8 +1175,7 @@ function renderPanel(){
   ].join("");
   const autoBox = `<div id="shoshi-auto" style="display:flex;flex-wrap:wrap;gap:5px;margin:8px 0">${auto}</div>`;
 
-  h=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin:2px 0 4px">基本情報</div>
-  <label class="f"><span>物件名</span><input type="text" value="${(U.p.name||"").replace(/"/g,"&quot;")}" oninput="S('p.name',this.value,false);renderTitle()"></label>
+  const secBasic=`<label class="f"><span>物件名</span><input type="text" value="${(U.p.name||"").replace(/"/g,"&quot;")}" oninput="S('p.name',this.value,false);renderTitle()"></label>
   <label class="f"><span>建物住所</span><input type="text" placeholder="例：愛知県名古屋市中区…" value="${(U.p.addr||"").replace(/"/g,"&quot;")}" oninput="S('p.addr',this.value,false);renderTitle()"></label>
   <label class="f"><span>用途（ファサード連動）</span><select onchange="S('p.use',this.value)">${USES.map(o=>`<option ${U.p.use===o?"selected":""}>${o}</option>`).join("")}</select></label>
   <div class="grid2">
@@ -1152,10 +1183,8 @@ function renderPanel(){
    <label class="f"><span>建物高さ m</span><input type="number" value="${U.p.height}" oninput="S('p.height',this.value)"></label>
    <label class="f"><span>構造</span><select onchange="S('p.struct',this.value,false);renderTitle()">${["RC","SRC","S","W","CFT"].map(o=>`<option ${U.p.struct===o?"selected":""}>${o}</option>`).join("")}</select></label>
    <label class="f"><span>戸数・室数</span><input type="number" placeholder="戸" value="${U.p.units}" oninput="S('p.units',this.value,false);renderTitle();updateShoshiChips()"></label>
-  </div>
-
-  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:10px 0 4px">面積（数値は実測値を優先・空欄は形状から自動）</div>
-  <div class="grid2">
+  </div>`;
+  const secArea=`<div class="grid2">
    <label class="f"><span>敷地面積 m²</span><input type="number" placeholder="空欄=形状から" value="${U.p.siteArea}" oninput="S('p.siteArea',this.value,false);renderTitle();updateShoshiChips()"></label>
    <label class="f"><span>建築面積 m²</span><input type="number" placeholder="空欄=1F相当" value="${U.p.bldgArea}" oninput="S('p.bldgArea',this.value,false);renderTitle();updateShoshiChips()"></label>
    <label class="f"><span>延床面積 m²</span><input type="number" value="${U.p.tArea}" oninput="S('p.tArea',this.value,false);renderTitle();updateShoshiChips()"></label>
@@ -1163,12 +1192,14 @@ function renderPanel(){
    <label class="f"><span>専有面積 m²</span><input type="number" placeholder="分譲/賃貸の専有計" value="${U.p.privArea}" oninput="S('p.privArea',this.value,false);renderTitle();updateShoshiChips()"></label>
   </div>
   ${autoBox}
-  <div class="hint">敷地面積を空欄にすると敷地形状から、建築面積を空欄にすると1F相当から自動計算します。容積率・建蔽率・専有率・戸あたり面積はリアルタイムで算出されます。</div>
-
-  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:10px 0 4px">その他・備考</div>
-  <label class="f" style="align-items:flex-start"><span>メモ</span><textarea rows="2" style="resize:vertical;font-family:inherit" placeholder="特記事項・地区計画・条件など" oninput="S('p.note',this.value,false);renderTitle()">${(U.p.note||"").replace(/</g,"&lt;")}</textarea></label>
+  <div class="hint">敷地面積を空欄にすると敷地形状から、建築面積を空欄にすると1F相当から自動計算します。容積率・建蔽率・専有率・戸あたり面積はリアルタイムで算出されます。</div>`;
+  const secNote=`<label class="f" style="align-items:flex-start"><span>メモ</span><textarea rows="2" style="resize:vertical;font-family:inherit" placeholder="特記事項・地区計画・条件など" oninput="S('p.note',this.value,false);renderTitle()">${(U.p.note||"").replace(/</g,"&lt;")}</textarea></label>
   <label class="f" style="margin-top:4px"><span>AIプロンプトに住所を含める</span><input type="checkbox" ${U.p.aiIncludeAddr?"checked":""} onchange="S('p.aiIncludeAddr',this.checked,false)"></label>
-  <div class="hint">「AIパース下書き」で生成するプロンプトは外部のAIツールに貼り付けて使います。住所も外部送信され得るため、機密案件では<b>オフのまま</b>を推奨します（既定オフ）。ここで入力した諸元はPNG右上のタイトルカードとBIM出力に反映されます。</div>`;
+  <div class="hint">「AIパース下書き」で生成するプロンプトは外部のAIツールに貼り付けて使います。住所も外部送信され得るため、機密案件では<b>オフのまま</b>を推奨します（既定オフ）。</div>`;
+
+  h = SEC("基本情報", secBasic, {key:"sho-basic", icon:"📋", open:true})
+    + SEC("面積（実測値を優先・空欄は自動）", secArea, {key:"sho-area", icon:"📐", open:true})
+    + SEC("その他・備考", secNote, {key:"sho-note", icon:"📝", open:false});
  }
  if(U.tab==="形状"){
   h=U.blocks.map((b,bi)=>{
@@ -1254,10 +1285,52 @@ function renderPanel(){
   ${SL("太陽高度 °",U.sun.alt,"(v)=>S('sun.alt',v)",8,85,1)}
   <div class="hint">影の落ち方で近隣への日影影響をざっくり確認できます。</div>`;
 
+  // ⑦ 前面道路での施工計画の検討（縦列収まり・残車道幅・道路使用条件）
+  const rwc=roadworkCalc();
+  const mt=COBJ_TYPES.mixer, pt=COBJ_TYPES.pump;
+  const ok=(b)=>b?'<span style="color:#2E7D5B;font-weight:700">○</span>':'<span style="color:#B0433A;font-weight:700">×</span>';
+  const judge=(label,val,good)=>`<div style="display:flex;justify-content:space-between;font-size:11.5px;padding:3px 0"><span style="color:var(--mut)">${label}</span><span style="font-family:ui-monospace">${val} ${good==null?"":ok(good)}</span></div>`;
+  let secWork=`<div style="font-size:10.5px;color:var(--mut);margin-bottom:4px">生コン車とポンプ車を前面に配置する際の収まりを概算チェックします。</div>
+  <div class="grid2">
+   <label class="f"><span>生コン車</span><select onchange="S('roadwork.mixerSize',this.value,false);renderPanel()">${mt.sizes.map(s=>`<option value="${s.key}" ${U.roadwork.mixerSize===s.key?"selected":""}>${s.label}（${s.w}×${s.d}m）</option>`).join("")}</select></label>
+   <label class="f"><span>ポンプ車</span><select onchange="S('roadwork.pumpSize',this.value,false);renderPanel()">${pt.sizes.map(s=>`<option value="${s.key}" ${U.roadwork.pumpSize===s.key?"selected":""}>${s.label}（${s.w}×${s.d}m）</option>`).join("")}</select></label>
+  </div>
+  <div style="background:#f3f5f8;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0">
+   <div style="font-size:10.5px;font-weight:700;color:var(--navy);margin-bottom:3px">縦列配置（前後に2台）</div>
+   ${judge("必要な縦列長",rwc.lineLen+" m",null)}
+   ${judge("敷地間口 "+rwc.front+"m に収まる",rwc.fitFront==null?"—":(rwc.fitFront?"収まる":"はみ出す"),rwc.fitFront)}
+  </div>
+  ${SL("歩道へ乗り上げる幅 m",U.roadwork.mountUp,"(v)=>{S('roadwork.mountUp',v,false);renderPanel()}",0,3,0.5)}
+  <div style="background:#f3f5f8;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0">
+   <div style="font-size:10.5px;font-weight:700;color:var(--navy);margin-bottom:3px">乗り上げ時の残り車道幅（幅員${rwc.roadW}m）</div>
+   ${judge("車道側の占有幅",rwc.occupy+" m",null)}
+   ${judge("残る車道幅",rwc.remain+" m",null)}
+   ${judge("緊急車両 通行可（4m基準）",rwc.emgOK?"確保":"不足",rwc.emgOK)}
+   ${judge("一般車 すれ違い（3m目安）",rwc.passOK?"可能":"困難",rwc.passOK)}
+  </div>
+  <div class="hint">概算チェックです。実際の可否は道路管理者・所轄警察の判断によります。車間2m・横間隔0.5mで計算。</div>
+  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:8px 0 3px">道路使用条件メモ（窓口で条件が異なります）</div>
+  <label class="f"><span>所轄警察署（道路使用許可）</span><textarea rows="2" style="resize:vertical;font-family:inherit;font-size:11.5px" placeholder="例：作業時間9-17時、ガードマン2名、片側交互通行…" oninput="S('roadwork.permitPolice',this.value,false)">${(U.roadwork.permitPolice||"").replace(/</g,"&lt;")}</textarea></label>
+  <label class="f"><span>道路管理者（道路占用許可）</span><textarea rows="2" style="resize:vertical;font-family:inherit;font-size:11.5px" placeholder="例：占用範囲、復旧条件、歩道養生…" oninput="S('roadwork.permitRoad',this.value,false)">${(U.roadwork.permitRoad||"").replace(/</g,"&lt;")}</textarea></label>
+  <label class="f"><span>建設事務所・その他</span><textarea rows="2" style="resize:vertical;font-family:inherit;font-size:11.5px" placeholder="例：協議事項、近隣条件、搬入経路指定…" oninput="S('roadwork.permitOffice',this.value,false)">${(U.roadwork.permitOffice||"").replace(/</g,"&lt;")}</textarea></label>`;
+  // 地図リンク（APIキー不要・別タブでGoogleマップを開く）
+  if(U.p.addr){
+   const ga=encodeURIComponent(U.p.addr);
+   secWork+=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin:8px 0 3px">周辺地図（別タブで開く）</div>
+   <div style="display:flex;flex-direction:column;gap:4px">
+    <a href="https://www.google.com/maps/search/?api=1&query=${ga}" target="_blank" rel="noopener" style="font-size:11.5px;color:#2552A0">🗺 Googleマップで計画地を開く（周辺確認）</a>
+    <a href="https://www.google.com/maps/dir/?api=1&destination=${ga}" target="_blank" rel="noopener" style="font-size:11.5px;color:#2552A0">🚚 計画地への搬入ルートを調べる</a>
+   </div>
+   <div class="hint">地図はGoogleマップを別タブで開きます（このアプリには地図データを取り込みません）。ズームやストリートビューで前面道路・周辺状況を確認できます。</div>`;
+  }else{
+   secWork+=`<div class="hint" style="margin-top:8px">「諸元」タブまたは上の「計画地」に住所を入れると、周辺地図リンクが表示されます。</div>`;
+  }
+
   h = SEC("計画地・公共データ照会", secGeo, {key:"site-geo", icon:"📍", open:false})
     + SEC("敷地 寸法・形状", secSite, {key:"site-dim", icon:"📐", open:true})
     + SEC("敷地 位置・地盤・高低差", secPos, {key:"site-pos", icon:"⛰", open:false})
     + SEC("道路・歩道・電柱", secRoad, {key:"site-road", icon:"🛣", open:true})
+    + SEC("前面道路での施工計画の検討", secWork, {key:"site-work", icon:"🚧", open:false})
     + SEC("斜線制限ガイド", secSlant, {key:"site-slant", icon:"📏", open:false})
     + SEC("日当たり・日影検討", secSun, {key:"site-sun", icon:"☀", open:false});
  }
