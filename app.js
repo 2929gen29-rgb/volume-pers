@@ -17,7 +17,8 @@ const U={
     consArea:"",                 // 施工床面積 m²（容積対象外含む総施工面積）
     privArea:"",                 // 専有面積 m²（分譲・賃貸の専有合計）
     units:"",                    // 戸数・室数
-    note:""},                    // その他・備考
+    note:"",                     // その他・備考
+    aiIncludeAddr:false},         // AIプロンプトに住所を含めるか（既定オフ・外部送信配慮）
  site:{w:25,d:20,dx:0,dz:0,gl:0,h:[0,0,0,0]}, // 敷地面積≒500㎡
  blocks:[{id:1,label:"建物",f1:1,f2:3,w:20.0,d:10.0,dx:0,dz:0,ry:0}],
  road:{w:8,side:"none",dx:0,dz:0,ry:0,
@@ -843,6 +844,7 @@ function loadProjectJSON(file){
    if(U.p.addr==null)U.p.addr="";
    // 詳細諸元フィールドの後方互換
    ["siteArea","bldgArea","consArea","privArea","units","note"].forEach(k=>{if(U.p[k]==null)U.p[k]="";});
+   if(U.p.aiIncludeAddr==null)U.p.aiIncludeAddr=false;
    if(!U.demo)U.demo={w:22,d:14,h:9,dx:0,dz:0,ry:0};
    (U.blocks||[]).forEach(b=>{if(b.w==null){const A=posv(b.area,200),r=posv(b.ratio,1.5);b.w=+Math.sqrt(A*r).toFixed(1);b.d=+Math.sqrt(A/r).toFixed(1);}if(b.ry==null)b.ry=0;});
    (U.nbs||[]).forEach(n=>{if(n.ry==null)n.ry=0;});
@@ -1077,7 +1079,8 @@ function renderPanel(){
 
   <div style="font-size:11px;font-weight:700;color:var(--mut);margin:10px 0 4px">その他・備考</div>
   <label class="f" style="align-items:flex-start"><span>メモ</span><textarea rows="2" style="resize:vertical;font-family:inherit" placeholder="特記事項・地区計画・条件など" oninput="S('p.note',this.value,false);renderTitle()">${(U.p.note||"").replace(/</g,"&lt;")}</textarea></label>
-  <div class="hint">形は「形状」、敷地の大きさ・高低差は「敷地・地形」タブで調整できます。ここで入力した諸元はPNG右上のタイトルカードとBIM出力(.bim.json)に反映されます。</div>`;
+  <label class="f" style="margin-top:4px"><span>AIプロンプトに住所を含める</span><input type="checkbox" ${U.p.aiIncludeAddr?"checked":""} onchange="S('p.aiIncludeAddr',this.checked,false)"></label>
+  <div class="hint">「AIパース下書き」で生成するプロンプトは外部のAIツールに貼り付けて使います。住所も外部送信され得るため、機密案件では<b>オフのまま</b>を推奨します（既定オフ）。ここで入力した諸元はPNG右上のタイトルカードとBIM出力に反映されます。</div>`;
  }
  if(U.tab==="形状"){
   h=U.blocks.map((b,bi)=>{
@@ -1381,6 +1384,74 @@ function bimUseColor(){
  if(use==="病院・医療")return [0.90,0.91,0.93];
  return [0.81,0.83,0.85];
 }
+// ───── AI連携：画像生成AI / 3D生成AI 向けプロンプト自動生成（日英併記）─────
+// 用途・構造・外装の日英対訳
+const AI_USE={
+ "共同住宅（賃貸）":{ja:"賃貸集合住宅",en:"rental apartment building",fac:"バルコニーが連続する住宅ファサード／コンクリート打放し調",facEn:"residential facade with continuous balconies, exposed concrete tone"},
+ "共同住宅（分譲）":{ja:"分譲マンション",en:"condominium",fac:"整然としたバルコニーと手摺／落ち着いた外装",facEn:"orderly balconies with railings, refined exterior"},
+ "ホテル":{ja:"ホテル",en:"hotel",fac:"規則的な客室窓が並ぶ／温かみのある外装",facEn:"regular grid of guest-room windows, warm-toned cladding"},
+ "事務所":{ja:"オフィスビル",en:"office building",fac:"ガラスカーテンウォール／反射する水平連窓",facEn:"glass curtain wall, reflective horizontal ribbon windows"},
+ "店舗":{ja:"店舗ビル",en:"retail/commercial building",fac:"1階に大きなショーウィンドウ／ガラス主体",facEn:"large ground-floor shopfront glazing, glass-dominant facade"},
+ "倉庫・物流":{ja:"物流倉庫",en:"logistics warehouse",fac:"金属サイディング外装／大型シャッター",facEn:"metal siding facade, large roll-up shutter doors"},
+ "病院・医療":{ja:"病院",en:"hospital",fac:"清潔感のある白い外装／連続した横長窓",facEn:"clean white exterior, continuous horizontal windows"}
+};
+const AI_STRUCT={RC:{ja:"鉄筋コンクリート造",en:"reinforced concrete (RC)"},SRC:{ja:"鉄骨鉄筋コンクリート造",en:"steel-reinforced concrete (SRC)"},S:{ja:"鉄骨造",en:"steel frame (S)"},W:{ja:"木造",en:"timber (wood)"},CFT:{ja:"CFT造",en:"concrete-filled steel tube (CFT)"}};
+
+function buildAIPrompts(){
+ const m=buildBIMMeta();
+ const u=AI_USE[U.p.use]||{ja:U.p.use,en:U.p.use,fac:"",facEn:""};
+ const s=AI_STRUCT[U.p.struct]||{ja:U.p.struct,en:U.p.struct};
+ const fl=m.building.floorsAbove, H=m.building.totalHeight_m, fh=m.building.typicalFloorHeight_m;
+ // 代表ブロックの寸法（最大の矩形ブロック）
+ let W=0,D=0; U.blocks.forEach(b=>{if(b.shape!=="poly"){const w=posv(b.w,0),d=posv(b.d,0);if(w*d>W*D){W=w;D=d;}}});
+ const dimJa = (W&&D)?`間口約${W.toFixed(0)}m × 奥行約${D.toFixed(0)}m`:"不整形（多角形）平面";
+ const dimEn = (W&&D)?`approx. ${W.toFixed(0)}m wide × ${D.toFixed(0)}m deep`:"irregular (polygonal) footprint";
+ // 住所はAI（外部サーバー）へ送られ得るため、既定では含めない（諸元の任意スイッチでON）
+ const addrJa = (U.p.aiIncludeAddr && U.p.addr)?`／所在地：${U.p.addr}`:"";
+ const roadJa = `前面道路 幅員約${m.road.width_m}m`;
+ const roadEn = `front road approx. ${m.road.width_m}m wide`;
+
+ // ① 画像生成AI向け（外観パース・写実）
+ const imgJa =
+`建築外観パース、写実的、${u.ja}、地上${fl}階建、最高高さ約${H}m（基準階高さ約${fh}m）、${dimJa}、${s.ja}${addrJa}。`+
+`外観：${u.fac}。${roadJa}に面する。昼光、晴天、人物と植栽を少々、プロの建築ビジュアライゼーション、高精細、アイレベルのアングル。`;
+ const imgEn =
+`Architectural exterior rendering, photorealistic, ${u.en}, ${fl} stories above ground, max height approx. ${H}m (typical floor ${fh}m), footprint ${dimEn}, ${s.en}. `+
+`Facade: ${u.facEn}. Faces a ${roadEn}. Daylight, clear sky, subtle people and greenery, professional architectural visualization, high detail, eye-level view.`;
+
+ // ② 3D生成AI（Blender MCP等）向け：構築手順の指示
+ const blocksDesc = U.blocks.map((b,i)=>{
+   if(b.shape==="poly")return `- ブロック${i+1}「${b.label}」：多角形平面、${b.f1}〜${b.f2}階`;
+   return `- ブロック${i+1}「${b.label}」：${posv(b.w,10).toFixed(0)}m×${posv(b.d,10).toFixed(0)}m、${b.f1}〜${b.f2}階`;
+ }).join("\n");
+ const d3Ja =
+`# Blender等で以下の建物ボリュームを作成してください（営業概算・寸法は近似）
+建物用途：${u.ja}（${s.ja}）
+規模：地上${fl}階、最高高さ約${H}m、基準階高さ約${fh}m
+延床面積：約${m.building.totalFloorArea_m2}㎡、建築面積：約${m.building.buildingArea_m2}㎡
+敷地：約${m.site.area_m2}㎡、${roadJa}
+構成ブロック：
+${blocksDesc}
+外装イメージ：${u.fac}
+手順の目安：1) 各ブロックを直方体/押し出しで作成 2) 階数×階高で高さを設定 3) 外装マテリアルを用途に合わせて設定 4) 道路・地面を簡易に配置。寸法は概算のため、最終はGLOOBE等のBIMで精査します。`;
+ const d3En =
+`# Create the following building volume in Blender (early-stage estimate, approximate dimensions)
+Use: ${u.en} (${s.en})
+Scale: ${fl} stories above ground, max height ~${H}m, typical floor height ~${fh}m
+Total floor area ~${m.building.totalFloorArea_m2} m2, building area ~${m.building.buildingArea_m2} m2
+Site ~${m.site.area_m2} m2, ${roadEn}
+Blocks:
+${U.blocks.map((b,i)=>b.shape==="poly"?`- Block${i+1} "${b.label}": polygonal footprint, floors ${b.f1}-${b.f2}`:`- Block${i+1} "${b.label}": ${posv(b.w,10).toFixed(0)}m x ${posv(b.d,10).toFixed(0)}m, floors ${b.f1}-${b.f2}`).join("\n")}
+Facade: ${u.facEn}
+Steps: 1) Create each block as a box/extrusion 2) Set height = floors x floor-height 3) Assign facade material per use 4) Add simple road and ground plane. Dimensions are approximate; final coordination in BIM (e.g., GLOOBE).`;
+
+ return {
+  meta:{project:U.p.name, use:u.ja, generatedAt:new Date().toISOString(),
+        note:"BuildSightの入力諸元から自動生成した補助プロンプトです。寸法は営業概算であり設計値ではありません。"},
+  imagePrompt:{ja:imgJa, en:imgEn},
+  model3dPrompt:{ja:d3Ja, en:d3En}
+ };
+}
 function exportOBJ(){
  if(typeof THREE.OBJExporter==="undefined"){
   alert("OBJExporterが読み込まれていません。\nindex.htmlの<head>に\nhttps://unpkg.com/three@0.128.0/examples/js/exporters/OBJExporter.js\nを追加してください。");
@@ -1398,14 +1469,58 @@ function exportOBJ(){
   const mtl=`# BuildSight material\nnewmtl bs_use\nKa ${r.toFixed(3)} ${gg.toFixed(3)} ${bb.toFixed(3)}\nKd ${r.toFixed(3)} ${gg.toFixed(3)} ${bb.toFixed(3)}\nKs 0.050 0.050 0.050\nd 1.0\nillum 2\n`;
   if(!/mtllib/.test(objStr)) objStr=`mtllib ${base}.mtl\nusemtl bs_use\n`+objStr;
   U._exporting=wasExporting; U.grid.show=wasGrid; rebuild();  // 復帰
-  // 3点セットで出力：OBJ（形状）/ MTL（素材）/ JSON（メタ情報）
+  // 4点セットで出力：OBJ（形状）/ MTL（素材）/ JSON（メタ情報）/ AIプロンプト（txt）
+  const ai=buildAIPrompts();
+  const aiTxt=
+`════════ 画像生成AI 向けプロンプト（Midjourney / DALL-E 等）════════
+【日本語】
+${ai.imagePrompt.ja}
+
+【English】
+${ai.imagePrompt.en}
+
+════════ 3D生成AI 向けプロンプト（Blender MCP 等）════════
+【日本語】
+${ai.model3dPrompt.ja}
+
+【English】
+${ai.model3dPrompt.en}
+
+──────────────────────────────
+${ai.meta.note}
+生成元：BuildSight ／ 物件：${ai.meta.project} ／ ${ai.meta.generatedAt}`;
   _dl(base+".obj", objStr, "text/plain");
   _dl(base+".mtl", mtl, "text/plain");
   _dl(base+".bim.json", JSON.stringify(buildBIMMeta(),null,2), "application/json");
-  alert("BIM出力（3ファイル）を保存しました：\n・"+base+".obj（形状）\n・"+base+".mtl（用途別の素材色）\n・"+base+".bim.json（階数・面積・敷地などのメタ情報）\n\nGLOOBEには OBJ を取り込み、寸法・階数は .bim.json を参照してください。");
+  _dl(base+"_AIプロンプト.txt", aiTxt, "text/plain");
+  alert("BIM出力（4ファイル）を保存しました：\n・"+base+".obj（形状）\n・"+base+".mtl（用途別の素材色）\n・"+base+".bim.json（階数・面積・敷地などのメタ情報）\n・"+base+"_AIプロンプト.txt（画像生成AI／3D生成AI向け・日英）\n\nGLOOBEには OBJ を、画像/3D生成AIにはテキストのプロンプトをご利用ください。");
  }catch(err){alert("OBJエクスポートに失敗しました: "+err.message);}
 }
 window.exportOBJ=exportOBJ;
+// onclick/onchangeから呼ばれるが公開漏れだった関数を明示エクスポート（難読化・モジュール化耐性）
+window.loadUnderFile=loadUnderFile;
+window.loadPhotoFile=loadPhotoFile;
+window.savePNG=savePNG;
+
+// AIプロンプトをその場でコピー（画像生成 or 3D生成を選択）
+function copyAIPrompt(kind){
+ const ai=buildAIPrompts();
+ let txt;
+ if(kind==="img") txt=`【画像生成AI向け】\n${ai.imagePrompt.ja}\n\n[English]\n${ai.imagePrompt.en}`;
+ else txt=`【3D生成AI向け（Blender MCP等）】\n${ai.model3dPrompt.ja}\n\n[English]\n${ai.model3dPrompt.en}`;
+ const done=()=>alert((kind==="img"?"画像生成AI":"3D生成AI")+"向けプロンプトをコピーしました。\nMidjourney / DALL-E / Blender MCP などに貼り付けてください。\n\n※寸法は営業概算です。");
+ if(navigator.clipboard&&navigator.clipboard.writeText){
+  navigator.clipboard.writeText(txt).then(done).catch(()=>{prompt("以下をコピーしてください：",txt);});
+ }else{prompt("以下をコピーしてください：",txt);}
+}
+window.copyAIPrompt=copyAIPrompt;
+
+// AIプロンプトの種類を選んでコピー
+function aiPromptMenu(){
+ const ok=confirm("AIパース用プロンプトを生成します。\n\n「OK」＝画像生成AI向け（Midjourney/DALL-E等の外観パース）\n「キャンセル」＝3D生成AI向け（Blender MCP等の構築指示）");
+ copyAIPrompt(ok?"img":"3d");
+}
+window.aiPromptMenu=aiPromptMenu;
 
 function savePNG(){
  // クリーン出力：UI（パネル・バー・表題・ヒント）とグリッドを一時非表示にして純粋な3Dのみ出力
@@ -1443,7 +1558,8 @@ function renderBar(){
   <button class="btn" onclick="document.getElementById('json-file').click()" style="border:1.5px solid var(--amber)">設定読込</button>
   <input type="file" id="json-file" accept=".json,.bsjson" style="display:none" onchange="loadProjectJSON(this.files[0]); this.value=''">
   <button class="btn primary" onclick="savePNG()">PNG保存</button>
-  <button class="btn" onclick="exportOBJ()" style="border:1.5px solid #2E7D5B;color:#2E7D5B;font-weight:700" title="GLOOBE等BIMソフト向けにOBJ＋MTL＋メタJSONを出力">BIMへ出力(OBJ)</button>`;
+  <button class="btn" onclick="exportOBJ()" style="border:1.5px solid #2E7D5B;color:#2E7D5B;font-weight:700" title="GLOOBE等BIMソフト向けにOBJ＋MTL＋メタJSON＋AIプロンプトを出力">BIMへ出力</button>
+  <button class="btn" onclick="aiPromptMenu()" style="border:1.5px solid #7A4DB0;color:#7A4DB0;font-weight:700" title="入力諸元から画像生成AI・3D生成AI向けプロンプトを生成">AIパース下書き</button>`;
 }
 $("#phead").addEventListener("click",()=>{const w=$("#pwrap");const off=w.style.display==="none";w.style.display=off?"":"none";$("#parr").textContent=off?"▲":"▼";});
 U._titleMin = (window.innerWidth < 720);  // モバイルは初期最小化
