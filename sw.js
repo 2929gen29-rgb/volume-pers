@@ -7,7 +7,7 @@
 //   ・SW更新時は skipWaiting + clients.claim で即時有効化
 //       → index.html 側の controllerchange で1回だけ自動リロード
 // ───────────────────────────────────────────────
-const VERSION = "v6";                 // ★更新時はここだけ上げる
+const VERSION = "v7";                 // ★更新時はここだけ上げる
 const CACHE   = "vp-" + VERSION;
 
 // アプリ本体（毎回ネットワーク優先で取りに行く）
