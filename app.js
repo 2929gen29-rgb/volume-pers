@@ -128,7 +128,7 @@ const sun=new THREE.DirectionalLight(0xfff4e0,1.0);
 sun.position.set(80,120,60);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
 Object.assign(sun.shadow.camera,{left:-140,right:140,top:140,bottom:-140,far:600});
 scene.add(sun);
-const ctrl={theta:Math.PI/4+.3,phi:1.05,r:150,ty:18,ptrs:new Map(),pinch:0};
+const ctrl={theta:Math.PI/4+.3,phi:1.05,r:150,ty:18,cx:0,cz:0,ptrs:new Map(),pinch:0,panMid:null};
 let model=null, dragMap={}, dragObj=null, dragOff=new THREE.Vector3();
 const ray=new THREE.Raycaster();
 
@@ -211,10 +211,35 @@ el.addEventListener("pointermove",(e)=>{
  const prev=ctrl.ptrs.get(e.pointerId);ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);
  if(dragObj&&rotMode&&ctrl.ptrs.size===1){setRy(dragObj.userData.dragKey,rotStartRy+(e.clientX-rotStartX)*0.7);rebuild();return;}
  if(dragObj&&ctrl.ptrs.size===1){const gp=groundPoint(e);dragObj.position.x=gp.x+dragOff.x;dragObj.position.z=gp.z+dragOff.z;return;}
- if(ctrl.ptrs.size===1){ctrl.theta-=(e.clientX-prev[0])*.006;ctrl.phi=Math.min(1.52,Math.max(.12,ctrl.phi-(e.clientY-prev[1])*.004));U.auto=false;syncBtns();}
- else if(ctrl.ptrs.size===2){const p=[...ctrl.ptrs.values()];const d=Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]);if(ctrl.pinch)ctrl.r=Math.min(800,Math.max(20,ctrl.r*(ctrl.pinch/d)));ctrl.pinch=d;}
+ if(ctrl.ptrs.size===1){
+   if(e.shiftKey){ // Shift+ドラッグ＝パン（注視点を平行移動）
+    const dxp=e.clientX-prev[0], dyp=e.clientY-prev[1], k=ctrl.r*0.0016;
+    const cosT=Math.cos(ctrl.theta), sinT=Math.sin(ctrl.theta);
+    ctrl.cx -= (dxp*cosT - dyp*sinT)*k;
+    ctrl.cz -= (dxp*sinT + dyp*cosT)*k;
+    U.auto=false;
+   }else{ // 通常ドラッグ＝回転
+    ctrl.theta-=(e.clientX-prev[0])*.006;ctrl.phi=Math.min(1.52,Math.max(.12,ctrl.phi-(e.clientY-prev[1])*.004));U.auto=false;syncBtns();
+   }
+ }
+ else if(ctrl.ptrs.size===2){const p=[...ctrl.ptrs.values()];
+   const d=Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]);
+   const mid=[(p[0][0]+p[1][0])/2,(p[0][1]+p[1][1])/2];
+   // ピンチでズーム
+   if(ctrl.pinch)ctrl.r=Math.min(800,Math.max(20,ctrl.r*(ctrl.pinch/d)));
+   // 2本指の中心移動でパン（注視点を平行移動）→「見たい場所を画面中央に」
+   if(ctrl.panMid){
+    const dxp=mid[0]-ctrl.panMid[0], dyp=mid[1]-ctrl.panMid[1];
+    const k=ctrl.r*0.0016;  // 距離に応じた移動量
+    // 画面の右方向・奥行方向をワールド座標に変換（カメラ方位thetaを考慮）
+    const cosT=Math.cos(ctrl.theta), sinT=Math.sin(ctrl.theta);
+    ctrl.cx -= (dxp*cosT - dyp*sinT)*k;
+    ctrl.cz -= (dxp*sinT + dyp*cosT)*k;
+   }
+   ctrl.pinch=d; ctrl.panMid=mid; U.auto=false; syncBtns();
+  }
 });
-const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;
+const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
  if(dragObj&&!rotMode){const k=dragObj.userData.dragKey,x=dragObj.position.x,z=dragObj.position.z;
   if(k==="crane"){U.tw.craneX=+x.toFixed(1);U.tw.craneZ=+z.toFixed(1);}
   if(k==="ev"){U.tw.evX=+x.toFixed(1);U.tw.evZ=+z.toFixed(1);}
@@ -277,8 +302,8 @@ el.addEventListener("dblclick",(e)=>{
 });
 addEventListener("resize",resize);resize();
 (function loop(){requestAnimationFrame(loop);if(U.auto)ctrl.theta+=.0035;
- camera.position.set(ctrl.r*Math.sin(ctrl.phi)*Math.cos(ctrl.theta),ctrl.ty+ctrl.r*Math.cos(ctrl.phi),ctrl.r*Math.sin(ctrl.phi)*Math.sin(ctrl.theta));
- camera.lookAt(0,ctrl.ty,0);renderer.render(scene,camera);})();
+ camera.position.set(ctrl.cx+ctrl.r*Math.sin(ctrl.phi)*Math.cos(ctrl.theta),ctrl.ty+ctrl.r*Math.cos(ctrl.phi),ctrl.cz+ctrl.r*Math.sin(ctrl.phi)*Math.sin(ctrl.theta));
+ camera.lookAt(ctrl.cx,ctrl.ty,ctrl.cz);renderer.render(scene,camera);})();
 
 // ───── 地形 ─────
 function terrainH(x,z,sw,sd,h){ // h:[前左,前右,奥左,奥右] 前=+z
@@ -748,7 +773,21 @@ function rebuild(){
    g.add(new THREE.Line(lg,new THREE.LineBasicMaterial({color:0xF2A33C})));}
  }
  // ───── スケール補正の点 ─────
- if(U.calib.a&&!L){const dot=(p)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.5,10,10),new THREE.MeshBasicMaterial({color:0x2552A0}));m.position.set(p.x,0.5,p.z);g.add(m);};dot(U.calib.a);if(U.calib.b)dot(U.calib.b);}
+ if(U.calib.a&&!L){
+   const dot=(p,idx)=>{
+    // 小さな球（半径0.18m）＋見やすいリング
+    const m=new THREE.Mesh(new THREE.SphereGeometry(0.18,12,12),new THREE.MeshBasicMaterial({color:0xE8442B}));
+    m.position.set(p.x,0.25,p.z);g.add(m);
+    const ring=new THREE.Mesh(new THREE.RingGeometry(0.35,0.5,20),new THREE.MeshBasicMaterial({color:0xE8442B,side:THREE.DoubleSide,transparent:true,opacity:0.85}));
+    ring.rotation.x=-Math.PI/2;ring.position.set(p.x,0.08,p.z);g.add(ring);
+   };
+   dot(U.calib.a,0);
+   if(U.calib.b){dot(U.calib.b,1);
+    // 2点間に補助線（測っている距離を可視化）
+    const lg=new THREE.BufferGeometry();lg.setAttribute("position",new THREE.BufferAttribute(new Float32Array([U.calib.a.x,0.2,U.calib.a.z, U.calib.b.x,0.2,U.calib.b.z]),3));
+    g.add(new THREE.Line(lg,new THREE.LineBasicMaterial({color:0xE8442B})));
+   }
+ }
 
  // ───── 寸法線ツール ─────
  if(U.dim.a&&!L){
@@ -927,17 +966,24 @@ async function parsePdfSummary(){
  const z=txt.replace(/[０-９．]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/，|,/g,"");
  if(z.replace(/\s/g,"").length<30){alert("このPDFからテキストを取得できませんでした（スキャン画像のPDFは読取不可）。数値は手入力してください。");return;}
  const num1=(re)=>{const m=z.match(re);return m?parseFloat(m[1]):null;};
+ const str1=(re)=>{const m=z.match(re);return m?m[1].trim():null;};
  const found={};
  found["延床面積"]=num1(/延べ?\s*床?\s*面積[^0-9]{0,15}([0-9]+(?:\.[0-9]+)?)/);
  found["建築面積"]=num1(/建築\s*面積[^0-9]{0,15}([0-9]+(?:\.[0-9]+)?)/);
  found["敷地面積"]=num1(/敷地\s*面積[^0-9]{0,15}([0-9]+(?:\.[0-9]+)?)/);
+ // 施工床面積（容積対象外を含む総施工面積。表記ゆれ多い）
+ found["施工床面積"]=num1(/施工\s*床?\s*面積[^0-9]{0,15}([0-9]+(?:\.[0-9]+)?)/)||num1(/工事\s*床\s*面積[^0-9]{0,15}([0-9]+(?:\.[0-9]+)?)/);
+ // 専有面積（住戸専有・専有部分など）
+ found["専有面積"]=num1(/専有\s*(?:部分)?\s*面積[^0-9]{0,15}([0-9]+(?:\.[0-9]+)?)/)||num1(/住戸\s*専有[^0-9]{0,15}([0-9]+(?:\.[0-9]+)?)/);
  found["地上階数"]=num1(/地上\s*([0-9]+)\s*階/)||num1(/([0-9]+)\s*階\s*建/);
  found["高さm"]=num1(/(?:最高|建物)\s*(?:の)?\s*高さ[^0-9]{0,12}([0-9]+(?:\.[0-9]+)?)/)||num1(/高さ[^0-9]{0,12}([0-9]+(?:\.[0-9]+)?)/);
- found["戸数"]=num1(/([0-9]+)\s*戸/);
- found["構造"]=/SRC|鉄骨鉄筋/.test(z)?"SRC":(/RC|鉄筋コンクリート/.test(z)?"RC":(/鉄骨造|S造/.test(z)?"S":null));
- // 拡張：建蔽率・容積率・用途
+ found["戸数"]=num1(/([0-9]+)\s*戸/)||num1(/総戸数[^0-9]{0,8}([0-9]+)/)||num1(/([0-9]+)\s*(?:室|住戸)/);
+ found["構造"]=/SRC|鉄骨鉄筋/.test(z)?"SRC":(/RC|鉄筋コンクリート/.test(z)?"RC":(/鉄骨造|S造/.test(z)?"S":(/木造|W造/.test(z)?"W":null)));
  found["建蔽率"]=num1(/建蔽率[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)/)||num1(/建ぺい率[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)/);
  found["容積率"]=num1(/容積率[^0-9]{0,10}([0-9]+(?:\.[0-9]+)?)/);
+ // 住所（所在地・地名地番・建設地など）／都道府県から始まる行を拾う
+ found["住所"]=str1(/(?:所在地|地名地番|建設地|敷地の?位置|計画地)[^぀-ヿ一-龥0-9]{0,6}([^\n　]{4,40}?)(?:\s{2,}|地域|地区|$)/)
+   ||str1(/((?:北海道|青森県|岩手県|宮城県|秋田県|山形県|福島県|茨城県|栃木県|群馬県|埼玉県|千葉県|東京都|神奈川県|新潟県|富山県|石川県|福井県|山梨県|長野県|岐阜県|静岡県|愛知県|三重県|滋賀県|京都府|大阪府|兵庫県|奈良県|和歌山県|鳥取県|島根県|岡山県|広島県|山口県|徳島県|香川県|愛媛県|高知県|福岡県|佐賀県|長崎県|熊本県|大分県|宮崎県|鹿児島県|沖縄県)[^\n　]{2,30}?[0-9０-９\-‐－]+)/);
  const useMap=[
   {re:/分譲/,val:"共同住宅（分譲）"},{re:/共同住宅|マンション|アパート|賃貸/,val:"共同住宅（賃貸）"},
   {re:/ホテル|旅館|宿泊/,val:"ホテル"},{re:/事務所|オフィス/,val:"事務所"},{re:/店舗|商業|物販/,val:"店舗"},
@@ -948,11 +994,14 @@ async function parsePdfSummary(){
  if(!lines.length){alert("設計概要らしき数値を見つけられませんでした（β）。手入力してください。");return;}
  if(!confirm("PDFから読み取りました（β版・必ず原本と照合してください）\n\n"+lines.join("\n")+"\n\nこの値を諸元へ反映しますか？"))return;
  if(found["延床面積"])U.p.tArea=found["延床面積"];
+ if(found["施工床面積"])U.p.consArea=found["施工床面積"];
+ if(found["専有面積"])U.p.privArea=found["専有面積"];
  if(found["地上階数"])U.p.floors=found["地上階数"];
  if(found["高さm"]&&found["高さm"]>3&&found["高さm"]<250)U.p.height=found["高さm"];
  if(found["構造"])U.p.struct=found["構造"];
  if(found["用途"])U.p.use=found["用途"];
  if(found["戸数"])U.p.units=found["戸数"];
+ if(found["住所"])U.p.addr=found["住所"];
  // 面積は諸元の実測値フィールドにも記録（ダッシュボード・BIM出力で優先使用）
  if(found["建築面積"]){U.p.bldgArea=found["建築面積"];const b=U.blocks[0];const r=posv(b.w,12)/Math.max(1,posv(b.d,10));b.w=+Math.sqrt(found["建築面積"]*r).toFixed(1);b.d=+Math.sqrt(found["建築面積"]/r).toFixed(1);}
  if(found["敷地面積"]){U.p.siteArea=found["敷地面積"];const r=posv(U.site.w,30)/Math.max(1,posv(U.site.d,18));U.site.w=+Math.sqrt(found["敷地面積"]*r).toFixed(1);U.site.d=+Math.sqrt(found["敷地面積"]/r).toFixed(1);}
@@ -1328,6 +1377,8 @@ function view(k){const H=posv(U.p.height,42);
  if(k==="eye"){ctrl.phi=1.45;ctrl.r=Math.max(H*1.7,95);}
  if(k==="front"){ctrl.theta=Math.PI/2;ctrl.phi=1.35;ctrl.r=Math.max(H*2,115);}
  if(k==="top"){ctrl.phi=.14;ctrl.r=Math.max(H*2,130);}
+ // 注視点を敷地中心へリセット（パンで動かした視点を戻す）
+ ctrl.cx=numv(U.site.dx,0); ctrl.cz=numv(U.site.dz,0);
  U.auto=false;renderBar();}
 // ───── BIM連携：OBJ / メタデータ出力（GLOOBE等へのブリッジ）─────
 function _dl(filename, text, mime){
