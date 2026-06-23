@@ -1335,7 +1335,7 @@ function renderPanel(){
  $("#body").innerHTML=h;
 }
 function renderTitle(){
- const modeLabel={build:`仮設計画イメージ（${Math.min(U.p.floors,U.tw.step)}階 躯体時）`,demo:"既存解体フェーズ ― 重機配置検討",plan:"BuildSight ― 営業概算BIM"}[U.tw.mode]||"BuildSight";
+ const modeLabel={build:`仮設計画イメージ（${Math.min(U.p.floors,U.tw.step)}階 躯体時）`,demo:"既存解体フェーズ ― 重機配置検討",plan:"BimGen ― 営業概算BIM"}[U.tw.mode]||"BimGen";
  const st=U._stats||{floorArea:0,maxFloors:0};
  // 敷地面積・建築面積は実測値（諸元入力）を優先、空欄なら形状から算出
  const site = posv(U.p.siteArea,0) || siteArea();
@@ -1500,7 +1500,7 @@ Steps: 1) Create each block as a box/extrusion 2) Set height = floors x floor-he
 
  return {
   meta:{project:U.p.name, use:u.ja, generatedAt:new Date().toISOString(),
-        note:"BuildSightの入力諸元から自動生成した補助プロンプトです。寸法は営業概算であり設計値ではありません。"},
+        note:"BimGenの入力諸元から自動生成した補助プロンプトです。寸法は営業概算であり設計値ではありません。"},
   imagePrompt:{ja:imgJa, en:imgEn},
   model3dPrompt:{ja:d3Ja, en:d3En}
  };
@@ -1516,7 +1516,7 @@ function exportOBJ(){
   const exporter=new THREE.OBJExporter();
   let objStr=exporter.parse(scene);
   const dateStr=new Date().toISOString().slice(0,10).replace(/-/g,"");
-  const base=`${U.p.name||"BuildSight"}_BIM_${dateStr}`;
+  const base=`${U.p.name||"BimGen"}_BIM_${dateStr}`;
   // MTL（用途別の素材色）を付与し、OBJ先頭にmtllib参照を挿入
   const [r,gg,bb]=bimUseColor();
   const mtl=`# BuildSight material\nnewmtl bs_use\nKa ${r.toFixed(3)} ${gg.toFixed(3)} ${bb.toFixed(3)}\nKd ${r.toFixed(3)} ${gg.toFixed(3)} ${bb.toFixed(3)}\nKs 0.050 0.050 0.050\nd 1.0\nillum 2\n`;
@@ -1541,7 +1541,7 @@ ${ai.model3dPrompt.en}
 
 ──────────────────────────────
 ${ai.meta.note}
-生成元：BuildSight ／ 物件：${ai.meta.project} ／ ${ai.meta.generatedAt}`;
+生成元：BimGen ／ 物件：${ai.meta.project} ／ ${ai.meta.generatedAt}`;
   _dl(base+".obj", objStr, "text/plain");
   _dl(base+".mtl", mtl, "text/plain");
   _dl(base+".bim.json", JSON.stringify(buildBIMMeta(),null,2), "application/json");
@@ -1592,7 +1592,7 @@ function savePNG(){
  ui.forEach((e,i)=>e.style.display=prevDisp[i]);
  const a=document.createElement("a");
  a.href=url;
- a.download=`${U.p.name||"BuildSight"}_${U.tw.mode==="build"?"仮設計画":U.tw.mode==="demo"?"既存解体":U.line?"線画下絵":"パース"}.png`;
+ a.download=`${U.p.name||"BimGen"}_${U.tw.mode==="build"?"仮設計画":U.tw.mode==="demo"?"既存解体":U.line?"線画下絵":"パース"}.png`;
  a.click();
 }
 function renderBar(){
