@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#16243D">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="ボリュームパース">
-<title>ボリュームパース v5 ― 施工計画・概算BIM</title>
+<meta name="apple-mobile-web-app-title" content="BimGen">
+<title>BimGen ― 施工計画・概算BIM</title>
 <link rel="manifest" href="manifest.json">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -17,16 +17,69 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="splash">
+  <div class="splash-inner">
+    <svg class="splash-logo" viewBox="0 0 140 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <g class="vol vol3"><polygon points="0,80 35,60 70,80 35,100" fill="#16243D"/><polygon points="0,80 0,95 35,115 35,100" fill="#1f3454"/><polygon points="70,80 70,95 35,115 35,100" fill="#2E4057"/></g>
+      <g class="vol vol2"><polygon points="12,52 47,32 82,52 47,72" fill="#24364f"/><polygon points="12,52 12,64 47,84 47,72" fill="#2b405d"/><polygon points="82,52 82,64 47,84 47,72" fill="#374d6b"/></g>
+      <g class="vol vol1"><polygon points="28,26 63,6 98,26 63,46" fill="#F2A33C"/><polygon points="28,26 28,38 63,58 63,46" fill="#d98a28"/><polygon points="98,26 98,38 63,58 63,46" fill="#e8962f"/></g>
+    </svg>
+    <div class="splash-word">Bim<span>Gen</span></div>
+    <div class="splash-sub">施工計画・概算BIM</div>
+    <div class="splash-bar"><i></i></div>
+  </div>
+</div>
 <div id="view"></div>
 <div id="bar"></div>
-<div id="panel"><div id="phead"><span>施工計画・概算BIM v5</span><span id="parr">▲</span></div><div id="pwrap"><div id="tabs"></div><div id="body"></div></div></div>
+<div id="panel"><div id="phead"><span class="brand"><svg class="brand-mark" viewBox="0 0 70 58" aria-hidden="true"><polygon points="0,38 18,28 36,38 18,48" fill="#F2A33C"/><polygon points="0,38 0,46 18,56 18,48" fill="#d98a28"/><polygon points="36,38 36,46 18,56 18,48" fill="#e8962f"/><polygon points="14,16 32,6 50,16 32,26" fill="#fff"/><polygon points="14,16 14,24 32,34 32,26" fill="#cfd6e0"/><polygon points="50,16 50,24 32,34 32,26" fill="#e4e9ef"/></svg>BimGen</span><span id="parr">▲</span></div><div id="pwrap"><div id="tabs"></div><div id="body"></div></div></div>
 <div id="title"></div>
-<div id="drag">クレーン・車両・近隣は<b>そのままドラッグで移動</b>。敷地・図面は右上「敷地/下敷き移動」をONにしてドラッグ</div>
+<div id="drag">クレーン・車両・近隣は<b>そのままドラッグで移動</b>。<b>2本指（PCはShift+ドラッグ）で視点移動</b>。敷地・図面は右上「敷地/下敷き移動」をONにしてドラッグ</div>
 
 <script src="app.js"></script>
 <script>
-if("serviceWorker" in navigator){
-  window.addEventListener("load",()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
+// 起動画面：アプリ初期化後に少し見せてフェードアウト
+(function(){
+  var sp=document.getElementById("splash");
+  if(!sp)return;
+  var hide=function(){ sp.classList.add("hide"); setTimeout(function(){ if(sp&&sp.parentNode) sp.parentNode.removeChild(sp); }, 650); };
+  // 最低1.1秒は見せる（速すぎるとチラ見えで安っぽい）。読み込み済みでも一定時間表示。
+  setTimeout(hide, 1100);
+})();
+</script>
+<script>
+// ───── Service Worker 登録＋自動更新（強制リロード不要化）─────
+// 仕組み：新しいSWが有効化(controllerchange)されたら、その瞬間に1回だけ自動リロード。
+//         これにより「Chrome/iPhoneで古い画面が出る→手動で強制リロード」を解消する。
+if ("serviceWorker" in navigator) {
+  let refreshing = false;
+  // 新SWが操作権を取得した瞬間に1回だけリロード
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").then(reg => {
+      // 登録直後に一度だけ更新チェック（古いSWが居座る端末を即・新版へ）
+      reg.update().catch(() => {});
+      // 既に待機中の新SWがあれば即適用
+      if (reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
+      // 更新が見つかったら、インストール完了後に即アクティベートを促す
+      reg.addEventListener("updatefound", () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener("statechange", () => {
+          if (nw.state === "installed" && navigator.serviceWorker.controller) {
+            nw.postMessage("SKIP_WAITING");
+          }
+        });
+      });
+      // タブにフォーカスが戻るたびに更新チェック（モバイルでアプリ復帰時に効く）
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") reg.update().catch(() => {});
+      });
+    }).catch(() => {});
+  });
 }
 </script>
 </body>
