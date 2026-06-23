@@ -27,6 +27,7 @@ const U={
        splitWalk:false},              // true=歩道を道路と独立して動かす
  roadwork:{mixerSize:"8t",pumpSize:"m4t",mountUp:0,        // 縦列検討の車種・歩道乗り上げ幅(m)
            permitPolice:"",permitRoad:"",permitOffice:""}, // 道路使用条件メモ（警察/道路局/建設事務所）
+ subsurface:[],  // 地下の支障物（経路帯・範囲マーカー）{kind,x,z,w,d,ry}
  poles:{n:3,pitch:18,far:true,dx:0,dz:0,ry:0},
  demo:{w:22,d:14,h:9,dx:0,dz:0,ry:0},
  tw:{mode:"plan",step:8,crane:true,craneModel:"JCL022", craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceAll:false,scaffold:true,poles:true,mixer:true,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
@@ -91,9 +92,27 @@ const COBJ_TYPES={
  ]},
  guard:{label:"警備員",color:0xCFA94A,sizes:[{key:"std",label:"標準",w:0.6,d:0.6,h:1.7}]},
  walkzone:{label:"歩行帯",color:0x6EA46E,sizes:[{key:"std",label:"標準(幅2m)",w:2,d:12,h:0.05}]},
+ obstacle:{label:"支障物（地上）",color:0xC0392B,sizes:[
+   {key:"padmount",label:"パットマウント(地上トランス)",w:1.4,d:1.0,h:1.3},
+   {key:"hydrant",label:"消火栓・水道メーター",w:0.5,d:0.5,h:0.9},
+   {key:"manhole",label:"マンホール",w:0.9,d:0.9,h:0.06},
+   {key:"signal",label:"信号機・道路標識",w:0.4,d:0.4,h:5.0},
+   {key:"mirror",label:"カーブミラー",w:0.5,d:0.5,h:3.5},
+   {key:"tree",label:"街路樹・植栽",w:3.0,d:3.0,h:6.0},
+   {key:"busstop",label:"バス停",w:1.2,d:1.0,h:2.5},
+   {key:"powerline",label:"架線・高圧線(揚重支障)",w:0.3,d:14,h:8.0},
+ ]},
 };
 // 指定タイプ・クラスの寸法を引く
 function cobjSize(type,sizeKey){const t=COBJ_TYPES[type];if(!t)return null;const arr=t.sizes;return arr.find(s=>s.key===sizeKey)||arr[0];}
+// 地下の支障物（範囲マーカー）種類：色・ラベル
+const SUBSURFACE_TYPES={
+ elec:{label:"共同溝・電気埋設管",color:0xE8B020},
+ water:{label:"上下水道 本管",color:0x2E8BC0},
+ gas:{label:"ガス本管",color:0xE07B2C},
+ subway:{label:"地下鉄・地下構造物",color:0x7A4DB0},
+ contam:{label:"汚染土壌・要注意",color:0xC0392B},
+};
 // タワークレーン カタログ仕様（昭和 RENTAL CATALOGUE 2018より・営業概算用）
 //  work=作業半径(m), cap=定格荷重(t), tail=尾部旋回半径(m), jib=ジブ長(m)
 const CRANE_SPECS={
@@ -184,7 +203,7 @@ function panBy(dxp,dyp){
 }
 function dragCandidates(){const small=["crane","ev","mixer","rough","poles","demo","road","roadwalk","roadside"];const out=[];
  for(const[k,o]of Object.entries(dragMap)){
-  if(small.includes(k)||k.startsWith("nb:")||k.startsWith("blk:")||k.startsWith("co:"))out.push(o);
+  if(small.includes(k)||k.startsWith("nb:")||k.startsWith("blk:")||k.startsWith("co:")||k.startsWith("sub:"))out.push(o);
   else if((k==="site"||k==="under"||k==="photo"||k==="dxf")&&U.moveLayers)out.push(o);}
  return out;}
 function pickDrag(e){
@@ -205,6 +224,7 @@ function objRyKey(k){
  if(k.startsWith("nb:"))return ["nb",+k.slice(3)];
  if(k.startsWith("blk:"))return ["blk",+k.slice(4)];
  if(k.startsWith("co:"))return ["co",+k.slice(3)];
+ if(k.startsWith("sub:"))return ["sub",+k.slice(4)];
  return null;
 }
 function getRy(k){const r=objRyKey(k);if(!r)return 0;
@@ -212,6 +232,7 @@ function getRy(k){const r=objRyKey(k);if(!r)return 0;
  if(r[0]==="road")return numv(U.road.ry,0);
  if(r[0]==="nb")return numv((U.nbs[r[1]]||{}).ry,0); if(r[0]==="blk")return numv((U.blocks[r[1]]||{}).ry,0);
  if(r[0]==="co")return numv((U.cobj[r[1]]||{}).ry,0);
+ if(r[0]==="sub")return numv((U.subsurface[r[1]]||{}).ry,0);
  return 0;}
 function setRy(k,deg){const r=objRyKey(k);if(!r)return;deg=((deg%360)+360)%360;
  if(r[0]==="tw")U.tw[r[1]]=+deg.toFixed(0);
@@ -220,7 +241,8 @@ function setRy(k,deg){const r=objRyKey(k);if(!r)return;deg=((deg%360)+360)%360;
  else if(r[0]==="road")U.road.ry=+deg.toFixed(0);
  else if(r[0]==="nb"){if(U.nbs[r[1]])U.nbs[r[1]].ry=+deg.toFixed(0);}
  else if(r[0]==="blk"){if(U.blocks[r[1]])U.blocks[r[1]].ry=+deg.toFixed(0);}
- else if(r[0]==="co"){if(U.cobj[r[1]])U.cobj[r[1]].ry=+deg.toFixed(0);}}
+ else if(r[0]==="co"){if(U.cobj[r[1]])U.cobj[r[1]].ry=+deg.toFixed(0);}
+ else if(r[0]==="sub"){if(U.subsurface[r[1]])U.subsurface[r[1]].ry=+deg.toFixed(0);}}
 el.addEventListener("pointerdown",(e)=>{
  ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);el.setPointerCapture(e.pointerId);
  // 多角形入力モード：地面クリックで頂点追加
@@ -310,6 +332,7 @@ const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
        if(Math.hypot(numv(o.x,0)-nx,numv(o.z,0)-nz)<3){c.ry=numv(o.ry,0);}}});
     }
     c.x=nx;c.z=nz;}}
+  if(k.startsWith("sub:")){const s=U.subsurface[+k.slice(4)];if(s){s.x=+x.toFixed(1);s.z=+z.toFixed(1);}}
   dragObj=null;renderPanel();}
  else if(dragObj&&rotMode){
    if(U.snap){const k=dragObj.userData.dragKey;const cur=getRy(k);setRy(k,Math.round(cur/15)*15);rebuild();}
@@ -755,6 +778,35 @@ function rebuild(){
    const track=new THREE.Mesh(new THREE.BoxGeometry(w,0.8,d),baseMat);track.position.y=.4;track.castShadow=!L;cg.add(track);
    const turret=new THREE.Mesh(new THREE.BoxGeometry(w*0.8,1.3,d*0.6),baseMat);turret.position.set(0,1.4,-d*0.1);cg.add(turret);
    const arm=new THREE.Mesh(new THREE.BoxGeometry(.35,.35,d*0.7),new THREE.MeshLambertMaterial({color:warn?0xD64545:0xC2611F}));arm.position.set(0,2.0,d*0.35);arm.rotation.x=-0.9;cg.add(arm);
+  }else if(c.type==="obstacle"){ // 地上の支障物（種類で見た目を変える）
+   const oc=warn?0xD64545:t.color;
+   const omat=L?baseMat:new THREE.MeshLambertMaterial({color:oc});
+   if(c.size==="padmount"){ // パットマウント：緑灰の箱＋警告ラベル面
+    const b=new THREE.Mesh(new THREE.BoxGeometry(w,hgt,d),L?baseMat:new THREE.MeshLambertMaterial({color:0x5E7A5E}));b.position.y=hgt/2;b.castShadow=!L;cg.add(b);
+    const ee=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w,hgt,d)),new THREE.LineBasicMaterial({color:0x2c3a2c}));ee.position.y=hgt/2;cg.add(ee);
+   }else if(c.size==="hydrant"){ // 消火栓：赤い短柱
+    const b=new THREE.Mesh(new THREE.CylinderGeometry(w*0.4,w*0.45,hgt,8),L?baseMat:new THREE.MeshLambertMaterial({color:0xC0392B}));b.position.y=hgt/2;b.castShadow=!L;cg.add(b);
+   }else if(c.size==="manhole"){ // マンホール：地面の円盤
+    const b=new THREE.Mesh(new THREE.CylinderGeometry(w*0.5,w*0.5,0.06,16),L?baseMat:new THREE.MeshLambertMaterial({color:0x6b7079}));b.position.y=0.05;cg.add(b);
+    const ring=new THREE.Mesh(new THREE.RingGeometry(w*0.4,w*0.5,16),new THREE.MeshBasicMaterial({color:0x3a3f47,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=0.09;cg.add(ring);
+   }else if(c.size==="signal"||c.size==="mirror"){ // 信号・標識・ミラー：細柱＋頭
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.1,hgt,8),L?baseMat:new THREE.MeshLambertMaterial({color:0x888f99}));pole.position.y=hgt/2;pole.castShadow=!L;cg.add(pole);
+    const head=c.size==="mirror"
+      ? new THREE.Mesh(new THREE.CircleGeometry(0.5,16),new THREE.MeshLambertMaterial({color:0xE8A23C,side:THREE.DoubleSide}))
+      : new THREE.Mesh(new THREE.BoxGeometry(1.0,0.35,0.15),new THREE.MeshLambertMaterial({color:0x2c3a2c}));
+    head.position.y=hgt; if(c.size==="mirror")head.position.z=0.2; cg.add(head);
+   }else if(c.size==="tree"){ // 街路樹：幹＋玉
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.25,hgt*0.45,8),new THREE.MeshLambertMaterial({color:0x6B5B45}));trunk.position.y=hgt*0.22;cg.add(trunk);
+    const crown=new THREE.Mesh(new THREE.SphereGeometry(Math.max(w,d)*0.5,10,10),new THREE.MeshLambertMaterial({color:warn?0xD64545:0x5A8F5A}));crown.position.y=hgt*0.65;crown.castShadow=!L;cg.add(crown);
+   }else if(c.size==="busstop"){ // バス停：標柱＋上屋
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,hgt,8),new THREE.MeshLambertMaterial({color:0x888f99}));pole.position.set(-w*0.3,hgt/2,0);cg.add(pole);
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(w,0.12,d),omat);roof.position.y=hgt;roof.castShadow=!L;cg.add(roof);
+   }else if(c.size==="powerline"){ // 架線・高圧線：2本柱＋水平線（揚重支障）
+    [-d/2,d/2].forEach(z=>{const p=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.12,hgt,8),new THREE.MeshLambertMaterial({color:0x888f99}));p.position.set(0,hgt/2,z);cg.add(p);});
+    [-0.4,0,0.4].forEach((xo,k)=>{const ln=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,d,6),new THREE.MeshLambertMaterial({color:warn?0xD64545:0x33425a}));ln.position.set(xo,hgt-0.2-k*0.3,0);ln.rotation.x=Math.PI/2;cg.add(ln);});
+    // 揚重支障の警告帯（地面）
+    const warnZone=new THREE.Mesh(new THREE.PlaneGeometry(2,d),new THREE.MeshBasicMaterial({color:0xE8442B,transparent:true,opacity:0.18,side:THREE.DoubleSide}));warnZone.rotation.x=-Math.PI/2;warnZone.position.y=0.05;cg.add(warnZone);
+   }else{ const b=new THREE.Mesh(new THREE.BoxGeometry(w,hgt,d),omat);b.position.y=hgt/2;b.castShadow=!L;cg.add(b); }
   }else if(c.type==="temp"){ // 仮設材
    if(c.size==="gate"){ // ゲート：2本柱＋上枠
     [-w/2+0.2,w/2-0.2].forEach(x=>{const p=new THREE.Mesh(new THREE.BoxGeometry(0.3,hgt,0.3),baseMat);p.position.set(x,hgt/2,0);cg.add(p);});
@@ -785,6 +837,23 @@ function rebuild(){
   }
   cg.position.set(numv(c.x,0),0,numv(c.z,0)); cg.rotation.y=ry; g.add(cg); dragMap["co:"+i]=cg;
  });
+
+ // ───── 地下の支障物（範囲マーカー：地面の色帯）─────
+ if(!U._exporting){(U.subsurface||[]).forEach((s,i)=>{
+  const st=SUBSURFACE_TYPES[s.kind]||SUBSURFACE_TYPES.elec;
+  const w=posv(s.w,3), d=posv(s.d,14), ry=numv(s.ry,0)*Math.PI/180;
+  const seld=(U.sel==="sub:"+i);
+  const sg=new THREE.Group(); sg.userData.dragKey="sub:"+i;
+  // 半透明の色帯（地面すれすれ）
+  const band=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshBasicMaterial({color:st.color,transparent:true,opacity:seld?0.5:0.32,side:THREE.DoubleSide}));
+  band.rotation.x=-Math.PI/2; band.position.y=0.03; sg.add(band);
+  // 点線風の枠（実線エッジで代用）＋中心線
+  const edge=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(w,d)),new THREE.LineBasicMaterial({color:st.color}));
+  edge.rotation.x=-Math.PI/2; edge.position.y=0.04; sg.add(edge);
+  const cl=new THREE.Mesh(new THREE.PlaneGeometry(Math.min(0.3,w*0.15),d),new THREE.MeshBasicMaterial({color:st.color,transparent:true,opacity:0.7,side:THREE.DoubleSide}));
+  cl.rotation.x=-Math.PI/2; cl.position.y=0.05; sg.add(cl);
+  sg.position.set(numv(s.x,0),0,numv(s.z,0)); sg.rotation.y=ry; g.add(sg); dragMap["sub:"+i]=sg;
+ });}
 
  // ───── DXF オーバーレイ（1/1000等のスケールで配置）─────
  if(U.dxf.ents&&!L){
@@ -914,6 +983,7 @@ function loadProjectJSON(file){
    if(U.road.dx==null)U.road.dx=0; if(U.road.dz==null)U.road.dz=0; if(U.road.ry==null)U.road.ry=0;
    if(U.road.walkDz==null)U.road.walkDz=0; if(U.road.walkW==null)U.road.walkW=1.6;
    if(!U.roadwork)U.roadwork={mixerSize:"8t",pumpSize:"m4t",mountUp:0,permitPolice:"",permitRoad:"",permitOffice:""};
+   if(!Array.isArray(U.subsurface))U.subsurface=[];
    if(U.road.sideDx==null)U.road.sideDx=0; if(U.road.sideDz==null)U.road.sideDz=0;
    if(!U.poles)U.poles={n:3,pitch:18,far:true,dx:0,dz:0,ry:0};
    if(!U.guide)U.guide={show:false,road:1.25,nbor:1.25};
@@ -1128,6 +1198,8 @@ window.addN=()=>{U.nbs.push({x:25,z:15,w:10,d:10,h:12,ry:0});rebuild();renderPan
 window.setMode=(m)=>{U.tw.mode=m;rebuild();renderPanel();};
 window.addCO=(type)=>{const t=COBJ_TYPES[type]||COBJ_TYPES.truck;const sz=t.sizes[0];const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);U.cobj.push({type,size:sz.key,x:numv(U.site.dx,0),z:sdz2+sd2/2+6,w:sz.w,d:sz.d,h:sz.h,ry:0});U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();};
 window.delCO=(i)=>{U.cobj.splice(i,1);if(U.sel==="co:"+i)U.sel=null;rebuild();renderPanel();};
+window.addSub=(kind)=>{const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);U.subsurface.push({kind,x:numv(U.site.dx,0),z:sdz2+sd2/2+3,w:3,d:14,ry:0});U.sel="sub:"+(U.subsurface.length-1);rebuild();renderPanel();};
+window.delSub=(i)=>{U.subsurface.splice(i,1);if(U.sel==="sub:"+i)U.sel=null;rebuild();renderPanel();};
 window.setCOSize=(i,key)=>{const c=U.cobj[i];if(!c)return;const sz=cobjSize(c.type,key);if(sz){c.size=key;c.w=sz.w;c.d=sz.d;c.h=sz.h;}rebuild();renderPanel();};
 window.selCO=(i)=>{U.sel="co:"+i;rebuild();renderPanel();};
 window.setPage=async(v)=>{U.under.page=v;await renderPdfPage();};
@@ -1473,6 +1545,25 @@ function renderPanel(){
    +Object.keys(U.dxf.layers).map(k=>`<label class="chk" style="font-size:11px"><input type="checkbox" ${U.dxf.layers[k].show!==false?"checked":""} onchange="toggleDxfLayer('${k.replace(/'/g,"\\\\'")}',this.checked)">${k}</label>`).join("")
    +`<button class="btn" style="margin-top:6px;color:#B0433A;border:1px solid #E3B5B5" onclick="clearDXF()">DXFをクリア</button>`;
   }else h+=`<div class="hint">DXF（LINE/POLYLINE/CIRCLE/ARC）を線画として重ねます。配置図・平面図のトレース下地に。文字・寸法線・ハッチングは簡略表示です。</div>`;
+  // 地下の支障物（範囲マーカー）
+  h+=`<div style="border-top:1px solid var(--line);margin:10px 0 6px"></div>
+   <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:4px">地下の支障物（経路帯・範囲マーカー）</div>
+   <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">`
+   +Object.keys(SUBSURFACE_TYPES).map(k=>`<button class="btn" style="font-size:10.5px;padding:6px 7px;border-left:4px solid #${SUBSURFACE_TYPES[k].color.toString(16).padStart(6,"0")}" onclick="addSub('${k}')">＋${SUBSURFACE_TYPES[k].label}</button>`).join("")
+   +`</div>`;
+  if((U.subsurface||[]).length){h+=U.subsurface.map((s,i)=>{
+    const st=SUBSURFACE_TYPES[s.kind]||SUBSURFACE_TYPES.elec; const seld=(U.sel==="sub:"+i);
+    return `<div class="card" style="${seld?'border-color:#F2A33C;background:#FFFBF0':''}" onclick="U.sel='sub:${i}';rebuild();renderPanel()">
+     <div style="display:flex;justify-content:space-between;align-items:center">
+      <b style="font-size:11.5px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#${st.color.toString(16).padStart(6,"0")};margin-right:5px"></span>${st.label}</b>
+      <button class="del" onclick="event.stopPropagation();delSub(${i})">削除</button></div>
+     <div class="grid2" style="margin-top:4px">
+      <label class="f"><span>幅 m</span><input type="number" value="${posv(s.w,3)}" onclick="event.stopPropagation()" oninput="U.subsurface[${i}].w=parseFloat(this.value)||1;rebuild()"></label>
+      <label class="f"><span>長さ m</span><input type="number" value="${posv(s.d,14)}" onclick="event.stopPropagation()" oninput="U.subsurface[${i}].d=parseFloat(this.value)||1;rebuild()"></label>
+     </div>
+     <div style="font-size:10px;color:var(--mut);font-family:ui-monospace">基準点 X=${numv(s.x,0).toFixed(1)} Z=${numv(s.z,0).toFixed(1)} ${numv(s.ry,0)}°</div>
+    </div>`;}).join("");
+  }else h+=`<div class="hint">現地調査で判明した埋設物の<b>おおよその経路・範囲</b>を色帯で配置できます。ドラッグ＝移動／Ctrl＋ドラッグ＝回転。幅・長さで帯の大きさを調整。<b>あくまで参考表示で、正確な位置は各管理者への照会が必要です。</b></div>`;
  }
  $("#body").innerHTML=h;
 }
