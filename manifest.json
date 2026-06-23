@@ -1,8 +1,7 @@
 {
-  "name": "ボリュームパース ― 施工計画・概算BIM",
-  "short_name": "ボリュームパース",
-  "description": "案件データと図面から3Dボリューム・仮設計画・概算を検討する施工計画BIMツール",
-  "lang": "ja",
+  "name": "BimGen ― 施工計画・概算BIM",
+  "short_name": "BimGen",
+  "description": "営業・初期計画のための3Dボリューム検討・施工計画ツール",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -10,7 +9,8 @@
   "background_color": "#16243D",
   "theme_color": "#16243D",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
