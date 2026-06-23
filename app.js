@@ -139,6 +139,18 @@ function groundPoint(e){
  const t=-ray.ray.origin.y/ray.ray.direction.y;
  return ray.ray.origin.clone().add(ray.ray.direction.clone().multiplyScalar(t));
 }
+// 画面のドラッグ量(px)から注視点を平行移動（カメラ方位に正しく追従）
+function panBy(dxp,dyp){
+ const th=ctrl.theta, ph=ctrl.phi;
+ // カメラ→注視点の水平前方ベクトル（正規化）
+ let fx=-Math.cos(th), fz=-Math.sin(th);
+ // 画面右ベクトル（y軸まわり）：(fx,fz)→(fz,-fx)
+ const rx=fz, rz=-fx;
+ const k=ctrl.r*0.0015;  // 距離に応じた移動量（遠いほど速く）
+ // 指を右(dxp>0)→ワールドが右に動く→注視点は-right。指を下(dyp>0)→注視点は+fwd（奥）
+ ctrl.cx += (-rx*dxp + fx*dyp)*k;
+ ctrl.cz += (-rz*dxp + fz*dyp)*k;
+}
 function dragCandidates(){const small=["crane","ev","mixer","rough","poles","demo","road","roadwalk","roadside"];const out=[];
  for(const[k,o]of Object.entries(dragMap)){
   if(small.includes(k)||k.startsWith("nb:")||k.startsWith("blk:")||k.startsWith("co:"))out.push(o);
@@ -201,7 +213,7 @@ el.addEventListener("pointerdown",(e)=>{
   else if(!U.dim.b){U.dim.b={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};}
   else {U.dim.a={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};U.dim.b=null;}
   rebuild();renderBar();return;}
- if(ctrl.ptrs.size===1){const o=pickDrag(e);if(o){dragObj=o;U.sel=o.userData.dragKey;
+ if(ctrl.ptrs.size===1 && !e.shiftKey){const o=pickDrag(e);if(o){dragObj=o;U.sel=o.userData.dragKey;
    if(e.ctrlKey||e.metaKey){rotMode=true;rotStartX=e.clientX;rotStartRy=getRy(o.userData.dragKey);}
    else{rotMode=false;const gp=groundPoint(e);dragOff.set(o.position.x-gp.x,0,o.position.z-gp.z);}
    U.auto=false;syncBtns();}else{U.sel=null;}}
@@ -213,10 +225,7 @@ el.addEventListener("pointermove",(e)=>{
  if(dragObj&&ctrl.ptrs.size===1){const gp=groundPoint(e);dragObj.position.x=gp.x+dragOff.x;dragObj.position.z=gp.z+dragOff.z;return;}
  if(ctrl.ptrs.size===1){
    if(e.shiftKey){ // Shift+ドラッグ＝パン（注視点を平行移動）
-    const dxp=e.clientX-prev[0], dyp=e.clientY-prev[1], k=ctrl.r*0.0016;
-    const cosT=Math.cos(ctrl.theta), sinT=Math.sin(ctrl.theta);
-    ctrl.cx -= (dxp*cosT - dyp*sinT)*k;
-    ctrl.cz -= (dxp*sinT + dyp*cosT)*k;
+    panBy(e.clientX-prev[0], e.clientY-prev[1]);
     U.auto=false;
    }else{ // 通常ドラッグ＝回転
     ctrl.theta-=(e.clientX-prev[0])*.006;ctrl.phi=Math.min(1.52,Math.max(.12,ctrl.phi-(e.clientY-prev[1])*.004));U.auto=false;syncBtns();
@@ -228,14 +237,7 @@ el.addEventListener("pointermove",(e)=>{
    // ピンチでズーム
    if(ctrl.pinch)ctrl.r=Math.min(800,Math.max(20,ctrl.r*(ctrl.pinch/d)));
    // 2本指の中心移動でパン（注視点を平行移動）→「見たい場所を画面中央に」
-   if(ctrl.panMid){
-    const dxp=mid[0]-ctrl.panMid[0], dyp=mid[1]-ctrl.panMid[1];
-    const k=ctrl.r*0.0016;  // 距離に応じた移動量
-    // 画面の右方向・奥行方向をワールド座標に変換（カメラ方位thetaを考慮）
-    const cosT=Math.cos(ctrl.theta), sinT=Math.sin(ctrl.theta);
-    ctrl.cx -= (dxp*cosT - dyp*sinT)*k;
-    ctrl.cz -= (dxp*sinT + dyp*cosT)*k;
-   }
+   if(ctrl.panMid)panBy(mid[0]-ctrl.panMid[0], mid[1]-ctrl.panMid[1]);
    ctrl.pinch=d; ctrl.panMid=mid; U.auto=false; syncBtns();
   }
 });
