@@ -43,7 +43,7 @@
   if(!sp)return;
   var hide=function(){ sp.classList.add("hide"); setTimeout(function(){ if(sp&&sp.parentNode) sp.parentNode.removeChild(sp); }, 650); };
   // 最低1.1秒は見せる（速すぎるとチラ見えで安っぽい）。読み込み済みでも一定時間表示。
-  setTimeout(hide, 1400);
+  setTimeout(hide, 2000);
 })();
 </script>
 <script>
