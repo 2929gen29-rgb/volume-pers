@@ -811,7 +811,7 @@ function rebuild(){
 
 // ───── 案件データの保存・読込 (JSON / AES暗号化対応) ─────
 function saveProjectJSON(){
- const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="sel"||k==="polyInput"||k==="calib")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
+ const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="sel"||k==="polyInput"||k==="calib")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
  const jsonStr=JSON.stringify(saveState,null,2);
  const dateStr=new Date().toISOString().slice(0,10).replace(/-/g,"");
  const baseName=`${U.p.name||"volume"}_${dateStr}`;
@@ -1049,6 +1049,25 @@ const F=(l,v,fn,t="number",step)=>`<label class="f"><span>${l}</span><input type
 const SL=(l,v,fn,mn,mx,st=1)=>`<label class="f"><span>${l}：<b style="font-family:ui-monospace">${v}</b></span><input type="range" min="${mn}" max="${mx}" step="${st}" value="${v}" oninput="(${fn})(parseFloat(this.value));this.previousElementSibling.querySelector('b').textContent=this.value"></label>`;
 const CK=(l,v,fn)=>`<label class="chk"><input type="checkbox" ${v?"checked":""} onchange="(${fn})(this.checked)">${l}</label>`;
 window.S=(path,v,re=true)=>{const ks=path.split(".");let o=U;while(ks.length>1)o=o[ks.shift()];o[ks[0]]=v;if(re)rebuild();};
+// ───── 折りたたみセクション（アコーディオン）─────
+// 使い方：SEC("見出し", "中身HTML", { key:"一意キー", open:既定で開くか, icon:"絵文字" })
+function SEC(title, inner, opt){
+ opt=opt||{};
+ const key=opt.key||title;
+ if(!U._acc)U._acc={};
+ // 初回だけ既定値を設定（以後はユーザー操作を尊重）
+ if(U._acc[key]===undefined)U._acc[key]=!!opt.open;
+ const open=U._acc[key];
+ const icon=opt.icon?`<span style="margin-right:6px">${opt.icon}</span>`:"";
+ return `<div class="sec ${open?"open":""}">
+   <div class="sec-h" onclick="toggleSec('${key.replace(/'/g,"")}')">
+     <span>${icon}${title}</span>
+     <span class="sec-arrow">${open?"▾":"▸"}</span>
+   </div>
+   <div class="sec-b" style="${open?"":"display:none"}">${inner}</div>
+ </div>`;
+}
+window.toggleSec=(key)=>{ if(!U._acc)U._acc={}; U._acc[key]=!U._acc[key]; renderPanel(); };
 window.SB=(id,k,v)=>{const b=U.blocks.find(x=>x.id===id);if(b){b[k]=v;rebuild();}};
 window.SN=(i,k,v)=>{if(U.nbs[i]){U.nbs[i][k]=v;rebuild();}};
 window.SH=(i,v)=>{U.site.h[i]=v;rebuild();};
@@ -1163,19 +1182,19 @@ function renderPanel(){
  if(U.tab==="敷地・地形"){
   const city=cityFromAddr(U.p.addr||"");
   const ge=encodeURIComponent;
-  h=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin:0 0 3px">計画地住所（公共データ照会）</div>
-  <input type="text" value="${(U.p.addr||"").replace(/"/g,"&quot;")}" placeholder="例：東京都北区上十条3丁目" oninput="S('p.addr',this.value,false)" style="margin-bottom:6px">
+  // ① 計画地住所・公共データ照会
+  let secGeo=`<input type="text" value="${(U.p.addr||"").replace(/"/g,"&quot;")}" placeholder="例：東京都北区上十条3丁目" oninput="S('p.addr',this.value,false)" style="margin-bottom:6px">
   <button class="addbtn" style="margin-bottom:6px" onclick="fetchGeo()">📍 地盤・標高情報を取得</button>`;
-  if(U.geo.status){h+=`<div style="background:#EEF3FA;border-radius:7px;padding:7px 9px;font-size:11px;line-height:1.7;color:#1E3A5F;white-space:pre-wrap;margin-bottom:6px">${U.geo.name?("📍 "+U.geo.name+"\n"):""}${U.geo.status}</div>`;}
-  if(U.p.addr){h+=`<div style="font-size:10.5px;color:var(--mut);margin-bottom:3px">▼ ${city||"計画地"}の公開情報を検索（別タブ）</div>
-   <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px">
+  if(U.geo.status){secGeo+=`<div style="background:#EEF3FA;border-radius:7px;padding:7px 9px;font-size:11px;line-height:1.7;color:#1E3A5F;white-space:pre-wrap;margin-bottom:6px">${U.geo.name?("📍 "+U.geo.name+"\n"):""}${U.geo.status}</div>`;}
+  if(U.p.addr){secGeo+=`<div style="font-size:10.5px;color:var(--mut);margin-bottom:3px">▼ ${city||"計画地"}の公開情報を検索（別タブ）</div>
+   <div style="display:flex;flex-direction:column;gap:4px">
     <a href="https://www.google.com/search?q=${ge(city+" 都市計画情報 用途地域")}" target="_blank" rel="noopener" style="font-size:11.5px;color:#2552A0">🔎 都市計画・用途地域</a>
     <a href="https://www.google.com/search?q=${ge(city+" ハザードマップ")}" target="_blank" rel="noopener" style="font-size:11.5px;color:#2552A0">🔎 ハザードマップ</a>
     <a href="https://disaportal.gsi.go.jp/" target="_blank" rel="noopener" style="font-size:11.5px;color:#2552A0">🔎 重ねるハザードマップ（国交省）</a>
     <a href="https://www.google.com/search?q=${ge(city+" 地盤 ボーリング 柱状図")}" target="_blank" rel="noopener" style="font-size:11.5px;color:#2552A0">🔎 周辺の地盤・ボーリングデータ</a>
    </div>`;}
-  h+=`<div style="border-top:1px solid var(--line);margin:4px 0 8px"></div>
-  <div class="grid2">
+  // ② 敷地寸法・形状
+  let secSite=`<div class="grid2">
    <label class="f"><span>敷地 間口 m</span><input type="number" value="${U.site.w}" oninput="S('site.w',this.value)"></label>
    <label class="f"><span>敷地 奥行 m</span><input type="number" value="${U.site.d}" oninput="S('site.d',this.value)"></label>
   </div>
@@ -1184,18 +1203,18 @@ function renderPanel(){
     ? `<div style="background:#EEF6EF;border:1.5px solid #2E7D5B;border-radius:8px;padding:7px 10px;font-size:11.5px;line-height:1.6">多角形敷地（${U.site.poly.length}頂点）で表示中。<br><button class="btn" style="margin-top:5px;color:#B0433A" onclick="U.site.poly=null;rebuild();renderPanel()">矩形敷地に戻す</button></div>`
     : (U.polyInput.on&&U.polyInput.target==="site"
        ? `<div style="background:#FFF3DD;border:1.5px dashed var(--amber);border-radius:8px;padding:8px 10px;font-size:11.5px;line-height:1.7"><b>敷地形状の入力モード中</b><br>下絵・地面をクリックして敷地外周の頂点を打ち、<b>ダブルクリックで閉じる</b>と敷地になります。<br>現在 ${U.polyInput.pts.length} 点<br><button class="btn" style="margin-top:6px" onclick="U.polyInput.pts.pop();rebuild();renderPanel()">1つ戻す</button> <button class="btn" style="margin-top:6px;color:#B0433A" onclick="U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar()">中止</button></div>`
-       : `<button class="addbtn" onclick="U.polyInput.on=true;U.polyInput.target='site';U.polyInput.pts=[];renderPanel();renderBar()">✏️ 敷地を多角形で描く（頂点クリック→ダブルクリックで閉じる）</button><div class="hint">配置図PDFを下敷きにして敷地境界をなぞると、不整形地も正確に再現できます。</div>`)}
-  <div style="border-top:1px dotted var(--line);margin:8px 0 6px"></div>
-  ${SL("敷地位置 左右",U.site.dx,"(v)=>S('site.dx',v)",-40,40,0.5)}
+       : `<button class="addbtn" onclick="U.polyInput.on=true;U.polyInput.target='site';U.polyInput.pts=[];renderPanel();renderBar()">✏️ 敷地を多角形で描く</button><div class="hint">配置図PDFを下敷きにして敷地境界をなぞると、不整形地も正確に再現できます。</div>`)}`;
+  // ③ 位置・地盤（GL・高低差）
+  let secPos=`${SL("敷地位置 左右",U.site.dx,"(v)=>S('site.dx',v)",-40,40,0.5)}
   ${SL("敷地位置 前後",U.site.dz,"(v)=>S('site.dz',v)",-40,40,0.5)}
   ${SL("建物GL（設計地盤）m",U.site.gl,"(v)=>S('site.gl',v)",-3,4,0.1)}
-  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:6px 0 2px">敷地の高低差（四隅の地盤高 m）${Array.isArray(U.site.poly)?'<span style="color:var(--mut);font-weight:400">（矩形敷地のみ反映）</span>':''}</div>
+  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:6px 0 2px">敷地の高低差（四隅の地盤高 m）${Array.isArray(U.site.poly)?'<span style="color:var(--mut);font-weight:400">（矩形のみ）</span>':''}</div>
   ${SL("前面・左",U.site.h[0],"(v)=>SH(0,v)",-4,4,0.1)}
   ${SL("前面・右",U.site.h[1],"(v)=>SH(1,v)",-4,4,0.1)}
   ${SL("奥・左",U.site.h[2],"(v)=>SH(2,v)",-4,4,0.1)}
-  ${SL("奥・右",U.site.h[3],"(v)=>SH(3,v)",-4,4,0.1)}
-  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:8px 0 2px">道路・電柱</div>
-  ${SL("前面道路 幅員 m",U.road.w,"(v)=>S('road.w',v)",4,20,0.5)}
+  ${SL("奥・右",U.site.h[3],"(v)=>SH(3,v)",-4,4,0.1)}`;
+  // ④ 道路・歩道・側道
+  let secRoad=`${SL("前面道路 幅員 m",U.road.w,"(v)=>S('road.w',v)",4,20,0.5)}
   <label class="f"><span>側道</span><select onchange="S('road.side',this.value)"><option value="none" ${U.road.side==="none"?"selected":""}>なし</option><option value="left" ${U.road.side==="left"?"selected":""}>左側</option><option value="right" ${U.road.side==="right"?"selected":""}>右側</option></select></label>
   <div style="font-size:11px;font-weight:700;color:var(--mut);margin:8px 0 2px">道路パーツの個別調整（3Dでドラッグも可）</div>
   ${SL("道路全体 前後",U.road.dz,"(v)=>S('road.dz',v)",-30,30,0.5)}
@@ -1204,17 +1223,25 @@ function renderPanel(){
   ${SL("前面歩道 前後オフセット",U.road.walkDz,"(v)=>S('road.walkDz',v)",-10,10,0.5)}
   ${SL("前面歩道 幅 m",U.road.walkW,"(v)=>S('road.walkW',v)",0.5,6,0.5)}
   ${U.road.side!=="none"?SL("側道 前後オフセット",U.road.sideDz,"(v)=>S('road.sideDz',v)",-20,20,0.5)+SL("側道 左右オフセット",U.road.sideDx,"(v)=>S('road.sideDx',v)",-20,20,0.5):""}
-  <div class="hint">3Dビュー上で車道・歩道・側道それぞれを<b>直接ドラッグ</b>でも動かせます（車道はCtrl＋ドラッグで回転）。</div>
+  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:8px 0 2px">電柱</div>
   ${SL("電柱 本数",U.poles.n,"(v)=>S('poles.n',v)",0,8,1)}
   ${SL("電柱 間隔 m",U.poles.pitch,"(v)=>S('poles.pitch',v)",8,40,1)}
   ${CK("電柱を道路の向こう側に",U.poles.far,"(v)=>S('poles.far',v)")}
-  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:8px 0 2px">斜線制限ガイド</div>
-  ${CK("道路斜線・隣地斜線ガイドを表示",U.guide.show,"(v)=>S('guide.show',v)")}
-  ${U.guide.show?`${SL("道路斜線 勾配",U.guide.road,"(v)=>S('guide.road',v)",1,2,0.05)}${SL("隣地斜線 勾配",U.guide.nbor,"(v)=>S('guide.nbor',v)",1,2.5,0.05)}<div class="hint">橙の半透明面が斜線制限の目安です。建物がこの面を突き抜けていないか視覚確認できます（簡易表示・正式判定は設計でご確認ください）。住居系は1.25、商業系は1.5が一般的な目安です。</div>`:""}
-  <div style="font-size:11px;font-weight:700;color:var(--mut);margin:8px 0 2px">日当たり・日影検討</div>
-  ${SL("太陽の方位 °（0=北 90=東 180=南）",U.sun.az,"(v)=>S('sun.az',v)",0,360,5)}
+  <div class="hint">3Dビュー上で車道・歩道・側道それぞれを<b>直接ドラッグ</b>でも動かせます（車道はCtrl＋ドラッグで回転）。</div>`;
+  // ⑤ 斜線制限
+  let secSlant=`${CK("道路斜線・隣地斜線ガイドを表示",U.guide.show,"(v)=>S('guide.show',v)")}
+  ${U.guide.show?`${SL("道路斜線 勾配",U.guide.road,"(v)=>S('guide.road',v)",1,2,0.05)}${SL("隣地斜線 勾配",U.guide.nbor,"(v)=>S('guide.nbor',v)",1,2.5,0.05)}<div class="hint">橙の半透明面が斜線制限の目安です。建物がこの面を突き抜けていないか視覚確認できます（簡易表示・正式判定は設計でご確認ください）。住居系1.25・商業系1.5が目安。</div>`:""}`;
+  // ⑥ 日影
+  let secSun=`${SL("太陽の方位 °（0=北 90=東 180=南）",U.sun.az,"(v)=>S('sun.az',v)",0,360,5)}
   ${SL("太陽高度 °",U.sun.alt,"(v)=>S('sun.alt',v)",8,85,1)}
-  <div class="hint">影の落ち方で近隣への日影影響をざっくり確認できます。電柱は画面上でドラッグ移動も可。敷地もドラッグ移動できます（道路は固定）。傾斜地は四隅の高さ、据え付けはGLで調整。</div>`;
+  <div class="hint">影の落ち方で近隣への日影影響をざっくり確認できます。</div>`;
+
+  h = SEC("計画地・公共データ照会", secGeo, {key:"site-geo", icon:"📍", open:false})
+    + SEC("敷地 寸法・形状", secSite, {key:"site-dim", icon:"📐", open:true})
+    + SEC("敷地 位置・地盤・高低差", secPos, {key:"site-pos", icon:"⛰", open:false})
+    + SEC("道路・歩道・電柱", secRoad, {key:"site-road", icon:"🛣", open:true})
+    + SEC("斜線制限ガイド", secSlant, {key:"site-slant", icon:"📏", open:false})
+    + SEC("日当たり・日影検討", secSun, {key:"site-sun", icon:"☀", open:false});
  }
  if(U.tab==="下敷き"){
   h=`<div class="hint" style="margin:0 0 8px">配置図・設計概要図の<b>PDFまたは画像</b>を敷地に下敷き表示。視点「真上(配置)」で縮尺と位置を合わせ、ブロックを重ねます。</div>
