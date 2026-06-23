@@ -106,3 +106,25 @@ input[type=range]{width:100%;accent-color:var(--amber)}
 #panel::-webkit-scrollbar{width:8px}
 #panel::-webkit-scrollbar-thumb{background:#c5ccd8;border-radius:99px}
 #panel::-webkit-scrollbar-track{background:transparent}
+
+/* ───── アクセスコード（PWゲート）───── */
+#gate{position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(120% 120% at 50% 30%, #1d3050 0%, #16243D 55%, #101b2e 100%);
+  transition:opacity .4s var(--ease),visibility .4s var(--ease)}
+#gate.hide{opacity:0;visibility:hidden}
+.gate-card{width:min(340px,86vw);background:rgba(255,255,255,.97);border-radius:16px;padding:30px 26px 22px;
+  box-shadow:0 18px 50px rgba(0,0,0,.4);display:flex;flex-direction:column;align-items:center;text-align:center}
+.gate-card.shake{animation:shake .4s var(--ease)}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+.gate-logo{width:70px;height:auto;margin-bottom:10px}
+.gate-title{font-size:24px;font-weight:800;color:var(--navy);letter-spacing:.3px}
+.gate-msg{font-size:12px;color:var(--mut);margin:8px 0 16px;line-height:1.6}
+#gate-pw{width:100%;padding:11px 13px;font-size:15px;border:1.5px solid var(--line);border-radius:9px;
+  background:#fff;outline:none;text-align:center;letter-spacing:2px;font-family:inherit}
+#gate-pw:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(242,163,60,.2)}
+#gate-btn{width:100%;margin-top:12px;padding:11px;font-size:14px;font-weight:700;color:#3a2604;
+  background:var(--amber);border:none;border-radius:9px;cursor:pointer;transition:filter .15s var(--ease)}
+#gate-btn:hover{filter:brightness(1.05)}
+#gate-btn:active{transform:scale(.98)}
+.gate-err{min-height:18px;margin-top:10px;font-size:12px;color:#B0433A;font-weight:700}
+.gate-note{margin-top:14px;font-size:10px;color:#9aa3b2;line-height:1.5}
