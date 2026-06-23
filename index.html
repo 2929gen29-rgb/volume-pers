@@ -29,6 +29,21 @@
     <div class="splash-bar"><i></i></div>
   </div>
 </div>
+<div id="gate" style="display:none">
+  <div class="gate-card">
+    <svg class="gate-logo" viewBox="0 0 140 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <g><polygon points="0,80 35,60 70,80 35,100" fill="#16243D"/><polygon points="0,80 0,95 35,115 35,100" fill="#1f3454"/><polygon points="70,80 70,95 35,115 35,100" fill="#2E4057"/></g>
+      <g><polygon points="12,52 47,32 82,52 47,72" fill="#24364f"/><polygon points="12,52 12,64 47,84 47,72" fill="#2b405d"/><polygon points="82,52 82,64 47,84 47,72" fill="#374d6b"/></g>
+      <g><polygon points="28,26 63,6 98,26 63,46" fill="#F2A33C"/><polygon points="28,26 28,38 63,58 63,46" fill="#d98a28"/><polygon points="98,26 98,38 63,58 63,46" fill="#e8962f"/></g>
+    </svg>
+    <div class="gate-title">BimGen</div>
+    <div class="gate-msg">社内利用ツールです。アクセスコードを入力してください。</div>
+    <input id="gate-pw" type="password" inputmode="text" autocomplete="off" placeholder="アクセスコード" />
+    <button id="gate-btn" type="button">入室する</button>
+    <div id="gate-err" class="gate-err"></div>
+    <div class="gate-note">※このツールおよびロジックは無断複製・無断利用・解析を禁止します。</div>
+  </div>
+</div>
 <div id="view"></div>
 <div id="bar"></div>
 <div id="panel"><div id="phead"><span class="brand"><svg class="brand-mark" viewBox="0 0 70 58" aria-hidden="true"><polygon points="0,38 18,28 36,38 18,48" fill="#F2A33C"/><polygon points="0,38 0,46 18,56 18,48" fill="#d98a28"/><polygon points="36,38 36,46 18,56 18,48" fill="#e8962f"/><polygon points="14,16 32,6 50,16 32,26" fill="#fff"/><polygon points="14,16 14,24 32,34 32,26" fill="#cfd6e0"/><polygon points="50,16 50,24 32,34 32,26" fill="#e4e9ef"/></svg>BimGen</span><span id="parr">▲</span></div><div id="pwrap"><div id="tabs"></div><div id="body"></div></div></div>
@@ -37,13 +52,62 @@
 
 <script src="app.js"></script>
 <script>
-// 起動画面：アプリ初期化後に少し見せてフェードアウト
+// ───── 起動画面 → アクセスコード（社内利用の人除け）─────
+// 注意：これはURLを知っただけの第三者が使えないようにする簡易ロックです。
+//       ブラウザで動く以上、開発者ツールでコードは読めます（強固な保護ではありません）。
+//       本来のロジック保護は利用規約・著作権表示（法的牽制）またはサーバー化で行います。
 (function(){
-  var sp=document.getElementById("splash");
-  if(!sp)return;
-  var hide=function(){ sp.classList.add("hide"); setTimeout(function(){ if(sp&&sp.parentNode) sp.parentNode.removeChild(sp); }, 650); };
-  // 最低1.1秒は見せる（速すぎるとチラ見えで安っぽい）。読み込み済みでも一定時間表示。
-  setTimeout(hide, 2000);
+  var SALT="BimGen::gate::v1";
+  // ▼ここに「設定したいアクセスコードのSHA-256ハッシュ」を入れてください。
+  //   仮コード "bimgen2026" のハッシュを既定にしています。必ず自分のコードに差し替えを。
+  var PW_HASH="a3b3d6278c72ae658c0d2fbe00d7f8e8711dfcb61664556294e51a76d7988397";
+  var REMEMBER_DAYS=14;            // 一度入室したら何日間は再入力不要にするか
+  var KEY="bimgen_gate_ok";
+
+  var splash=document.getElementById("splash");
+  var gate=document.getElementById("gate");
+
+  function sha(s){ return CryptoJS.SHA256(SALT+s).toString(); }
+  function alreadyOK(){
+    try{
+      var raw=localStorage.getItem(KEY); if(!raw)return false;
+      var o=JSON.parse(raw);
+      return o && o.h===PW_HASH && o.exp>Date.now();   // 同じコード&期限内なら通す
+    }catch(_){ return false; }
+  }
+  function remember(){
+    try{ localStorage.setItem(KEY, JSON.stringify({h:PW_HASH, exp:Date.now()+REMEMBER_DAYS*864e5})); }catch(_){}
+  }
+  function showApp(){ if(gate){gate.style.display="none";} }
+  function showGate(){
+    if(!gate)return;
+    gate.style.display="flex";
+    var inp=document.getElementById("gate-pw"),
+        btn=document.getElementById("gate-btn"),
+        err=document.getElementById("gate-err");
+    var tries=0;
+    function tryUnlock(){
+      var v=(inp.value||"").trim();
+      if(!v){ inp.focus(); return; }
+      if(sha(v)===PW_HASH){ remember(); gate.classList.add("hide"); setTimeout(showApp,400); }
+      else{
+        tries++; err.textContent="アクセスコードが違います。"+(tries>=3?"（社内の管理者にご確認ください）":"");
+        inp.value=""; inp.focus();
+        gate.querySelector(".gate-card").classList.remove("shake"); void gate.offsetWidth;
+        gate.querySelector(".gate-card").classList.add("shake");
+      }
+    }
+    btn.addEventListener("click", tryUnlock);
+    inp.addEventListener("keydown", function(e){ if(e.key==="Enter") tryUnlock(); });
+    setTimeout(function(){ inp.focus(); }, 100);
+  }
+
+  // スプラッシュを少し見せてから、認証状態に応じてゲート or 本体へ
+  setTimeout(function(){
+    if(splash){ splash.classList.add("hide"); setTimeout(function(){ if(splash&&splash.parentNode) splash.parentNode.removeChild(splash); }, 650); }
+    if(alreadyOK()){ showApp(); }   // 期限内：そのまま使える
+    else { showGate(); }            // 未認証：コード入力
+  }, 1100);
 })();
 </script>
 <script>
