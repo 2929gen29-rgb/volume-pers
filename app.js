@@ -27,7 +27,7 @@ const U={
        splitWalk:false},              // true=歩道を道路と独立して動かす
  poles:{n:3,pitch:18,far:true,dx:0,dz:0,ry:0},
  demo:{w:22,d:14,h:9,dx:0,dz:0,ry:0},
- tw:{mode:"plan",step:8,crane:true,craneModel:"JCL022", craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,scaffold:true,poles:true,mixer:true,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
+ tw:{mode:"plan",step:8,crane:true,craneModel:"JCL022", craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceAll:false,scaffold:true,poles:true,mixer:true,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
  under:{tex:null,show:true,width:40,opacity:.65,rot:0,dx:0,dz:0,pages:1,page:1,raw:null},
  photo:{tex:null,show:true,width:160,opacity:.8,rot:0,dx:0,dz:0},
  nbs:[], line:false, auto:true, tab:"諸元", moveLayers:false,
@@ -581,12 +581,29 @@ function rebuild(){
 
  const builtH=gl+built*fh;
 
- // 仮囲い
- if(U.tw.fence&&U.tw.mode==="build"){
+ // 仮囲い（ゲート開口・高さ可変・全モード対応）
+ if(U.tw.fence && (U.tw.mode==="build" || U.tw.fenceAll)){
   const fG=new THREE.Group();
-  const mk=(w,x,z,ry)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,3,.1),mat(0xf0f1f3));m.position.set(x,1.62,z);m.rotation.y=ry||0;m.castShadow=!L;fG.add(m);};
-  mk(sw,0,-sd/2,0);mk(sd,-sw/2,0,Math.PI/2);mk(sd,sw/2,0,Math.PI/2);
-  mk(sw/2-4,-sw/4-2,sd/2,0);mk(sw/2-4,sw/4+2,sd/2,0);
+  const fh=Math.max(2,Math.min(8,numv(U.tw.fenceH,3)));        // パネル高さ
+  const gate=U.tw.fenceGate||"front";                           // ゲート位置
+  const gw=Math.min(8,Math.max(4,sw*0.3));                      // ゲート開口幅
+  const panel=(w,x,z,ry)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,fh,.1),mat(0xeef0f3));m.position.set(x,fh/2+.06,z);m.rotation.y=ry||0;m.castShadow=!L;fG.add(m);
+   if(!L){const cap=new THREE.Mesh(new THREE.BoxGeometry(w,.12,.16),mat(0xF2A33C));cap.position.set(x,fh+.1,z);cap.rotation.y=ry||0;fG.add(cap);}}; // 上端にアンバーの笠木
+  // 前面（z=-sd/2側がdefault道路面と逆。ここでは前面=+z側に開口を想定）
+  const half=sw/2;
+  // 各辺：ゲート位置の辺だけ中央に開口（2枚に割る）
+  const edge=(side)=>{
+   if(side==="front"){ // +z 辺
+    if(gate==="front"){const seg=(sw-gw)/2; panel(seg,-half+seg/2,sd/2,0); panel(seg,half-seg/2,sd/2,0);
+     // ゲート柱
+     if(!L){[-gw/2,gw/2].forEach(gx=>{const p=new THREE.Mesh(new THREE.BoxGeometry(.18,fh+.4,.18),mat(0x9aa1ab));p.position.set(gx,(fh+.4)/2,sd/2);fG.add(p);});}
+    } else panel(sw,0,sd/2,0);
+   }
+   if(side==="back") panel(sw,0,-sd/2,0);
+   if(side==="left"){ if(gate==="left"){const seg=(sd-gw)/2;panel(seg,-half,-sd/2+seg/2,Math.PI/2);panel(seg,-half,sd/2-seg/2,Math.PI/2);} else panel(sd,-half,0,Math.PI/2);}
+   if(side==="right"){ if(gate==="right"){const seg=(sd-gw)/2;panel(seg,half,-sd/2+seg/2,Math.PI/2);panel(seg,half,sd/2-seg/2,Math.PI/2);} else panel(sd,half,0,Math.PI/2);}
+  };
+  edge("front");edge("back");edge("left");edge("right");
   fG.position.set(sdx,0,sdz);g.add(fG);}
 
  // タワークレーン（ドラッグ可・カタログ仕様連動）
@@ -877,6 +894,7 @@ function loadProjectJSON(file){
    if(!U.polyInput)U.polyInput={on:false,pts:[],target:null};
    if(!U.calib)U.calib={on:false,a:null,b:null};
    if(U.tw&&!U.tw.craneModel)U.tw.craneModel="JCL022";
+   if(U.tw){if(U.tw.fenceH==null)U.tw.fenceH=3; if(U.tw.fenceGate==null)U.tw.fenceGate="front"; if(U.tw.fenceAll==null)U.tw.fenceAll=false;}
    if(!U.dxf)U.dxf={ents:null,layers:{},scale:0.001,dx:0,dz:0,raw:null};
    if(U.cost)delete U.cost;  // 旧バージョンの概算単価データを破棄
    if(!U.geo)U.geo={elev:null,name:"",status:""};
@@ -1282,6 +1300,19 @@ function renderPanel(){
    <button class="btn ${U.tw.mode==="plan"?"active":""}" style="flex:1;padding:7px 4px;font-size:11px" onclick="setMode('plan')">完成</button>
    <button class="btn ${U.tw.mode==="demo"?"active":""}" style="flex:1;padding:7px 4px;font-size:11px" onclick="setMode('demo')">既存解体</button>
    <button class="btn ${U.tw.mode==="build"?"active":""}" style="flex:1;padding:7px 4px;font-size:11px" onclick="setMode('build')">施工中</button></div>`;
+  if(U.tw.mode==="plan"){
+   const secPlanFence = CK("仮囲いを表示（完成イメージにも重ねる）",U.tw.fenceAll,"(v)=>S('tw.fenceAll',v)")
+    +(U.tw.fenceAll?`<div style="padding-left:10px">
+       ${SL("パネル高さ m",U.tw.fenceH,"(v)=>S('tw.fenceH',v)",2,8,0.5)}
+       <label class="f"><span>ゲート（出入口）位置</span><select onchange="S('tw.fenceGate',this.value)">
+         <option value="front" ${U.tw.fenceGate==="front"?"selected":""}>前面（道路側）</option>
+         <option value="left" ${U.tw.fenceGate==="left"?"selected":""}>左側</option>
+         <option value="right" ${U.tw.fenceGate==="right"?"selected":""}>右側</option>
+         <option value="none" ${U.tw.fenceGate==="none"?"selected":""}>開口なし（全周閉鎖）</option>
+       </select></label></div>`:"")
+    +`<div class="hint">完成パースは通常そのまま見せますが、近隣説明で「工事中の囲い」を見せたい時に使えます。重機・足場は「施工中」モードで。</div>`;
+   h += SEC("仮囲い（任意）", secPlanFence, {key:"tw-planfence", icon:"🚧", open:false});
+  }
   if(U.tw.mode==="demo"){
    h+=`<div class="hint" style="margin:0 0 8px">解体予定の既存建物（赤×印）を表示。重機をドラッグ配置して解体計画を検討できます。新築ボリュームは非表示になります。</div>`
    +`<div style="font-size:11px;font-weight:700;color:var(--mut);margin:4px 0 2px">既存建物（解体予定）</div>`
@@ -1297,15 +1328,26 @@ function renderPanel(){
    +`<div class="hint">Ctrl＋ドラッグで重機の向きを回転できます。</div>`;
   }
   else if(U.tw.mode==="build"){
-   h+=SL("躯体の進捗（〜階）",U.tw.step,"(v)=>S('tw.step',v)",1,Math.max(1,Math.round(posv(U.p.floors,14))),1)
-   +`<div style="border-top:1px solid var(--line);margin:8px 0"></div>`
-   +CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")
-   +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${CRANE_SPECS[k].label}</option>`).join("")}</select></label><div style="font-size:10px;color:#2552A0;margin:-2px 0 4px">作業半径 ${craneSpec(U.tw.craneModel).work}m ／ 定格 ${craneSpec(U.tw.craneModel).cap}t ／ 尾部 ${craneSpec(U.tw.craneModel).tail}m</div>${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}${CK("作業半径・尾部旋回の円",U.tw.radius,"(v)=>S('tw.radius',v)")}</div>`:"")
-   +CK("ロングスパンEV（ドラッグ可）",U.tw.ev,"(v)=>S('tw.ev',v)")
-   +CK("外部足場＋養生シート",U.tw.scaffold,"(v)=>S('tw.scaffold',v)")
-   +CK("仮囲い（ゲート付き）",U.tw.fence,"(v)=>S('tw.fence',v)")
-   +CK("生コン車（ドラッグ可）",U.tw.mixer,"(v)=>S('tw.mixer',v)")
-   +CK("ラフタークレーン（ドラッグ可）",U.tw.rough,"(v)=>S('tw.rough',v)");
+   const secCrane = SL("躯体の進捗（〜階）",U.tw.step,"(v)=>S('tw.step',v)",1,Math.max(1,Math.round(posv(U.p.floors,14))),1)
+    +CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")
+    +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${CRANE_SPECS[k].label}</option>`).join("")}</select></label><div style="font-size:10px;color:#2552A0;margin:-2px 0 4px">作業半径 ${craneSpec(U.tw.craneModel).work}m ／ 定格 ${craneSpec(U.tw.craneModel).cap}t ／ 尾部 ${craneSpec(U.tw.craneModel).tail}m</div>${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}${CK("作業半径・尾部旋回の円",U.tw.radius,"(v)=>S('tw.radius',v)")}</div>`:"")
+    +CK("ラフタークレーン（ドラッグ可）",U.tw.rough,"(v)=>S('tw.rough',v)");
+   const secFence = CK("仮囲いを表示",U.tw.fence,"(v)=>S('tw.fence',v)")
+    +(U.tw.fence?`<div style="padding-left:10px">
+       ${SL("パネル高さ m",U.tw.fenceH,"(v)=>S('tw.fenceH',v)",2,8,0.5)}
+       <label class="f"><span>ゲート（出入口）位置</span><select onchange="S('tw.fenceGate',this.value)">
+         <option value="front" ${U.tw.fenceGate==="front"?"selected":""}>前面（道路側）</option>
+         <option value="left" ${U.tw.fenceGate==="left"?"selected":""}>左側</option>
+         <option value="right" ${U.tw.fenceGate==="right"?"selected":""}>右側</option>
+         <option value="none" ${U.tw.fenceGate==="none"?"selected":""}>開口なし（全周閉鎖）</option>
+       </select></label></div>`:"")
+    +CK("外部足場＋養生シート",U.tw.scaffold,"(v)=>S('tw.scaffold',v)");
+   const secVeh = CK("ロングスパンEV（ドラッグ可）",U.tw.ev,"(v)=>S('tw.ev',v)")
+    +CK("生コン車（ドラッグ可）",U.tw.mixer,"(v)=>S('tw.mixer',v)")
+    +`<div class="hint">出入口・詰所・資材置場などは「施工/CAD」タブの施工オブジェクト（仮囲いゲート・警備員ほか）をドラッグ配置できます。</div>`;
+   h += SEC("揚重・クレーン", secCrane, {key:"tw-crane", icon:"🏗", open:true})
+      + SEC("仮囲い・足場", secFence, {key:"tw-fence", icon:"🚧", open:true})
+      + SEC("車両・その他", secVeh, {key:"tw-veh", icon:"🚚", open:false});
   }
   h+=CK("電柱・架線（前面道路）",U.tw.poles,"(v)=>S('tw.poles',v)")
   +`<div class="hint">ドラッグ＝移動／<b>Ctrl＋ドラッグ＝向き回転</b>。作業半径円で揚重範囲を確認できます。</div>`;
