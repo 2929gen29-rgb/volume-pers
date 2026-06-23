@@ -811,8 +811,14 @@ function rebuild(){
    if(c.size==="gate"){ // ゲート：2本柱＋上枠
     [-w/2+0.2,w/2-0.2].forEach(x=>{const p=new THREE.Mesh(new THREE.BoxGeometry(0.3,hgt,0.3),baseMat);p.position.set(x,hgt/2,0);cg.add(p);});
     const top=new THREE.Mesh(new THREE.BoxGeometry(w,0.4,0.3),baseMat);top.position.y=hgt;cg.add(top);
-   }else if(c.size==="asagao"){ // 朝顔：傾いた板
-    const b=new THREE.Mesh(new THREE.BoxGeometry(w,0.12,d),new THREE.MeshLambertMaterial({color:warn?0xD64545:0xC9A14A}));b.position.y=hgt;b.rotation.x=-0.35;b.castShadow=!L;cg.add(b);
+   }else if(c.size==="asagao"){ // 朝顔：設置高さ可変の傾いた庇＋ブラケット
+    const mh=numv(c.mountH,4);  // 設置高さ（地上からの高さ m）
+    const b=new THREE.Mesh(new THREE.BoxGeometry(w,0.12,d),new THREE.MeshLambertMaterial({color:warn?0xD64545:0xC9A14A}));
+    b.position.set(0,mh,d*0.2);b.rotation.x=-0.35;b.castShadow=!L;cg.add(b);
+    // 受けブラケット（斜材）2本
+    if(!L){[-w*0.35,w*0.35].forEach(bx=>{const br=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,d*1.1),new THREE.MeshLambertMaterial({color:0x9aa1ab}));br.position.set(bx,mh-d*0.18,d*0.05);br.rotation.x=-0.6;cg.add(br);});}
+    // 設置高さの目安ポール（地面〜朝顔）
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,mh,6),new THREE.MeshBasicMaterial({color:warn?0xD64545:0xC9A14A,transparent:true,opacity:0.5}));pole.position.set(-w/2+0.2,mh/2,0);cg.add(pole);
    }else{ // 詰所など箱
     const body=new THREE.Mesh(new THREE.BoxGeometry(w,hgt,d),baseMat);body.position.y=hgt/2;body.castShadow=!L;cg.add(body);
     const ee=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w,hgt,d)),new THREE.LineBasicMaterial({color:0x8a7f5f}));ee.position.y=hgt/2;cg.add(ee);
@@ -844,14 +850,14 @@ function rebuild(){
   const w=posv(s.w,3), d=posv(s.d,14), ry=numv(s.ry,0)*Math.PI/180;
   const seld=(U.sel==="sub:"+i);
   const sg=new THREE.Group(); sg.userData.dragKey="sub:"+i;
-  // 半透明の色帯（地面すれすれ）
-  const band=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshBasicMaterial({color:st.color,transparent:true,opacity:seld?0.5:0.32,side:THREE.DoubleSide}));
-  band.rotation.x=-Math.PI/2; band.position.y=0.03; sg.add(band);
+  // 半透明の色帯（道路メッシュより上に出して隠れないように）
+  const band=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshBasicMaterial({color:st.color,transparent:true,opacity:seld?0.5:0.32,side:THREE.DoubleSide,depthWrite:false}));
+  band.rotation.x=-Math.PI/2; band.position.y=0.16; sg.add(band);
   // 点線風の枠（実線エッジで代用）＋中心線
   const edge=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(w,d)),new THREE.LineBasicMaterial({color:st.color}));
-  edge.rotation.x=-Math.PI/2; edge.position.y=0.04; sg.add(edge);
-  const cl=new THREE.Mesh(new THREE.PlaneGeometry(Math.min(0.3,w*0.15),d),new THREE.MeshBasicMaterial({color:st.color,transparent:true,opacity:0.7,side:THREE.DoubleSide}));
-  cl.rotation.x=-Math.PI/2; cl.position.y=0.05; sg.add(cl);
+  edge.rotation.x=-Math.PI/2; edge.position.y=0.17; sg.add(edge);
+  const cl=new THREE.Mesh(new THREE.PlaneGeometry(Math.min(0.3,w*0.15),d),new THREE.MeshBasicMaterial({color:st.color,transparent:true,opacity:0.7,side:THREE.DoubleSide,depthWrite:false}));
+  cl.rotation.x=-Math.PI/2; cl.position.y=0.18; sg.add(cl);
   sg.position.set(numv(s.x,0),0,numv(s.z,0)); sg.rotation.y=ry; g.add(sg); dragMap["sub:"+i]=sg;
  });}
 
@@ -1198,7 +1204,15 @@ window.addN=()=>{U.nbs.push({x:25,z:15,w:10,d:10,h:12,ry:0});rebuild();renderPan
 window.setMode=(m)=>{U.tw.mode=m;rebuild();renderPanel();};
 window.addCO=(type)=>{const t=COBJ_TYPES[type]||COBJ_TYPES.truck;const sz=t.sizes[0];const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);U.cobj.push({type,size:sz.key,x:numv(U.site.dx,0),z:sdz2+sd2/2+6,w:sz.w,d:sz.d,h:sz.h,ry:0});U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();};
 window.delCO=(i)=>{U.cobj.splice(i,1);if(U.sel==="co:"+i)U.sel=null;rebuild();renderPanel();};
-window.addSub=(kind)=>{const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);U.subsurface.push({kind,x:numv(U.site.dx,0),z:sdz2+sd2/2+3,w:3,d:14,ry:0});U.sel="sub:"+(U.subsurface.length-1);rebuild();renderPanel();};
+window.addSub=(kind)=>{
+ const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);
+ const rw=Math.min(20,Math.max(4,numv(U.road.w,8)));
+ // 既定位置＝前面道路の中心線上（埋設物は道路下に多いため）。道路の移動オフセットも反映
+ const roadZ=sdz2+sd2/2+1.6+rw/2+numv(U.road.dz,0);
+ const roadX=numv(U.site.dx,0)+numv(U.road.dx,0);
+ U.subsurface.push({kind,x:roadX,z:roadZ,w:Math.min(rw*0.7,3),d:Math.max(sd2,20),ry:numv(U.road.ry,0)});
+ U.sel="sub:"+(U.subsurface.length-1);rebuild();renderPanel();
+};
 window.delSub=(i)=>{U.subsurface.splice(i,1);if(U.sel==="sub:"+i)U.sel=null;rebuild();renderPanel();};
 window.setCOSize=(i,key)=>{const c=U.cobj[i];if(!c)return;const sz=cobjSize(c.type,key);if(sz){c.size=key;c.w=sz.w;c.d=sz.d;c.h=sz.h;}rebuild();renderPanel();};
 window.selCO=(i)=>{U.sel="co:"+i;rebuild();renderPanel();};
@@ -1514,6 +1528,7 @@ function renderPanel(){
      <b style="font-size:11.5px">${seld?"▸ ":""}${t?t.label:c.type}${c._warn?' <span style="color:#D64545">⚠歩行帯と干渉</span>':''}</b>
      <button class="del" onclick="event.stopPropagation();delCO(${i})">削除</button></div>
     ${opts}
+    ${(c.type==="temp"&&c.size==="asagao")?`<div onclick="event.stopPropagation()">${SL("設置高さ m",numv(c.mountH,4),"(v)=>{U.cobj["+i+"].mountH=v;rebuild()}",2,40,0.5)}</div>`:""}
     <div style="font-size:10px;color:var(--mut);font-family:ui-monospace">基準点 X=${numv(c.x,0).toFixed(1)}m Z=${numv(c.z,0).toFixed(1)}m ${numv(c.ry,0)}°</div>
     ${guide.length?`<div style="font-size:10px;color:#2552A0;margin-top:2px">ガイド: ${guide.join(" / ")}${seld?"（表示中）":"（選択で表示）"}</div>`:""}
    </div>`;}).join("");}
@@ -1808,6 +1823,18 @@ function aiPromptMenu(){
 }
 window.aiPromptMenu=aiPromptMenu;
 
+// ───── 意見・要望（社内フォームを別タブで開く）─────
+// ▼ここに社内のGoogleフォーム等のURLを設定してください（空欄なら案内のみ表示）
+const FEEDBACK_URL="";  // 例: "https://forms.gle/xxxxxxxx"
+function openFeedback(){
+ if(FEEDBACK_URL){
+  window.open(FEEDBACK_URL,"_blank","noopener");
+ }else{
+  alert("意見・要望フォームは未設定です。\n\nGoogleフォーム等を作成し、app.js の FEEDBACK_URL にそのURLを設定すると、このボタンからフォームを開けるようになります。\n\n（このアプリ自体は意見データを送受信しません。フォームは別タブで開くだけです）");
+ }
+}
+window.openFeedback=openFeedback;
+
 function savePNG(){
  // クリーン出力：UI（パネル・バー・表題・ヒント）とグリッドを一時非表示にして純粋な3Dのみ出力
  const ui=["#panel","#bar","#title","#drag"].map(s=>$(s)).filter(Boolean);
@@ -1845,6 +1872,7 @@ function renderBar(){
   <input type="file" id="json-file" accept=".json,.bsjson" style="display:none" onchange="loadProjectJSON(this.files[0]); this.value=''">
   <button class="btn primary" onclick="savePNG()">PNG保存</button>
   <button class="btn" onclick="exportOBJ()" style="border:1.5px solid #2E7D5B;color:#2E7D5B;font-weight:700" title="GLOOBE等BIMソフト向けにOBJ＋MTL＋メタJSON＋AIプロンプトを出力">BIMへ出力</button>
+  <button class="btn" onclick="openFeedback()" style="border:1.5px solid #2E7D5B;color:#2E7D5B" title="使ってみた感想・要望を社内フォームに送る">💬 意見・要望</button>
   <button class="btn" onclick="aiPromptMenu()" style="border:1.5px solid #7A4DB0;color:#7A4DB0;font-weight:700" title="入力諸元から画像生成AI・3D生成AI向けプロンプトを生成">AIパース下書き</button>`;
 }
 $("#phead").addEventListener("click",()=>{const w=$("#pwrap");const off=w.style.display==="none";w.style.display=off?"":"none";$("#parr").textContent=off?"▲":"▼";});
