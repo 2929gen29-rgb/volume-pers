@@ -107,7 +107,7 @@
     if(splash){ splash.classList.add("hide"); setTimeout(function(){ if(splash&&splash.parentNode) splash.parentNode.removeChild(splash); }, 650); }
     if(alreadyOK()){ showApp(); }   // 期限内：そのまま使える
     else { showGate(); }            // 未認証：コード入力
-  }, 1100);
+  }, 5000);
 })();
 </script>
 <script>
