@@ -533,6 +533,16 @@ function rebuild(){
    }
    // 屋上パラペット相当（簡易）
    if(bTo===f2&&U.tw.mode==="plan"&&!L){const cap=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:0.8,bevelEnabled:false}),new THREE.MeshLambertMaterial({color:isApt?0xcfd3d9:isOff?0x33425a:0xcfd3d9}));cap.geometry.rotateX(-Math.PI/2);cap.position.set(ox,y0+bh+0.12,oz);g.add(cap);}
+   // 多角形建物にも足場を巻く（建物メッシュの実バウンディングボックスから・座標ズレ防止）
+   if(U.tw.scaffold&&U.tw.mode==="build"&&!L){
+    eg.computeBoundingBox(); const bb=eg.boundingBox;
+    const pw=(bb.max.x-bb.min.x)+1.8, pd=(bb.max.z-bb.min.z)+1.8;
+    const bcx=(bb.min.x+bb.max.x)/2, bcz=(bb.min.z+bb.max.z)/2;
+    const sg2=new THREE.BoxGeometry(pw,bh+1.5,pd);
+    const sm2=new THREE.Mesh(sg2,new THREE.MeshLambertMaterial({color:0xf4f6f8,transparent:true,opacity:.3,depthWrite:false}));
+    sm2.position.set(ox+bcx,y0+(bh+1.5)/2+.1,oz+bcz);g.add(sm2);
+    const ee2=new THREE.LineSegments(new THREE.EdgesGeometry(sg2),new THREE.LineBasicMaterial({color:0xaab2bf}));ee2.position.copy(sm2.position);g.add(ee2);
+   }
    return;
   }
   const W=posv(b.w, Math.sqrt(posv(b.area,200)*posv(b.ratio,1.5)));
@@ -1197,7 +1207,7 @@ window.toggleSec=(key)=>{ if(!U._acc)U._acc={}; U._acc[key]=!U._acc[key]; render
 window.SB=(id,k,v)=>{const b=U.blocks.find(x=>x.id===id);if(b){b[k]=v;rebuild();}};
 window.SN=(i,k,v)=>{if(U.nbs[i]){U.nbs[i][k]=v;rebuild();}};
 window.SH=(i,v)=>{U.site.h[i]=v;rebuild();};
-window.delB=(id)=>{if(U.blocks.length>1){U.blocks=U.blocks.filter(b=>b.id!==id);rebuild();renderPanel();}};
+window.delB=(id)=>{U.blocks=U.blocks.filter(b=>b.id!==id);if(U.sel&&U.sel.startsWith("blk:"))U.sel=null;rebuild();renderPanel();};
 window.addB=()=>{U.blocks.push({id:Date.now(),label:"ブロック",f1:1,f2:2,w:15,d:10,dx:0,dz:8});rebuild();renderPanel();};
 window.delN=(i)=>{U.nbs.splice(i,1);rebuild();renderPanel();};
 window.addN=()=>{U.nbs.push({x:25,z:15,w:10,d:10,h:12,ry:0});rebuild();renderPanel();};
@@ -1294,7 +1304,7 @@ function renderPanel(){
    return `<div class="card">
    <div style="display:flex;justify-content:space-between;margin-bottom:5px">
     <input type="text" value="${b.label}" style="width:110px;font-weight:700;padding:4px 7px" oninput="SB(${b.id},'label',this.value)">
-    ${U.blocks.length>1?`<button class="del" onclick="delB(${b.id})">削除</button>`:""}
+    <button class="del" onclick="delB(${b.id})">削除</button>
    </div>
    <div class="grid2">
     <label class="f"><span>開始階</span><input type="number" value="${b.f1}" oninput="SB(${b.id},'f1',this.value)"></label>
@@ -1306,6 +1316,7 @@ function renderPanel(){
    ${SL("位置 左右",b.dx,`(v)=>SB(${b.id},'dx',v)`,-30,30,0.5)}
    ${SL("位置 前後",b.dz,`(v)=>SB(${b.id},'dz',v)`,-30,30,0.5)}
   </div>`;}).join("")
+  +(U.blocks.length===0?`<div class="hint" style="background:#FFF3DD;border:1px solid var(--amber);border-radius:8px;padding:8px 10px;margin-bottom:8px">建物ブロックがありません。下のボタンで矩形を追加するか、多角形入力で建物を作成してください。</div>`:"")
   +`<button class="addbtn" onclick="addB()">＋ 矩形ブロックを追加</button>`
   +`<div style="border-top:1px solid var(--line);margin:10px 0 6px"></div>
    <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:3px">形状タイプ：自由多角形（L字・雁行など）</div>`
