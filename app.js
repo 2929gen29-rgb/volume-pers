@@ -1,4 +1,5 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const APP_VER="2026.07";  // アプリのバージョン（保存データの互換管理に使用）
 // ───── 白画面防止ガード ─────
 window.addEventListener("error",(e)=>{if(document.getElementById("err-banner"))return;const d=document.createElement("div");d.id="err-banner";d.style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#B0433A;color:#fff;font-family:Meiryo,sans-serif;font-size:12px;padding:8px 14px;";d.textContent="エラー: "+(e.message||"不明")+"（この文言を開発者へ）";document.body.appendChild(d);});
 function webglOK(){try{const c=document.createElement("canvas");return !!(window.WebGLRenderingContext&&(c.getContext("webgl")||c.getContext("experimental-webgl")));}catch(e){return false;}}
@@ -28,6 +29,7 @@ const U={
  roadwork:{mixerSize:"8t",pumpSize:"m4t",mountUp:0,        // 縦列検討の車種・歩道乗り上げ幅(m)
            permitPolice:"",permitRoad:"",permitOffice:""}, // 道路使用条件メモ（警察/道路局/建設事務所）
  subsurface:[],  // 地下の支障物（経路帯・範囲マーカー）{kind,x,z,w,d,ry}
+ annot:[],       // 注記（地面貼り付け）{type:"zone"|"text", x,z,w,d,ry,color,text,fsize}
  poles:{n:3,pitch:18,far:true,dx:0,dz:0,ry:0},
  demo:{w:22,d:14,h:9,dx:0,dz:0,ry:0},
  tw:{mode:"plan",step:8,crane:true,craneModel:"JCL022", craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceAll:false,fenceDx:0,fenceDz:0,fenceRy:0,fenceW:0,fenceD:0,scaffold:true,poles:true,mixer:true,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
@@ -113,6 +115,15 @@ const SUBSURFACE_TYPES={
  subway:{label:"地下鉄・地下構造物",color:0x7A4DB0},
  contam:{label:"汚染土壌・要注意",color:0xC0392B},
 };
+// 注記の色プリセット（範囲マーカー・文字で共用）
+const ANNOT_COLORS=[
+ {key:"red",   label:"赤（危険・注意）",  hex:0xE8442B},
+ {key:"amber", label:"橙（要確認）",      hex:0xF2A33C},
+ {key:"green", label:"緑（安全・OK）",    hex:0x2E7D5B},
+ {key:"blue",  label:"青（情報・動線）",  hex:0x2E6FBE},
+ {key:"purple",label:"紫（計画・仮）",    hex:0x7A4DB0},
+];
+const annotColor=(k)=>(ANNOT_COLORS.find(c=>c.key===k)||ANNOT_COLORS[0]).hex;
 // タワークレーン カタログ仕様（昭和 RENTAL CATALOGUE 2018より・営業概算用）
 //  work=作業半径(m), cap=定格荷重(t), tail=尾部旋回半径(m), jib=ジブ長(m)
 const CRANE_SPECS={
@@ -175,7 +186,10 @@ const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(40,1,0.5,5000);
 scene.add(new THREE.HemisphereLight(0xffffff,0x9aa0a8,.75));
 const sun=new THREE.DirectionalLight(0xfff4e0,1.0);
-sun.position.set(80,120,60);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+// 影の解像度：モバイルや低解像度端末では軽く、PCでは高精細に
+const _isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)||Math.min(screen.width,screen.height)<768;
+const _shadowRes=_isMobile?1024:2048;
+sun.position.set(80,120,60);sun.castShadow=true;sun.shadow.mapSize.set(_shadowRes,_shadowRes);
 Object.assign(sun.shadow.camera,{left:-140,right:140,top:140,bottom:-140,far:600});
 scene.add(sun);
 const ctrl={theta:Math.PI/4+.3,phi:1.05,r:150,ty:18,cx:0,cz:0,ptrs:new Map(),pinch:0,panMid:null};
@@ -203,7 +217,7 @@ function panBy(dxp,dyp){
 }
 function dragCandidates(){const small=["crane","ev","mixer","rough","poles","demo","road","roadwalk","roadside","fence"];const out=[];
  for(const[k,o]of Object.entries(dragMap)){
-  if(small.includes(k)||k.startsWith("nb:")||k.startsWith("blk:")||k.startsWith("co:")||k.startsWith("sub:"))out.push(o);
+  if(small.includes(k)||k.startsWith("nb:")||k.startsWith("blk:")||k.startsWith("co:")||k.startsWith("sub:")||k.startsWith("an:"))out.push(o);
   else if((k==="site"||k==="under"||k==="photo"||k==="dxf")&&U.moveLayers)out.push(o);}
  return out;}
 function pickDrag(e){
@@ -226,6 +240,7 @@ function objRyKey(k){
  if(k.startsWith("blk:"))return ["blk",+k.slice(4)];
  if(k.startsWith("co:"))return ["co",+k.slice(3)];
  if(k.startsWith("sub:"))return ["sub",+k.slice(4)];
+ if(k.startsWith("an:"))return ["an",+k.slice(3)];
  return null;
 }
 function getRy(k){const r=objRyKey(k);if(!r)return 0;
@@ -234,6 +249,7 @@ function getRy(k){const r=objRyKey(k);if(!r)return 0;
  if(r[0]==="nb")return numv((U.nbs[r[1]]||{}).ry,0); if(r[0]==="blk")return numv((U.blocks[r[1]]||{}).ry,0);
  if(r[0]==="co")return numv((U.cobj[r[1]]||{}).ry,0);
  if(r[0]==="sub")return numv((U.subsurface[r[1]]||{}).ry,0);
+ if(r[0]==="an")return numv((U.annot[r[1]]||{}).ry,0);
  return 0;}
 function setRy(k,deg){const r=objRyKey(k);if(!r)return;deg=((deg%360)+360)%360;
  if(r[0]==="tw")U.tw[r[1]]=+deg.toFixed(0);
@@ -243,7 +259,8 @@ function setRy(k,deg){const r=objRyKey(k);if(!r)return;deg=((deg%360)+360)%360;
  else if(r[0]==="nb"){if(U.nbs[r[1]])U.nbs[r[1]].ry=+deg.toFixed(0);}
  else if(r[0]==="blk"){if(U.blocks[r[1]])U.blocks[r[1]].ry=+deg.toFixed(0);}
  else if(r[0]==="co"){if(U.cobj[r[1]])U.cobj[r[1]].ry=+deg.toFixed(0);}
- else if(r[0]==="sub"){if(U.subsurface[r[1]])U.subsurface[r[1]].ry=+deg.toFixed(0);}}
+ else if(r[0]==="sub"){if(U.subsurface[r[1]])U.subsurface[r[1]].ry=+deg.toFixed(0);}
+ else if(r[0]==="an"){if(U.annot[r[1]])U.annot[r[1]].ry=+deg.toFixed(0);}}
 el.addEventListener("pointerdown",(e)=>{
  ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);el.setPointerCapture(e.pointerId);
  // 多角形入力モード：地面クリックで頂点追加
@@ -335,6 +352,7 @@ const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
     }
     c.x=nx;c.z=nz;}}
   if(k.startsWith("sub:")){const s=U.subsurface[+k.slice(4)];if(s){s.x=+x.toFixed(1);s.z=+z.toFixed(1);}}
+  if(k.startsWith("an:")){const a=U.annot[+k.slice(3)];if(a){a.x=+x.toFixed(1);a.z=+z.toFixed(1);}}
   dragObj=null;renderPanel();}
  else if(dragObj&&rotMode){
    if(U.snap){const k=dragObj.userData.dragKey;const cur=getRy(k);setRy(k,Math.round(cur/15)*15);rebuild();}
@@ -875,6 +893,50 @@ function rebuild(){
   sg.position.set(numv(s.x,0),0,numv(s.z,0)); sg.rotation.y=ry; g.add(sg); dragMap["sub:"+i]=sg;
  });}
 
+ // ───── 注記（地面貼り付け：範囲マーカー・文字）※PNG出力にも含める ─────
+ (U.annot||[]).forEach((a,i)=>{
+  const col=annotColor(a.color);
+  const seld=(U.sel==="an:"+i);
+  const ag=new THREE.Group(); ag.userData.dragKey="an:"+i;
+  if(a.type==="zone"){
+   const w=posv(a.w,6), d=posv(a.d,6);
+   // 塗り（ごく薄く）＋しっかりした枠線で「マーカーで囲った」感じに
+   const fill=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:seld?0.34:0.2,side:THREE.DoubleSide,depthWrite:false}));
+   fill.rotation.x=-Math.PI/2; fill.position.y=0.2; ag.add(fill);
+   // 枠線を太く見せる（外周に細い帯4本）
+   const bw=Math.min(0.3,Math.max(0.12,Math.min(w,d)*0.03));
+   const mkEdge=(ew,ed,ex,ez)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(ew,ed),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.9,side:THREE.DoubleSide,depthWrite:false}));m.rotation.x=-Math.PI/2;m.position.set(ex,0.21,ez);ag.add(m);};
+   mkEdge(w,bw,0,-d/2+bw/2); mkEdge(w,bw,0,d/2-bw/2); mkEdge(bw,d,-w/2+bw/2,0); mkEdge(bw,d,w/2-bw/2,0);
+  }else{ // text
+   const txt=(a.text||"注記").slice(0,40);
+   const fs=Math.max(0.8,Math.min(10,posv(a.fsize,2)));  // 文字高さ(m)
+   const cv=document.createElement("canvas"); const cx=cv.getContext("2d");
+   const px=96; cx.font=`bold ${px}px 'Yu Gothic UI','Hiragino Sans',sans-serif`;
+   const tw=Math.ceil(cx.measureText(txt).width);
+   cv.width=tw+px*0.8; cv.height=px*1.6;
+   const c2=cv.getContext("2d");
+   c2.font=`bold ${px}px 'Yu Gothic UI','Hiragino Sans',sans-serif`;
+   c2.textBaseline="middle";
+   // 白の座布団（角丸・わずかに透過）→ 文字が地面色に埋もれない
+   const r=px*0.3, W=cv.width, H=cv.height;
+   c2.fillStyle="rgba(255,255,255,0.88)";
+   c2.beginPath();c2.moveTo(r,0);c2.lineTo(W-r,0);c2.quadraticCurveTo(W,0,W,r);c2.lineTo(W,H-r);c2.quadraticCurveTo(W,H,W-r,H);c2.lineTo(r,H);c2.quadraticCurveTo(0,H,0,H-r);c2.lineTo(0,r);c2.quadraticCurveTo(0,0,r,0);c2.closePath();c2.fill();
+   c2.strokeStyle="#"+col.toString(16).padStart(6,"0"); c2.lineWidth=6; c2.stroke();
+   c2.fillStyle="#"+col.toString(16).padStart(6,"0");
+   c2.fillText(txt, px*0.4, H/2);
+   const tex=new THREE.CanvasTexture(cv); tex.anisotropy=4;
+   const pw=fs*(W/H);
+   const tp=new THREE.Mesh(new THREE.PlaneGeometry(pw,fs),new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false}));
+   tp.rotation.x=-Math.PI/2; tp.rotation.z=0; tp.position.y=0.22; ag.add(tp);
+   if(seld){ // 選択中は薄い下線ガイド
+    const ul=new THREE.Mesh(new THREE.PlaneGeometry(pw,0.15),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.5,side:THREE.DoubleSide,depthWrite:false}));
+    ul.rotation.x=-Math.PI/2; ul.position.set(0,0.21,fs*0.62); ag.add(ul);
+   }
+  }
+  ag.position.set(numv(a.x,0),0,numv(a.z,0)); ag.rotation.y=numv(a.ry,0)*Math.PI/180;
+  g.add(ag); dragMap["an:"+i]=ag;
+ });
+
  // ───── DXF オーバーレイ（1/1000等のスケールで配置）─────
  if(U.dxf.ents&&!L){
   const sc=numv(U.dxf.scale,0.001);
@@ -949,6 +1011,8 @@ function rebuild(){
 // ───── 案件データの保存・読込 (JSON / AES暗号化対応) ─────
 function saveProjectJSON(){
  const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="sel"||k==="polyInput"||k==="calib")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
+ // 互換のためのメタ情報（将来バージョンで古いデータを安全に開くための目印）
+ saveState._meta={app:"BimGen",appVer:APP_VER,schema:2,savedAt:new Date().toISOString()};
  const jsonStr=JSON.stringify(saveState,null,2);
  const dateStr=new Date().toISOString().slice(0,10).replace(/-/g,"");
  const baseName=`${U.p.name||"volume"}_${dateStr}`;
@@ -996,14 +1060,17 @@ function loadProjectJSON(file){
     parsed=wrapper;
    }
    // ─── 以下は共通の展開処理 ───
+   const _loadedMeta=parsed._meta||null;  // バージョン情報を退避
    const cuTex=U.under.tex,cuRaw=U.under.raw,cuPages=U.under.pages,cuPage=U.under.page,cpTex=U.photo.tex;
    Object.assign(U,parsed);
+   delete U._meta;  // メタ情報はUに混ぜない
    U.under.tex=cuTex;U.under.raw=cuRaw;U.under.pages=cuPages;U.under.page=cuPage;U.photo.tex=cpTex;
    if(!U.road)U.road={w:8,side:"none"};
    if(U.road.dx==null)U.road.dx=0; if(U.road.dz==null)U.road.dz=0; if(U.road.ry==null)U.road.ry=0;
    if(U.road.walkDz==null)U.road.walkDz=0; if(U.road.walkW==null)U.road.walkW=1.6;
    if(!U.roadwork)U.roadwork={mixerSize:"8t",pumpSize:"m4t",mountUp:0,permitPolice:"",permitRoad:"",permitOffice:""};
    if(!Array.isArray(U.subsurface))U.subsurface=[];
+   if(!Array.isArray(U.annot))U.annot=[];
    if(U.road.sideDx==null)U.road.sideDx=0; if(U.road.sideDz==null)U.road.sideDz=0;
    if(!U.poles)U.poles={n:3,pitch:18,far:true,dx:0,dz:0,ry:0};
    if(!U.guide)U.guide={show:false,road:1.25,nbor:1.25};
@@ -1189,7 +1256,14 @@ function loadPhotoFile(file){
 const F=(l,v,fn,t="number",step)=>`<label class="f"><span>${l}</span><input type="${t}" ${step?`step="${step}"`:""} value="${v}" oninput="(${fn})(this.value)"></label>`;
 const SL=(l,v,fn,mn,mx,st=1)=>`<label class="f"><span>${l}：<b style="font-family:ui-monospace">${v}</b></span><input type="range" min="${mn}" max="${mx}" step="${st}" value="${v}" oninput="(${fn})(parseFloat(this.value));this.previousElementSibling.querySelector('b').textContent=this.value"></label>`;
 const CK=(l,v,fn)=>`<label class="chk"><input type="checkbox" ${v?"checked":""} onchange="(${fn})(this.checked)">${l}</label>`;
-window.S=(path,v,re=true)=>{const ks=path.split(".");let o=U;while(ks.length>1)o=o[ks.shift()];o[ks[0]]=v;if(re)rebuild();};
+// rebuildをフレーム単位で間引く（スライダー連続操作でのカクつき防止）
+let _rebuildQueued=false;
+function rebuildThrottled(){
+ if(_rebuildQueued)return;
+ _rebuildQueued=true;
+ requestAnimationFrame(()=>{ _rebuildQueued=false; rebuild(); });
+}
+window.S=(path,v,re=true)=>{const ks=path.split(".");let o=U;while(ks.length>1)o=o[ks.shift()];o[ks[0]]=v;if(re)rebuildThrottled();};
 // ───── 折りたたみセクション（アコーディオン）─────
 // 使い方：SEC("見出し", "中身HTML", { key:"一意キー", open:既定で開くか, icon:"絵文字" })
 function SEC(title, inner, opt){
@@ -1229,6 +1303,11 @@ window.addSub=(kind)=>{
  U.sel="sub:"+(U.subsurface.length-1);rebuild();renderPanel();
 };
 window.delSub=(i)=>{U.subsurface.splice(i,1);if(U.sel==="sub:"+i)U.sel=null;rebuild();renderPanel();};
+// ───── 注記（地面貼り付け）─────
+window.addAnnotZone=()=>{const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);U.annot.push({type:"zone",x:numv(U.site.dx,0),z:sdz2,w:8,d:6,ry:0,color:"red"});U.sel="an:"+(U.annot.length-1);rebuild();renderPanel();};
+window.addAnnotText=()=>{const t=prompt("注記の文字を入力（40文字まで）","注意");if(t==null)return;const sdz2=numv(U.site.dz,0);U.annot.push({type:"text",x:numv(U.site.dx,0),z:sdz2,ry:0,color:"red",text:t.slice(0,40),fsize:2.5});U.sel="an:"+(U.annot.length-1);rebuild();renderPanel();};
+window.editAnnotText=(i)=>{const a=U.annot[i];if(!a)return;const t=prompt("注記の文字を編集",a.text||"");if(t==null)return;a.text=t.slice(0,40);rebuild();renderPanel();};
+window.delAnnot=(i)=>{U.annot.splice(i,1);if(U.sel==="an:"+i)U.sel=null;rebuild();renderPanel();};
 window.setCOSize=(i,key)=>{const c=U.cobj[i];if(!c)return;const sz=cobjSize(c.type,key);if(sz){c.size=key;c.w=sz.w;c.d=sz.d;c.h=sz.h;}rebuild();renderPanel();};
 window.selCO=(i)=>{U.sel="co:"+i;rebuild();renderPanel();};
 window.setPage=async(v)=>{U.under.page=v;await renderPdfPage();};
@@ -1371,8 +1450,9 @@ function renderPanel(){
        ? `<div style="background:#FFF3DD;border:1.5px dashed var(--amber);border-radius:8px;padding:8px 10px;font-size:11.5px;line-height:1.7"><b>敷地形状の入力モード中</b><br>下絵・地面をクリックして敷地外周の頂点を打ち、<b>ダブルクリックで閉じる</b>と敷地になります。<br>現在 ${U.polyInput.pts.length} 点<br><button class="btn" style="margin-top:6px" onclick="U.polyInput.pts.pop();rebuild();renderPanel()">1つ戻す</button> <button class="btn" style="margin-top:6px;color:#B0433A" onclick="U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar()">中止</button></div>`
        : `<button class="addbtn" onclick="U.polyInput.on=true;U.polyInput.target='site';U.polyInput.pts=[];renderPanel();renderBar()">✏️ 敷地を多角形で描く</button><div class="hint">配置図PDFを下敷きにして敷地境界をなぞると、不整形地も正確に再現できます。</div>`)}`;
   // ③ 位置・地盤（GL・高低差）
-  let secPos=`${SL("敷地位置 左右",U.site.dx,"(v)=>S('site.dx',v)",-40,40,0.5)}
-  ${SL("敷地位置 前後",U.site.dz,"(v)=>S('site.dz',v)",-40,40,0.5)}
+  let secPos=`${SL("敷地位置 左右",U.site.dx,"(v)=>S('site.dx',v)",-80,80,0.5)}
+  ${SL("敷地位置 前後",U.site.dz,"(v)=>S('site.dz',v)",-80,80,0.5)}
+  <div style="font-size:10px;color:#2552A0;margin:-2px 0 6px">スライダーのほか、右上「敷地/下敷き移動」をONにすると3D上で敷地を直接ドラッグできます。</div>
   ${SL("建物GL（設計地盤）m",U.site.gl,"(v)=>S('site.gl',v)",-3,4,0.1)}
   <div style="font-size:11px;font-weight:700;color:var(--mut);margin:6px 0 2px">敷地の高低差（四隅の地盤高 m）${Array.isArray(U.site.poly)?'<span style="color:var(--mut);font-weight:400">（矩形のみ）</span>':''}</div>
   ${SL("前面・左",U.site.h[0],"(v)=>SH(0,v)",-4,4,0.1)}
@@ -1618,6 +1698,27 @@ function renderPanel(){
      <div style="font-size:10px;color:var(--mut);font-family:ui-monospace">基準点 X=${numv(s.x,0).toFixed(1)} Z=${numv(s.z,0).toFixed(1)} ${numv(s.ry,0)}°</div>
     </div>`;}).join("");
   }else h+=`<div class="hint">現地調査で判明した埋設物の<b>おおよその経路・範囲</b>を色帯で配置できます。ドラッグ＝移動／Ctrl＋ドラッグ＝回転。幅・長さで帯の大きさを調整。<b>あくまで参考表示で、正確な位置は各管理者への照会が必要です。</b></div>`;
+  // 注記（地面貼り付け：範囲・文字）
+  h+=`<div style="border-top:1px solid var(--line);margin:12px 0 6px"></div>
+   <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:4px">注記（図に書き込む・OJT/申し送り用）</div>
+   <div style="display:flex;gap:6px;margin-bottom:6px">
+    <button class="btn" style="flex:1;border:1.5px solid var(--amber)" onclick="addAnnotZone()">＋ 範囲で囲う</button>
+    <button class="btn" style="flex:1;border:1.5px solid var(--amber)" onclick="addAnnotText()">＋ 文字を置く</button>
+   </div>`;
+  if((U.annot||[]).length){h+=U.annot.map((a,i)=>{
+    const seld=(U.sel==="an:"+i); const hex="#"+annotColor(a.color).toString(16).padStart(6,"0");
+    const colorSel=`<select onclick="event.stopPropagation()" onchange="U.annot[${i}].color=this.value;rebuild();renderPanel()" style="font-size:11px">${ANNOT_COLORS.map(c=>`<option value="${c.key}" ${a.color===c.key?"selected":""}>${c.label}</option>`).join("")}</select>`;
+    return `<div class="card" style="${seld?'border-color:#F2A33C;background:#FFFBF0':''}" onclick="U.sel='an:${i}';rebuild();renderPanel()">
+     <div style="display:flex;justify-content:space-between;align-items:center">
+      <b style="font-size:11.5px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${hex};margin-right:5px"></span>${a.type==="zone"?"範囲マーカー":"文字：「"+(a.text||"").slice(0,10)+"」"}</b>
+      <button class="del" onclick="event.stopPropagation();delAnnot(${i})">削除</button></div>
+     <label class="f" style="margin-top:4px"><span>色</span>${colorSel}</label>
+     ${a.type==="zone"
+       ? `<div class="grid2"><label class="f"><span>幅 m</span><input type="number" value="${posv(a.w,6)}" onclick="event.stopPropagation()" oninput="U.annot[${i}].w=parseFloat(this.value)||1;rebuild()"></label><label class="f"><span>奥行 m</span><input type="number" value="${posv(a.d,6)}" onclick="event.stopPropagation()" oninput="U.annot[${i}].d=parseFloat(this.value)||1;rebuild()"></label></div>`
+       : `<button class="btn" style="width:100%;margin-bottom:4px" onclick="event.stopPropagation();editAnnotText(${i})">✎ 文字を編集</button><label class="f"><span>文字サイズ m</span><input type="number" step="0.5" value="${posv(a.fsize,2.5)}" onclick="event.stopPropagation()" oninput="U.annot[${i}].fsize=parseFloat(this.value)||2;rebuild()"></label>`}
+     <div style="font-size:10px;color:var(--mut);font-family:ui-monospace">X=${numv(a.x,0).toFixed(1)} Z=${numv(a.z,0).toFixed(1)} ${numv(a.ry,0)}°</div>
+    </div>`;}).join("");
+  }else h+=`<div class="hint">検討意図や注意点を図に直接書き込めます。<b>範囲で囲う</b>＝色枠でエリアを強調、<b>文字を置く</b>＝任意位置にラベル。地面に貼り付くので視点を回しても位置が保たれ、PNG出力にも写ります。ドラッグ＝移動／Ctrl＋ドラッグ＝回転。<b>OJTでの申し送りや、なぜこの配置かの説明に。</b></div>`;
  }
  $("#body").innerHTML=h;
 }
@@ -1711,7 +1812,14 @@ function buildBIMMeta(){
     shape:b.shape==="poly"?"polygon":"box",
     width_m:b.shape==="poly"?null:posv(b.w,10), depth_m:b.shape==="poly"?null:posv(b.d,10),
     polygon_m:b.shape==="poly"?(b.poly||[]):null,
-    offset_m:{dx:numv(b.dx,0), dz:numv(b.dz,0)}, rotation_deg:numv(b.ry,0)}))
+    offset_m:{dx:numv(b.dx,0), dz:numv(b.dz,0)}, rotation_deg:numv(b.ry,0)})),
+  // 注記（地面貼り付け）と地下支障物：将来のBIM連携で位置つきメモとして活用できるよう出力
+  annotations:(U.annot||[]).map(a=>({kind:a.type, text:a.type==="text"?(a.text||""):null,
+    color:a.color, x_m:numv(a.x,0), z_m:numv(a.z,0),
+    width_m:a.type==="zone"?posv(a.w,6):null, depth_m:a.type==="zone"?posv(a.d,6):null,
+    rotation_deg:numv(a.ry,0)})),
+  subsurface:(U.subsurface||[]).map(s=>({kind:s.kind, x_m:numv(s.x,0), z_m:numv(s.z,0),
+    width_m:posv(s.w,3), length_m:posv(s.d,14), rotation_deg:numv(s.ry,0)}))
  };
 }
 // 用途別マテリアル色（OBJ/MTL用・RGB 0-1）
