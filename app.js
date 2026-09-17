@@ -30,6 +30,7 @@ const U={
            permitPolice:"",permitRoad:"",permitOffice:""}, // 道路使用条件メモ（警察/道路局/建設事務所）
  subsurface:[],  // 地下の支障物（経路帯・範囲マーカー）{kind,x,z,w,d,ry}
  ojt:{},         // OJT検討項目の✓状態 {key:true}
+ roads:[],       // 自分で引く道路 {pts:[{x,z}...](敷地原点基準), w:幅員, dx,dz}
  annot:[],       // 注記（地面貼り付け）{type:"zone"|"text", x,z,w,d,ry,color,text,fsize}
  poles:{n:3,pitch:18,far:true,dx:0,dz:0,ry:0},
  demo:{w:22,d:14,h:9,dx:0,dz:0,ry:0},
@@ -218,7 +219,7 @@ function panBy(dxp,dyp){
 }
 function dragCandidates(){const small=["crane","ev","mixer","rough","poles","demo","road","roadwalk","roadside","fence"];const out=[];
  for(const[k,o]of Object.entries(dragMap)){
-  if(small.includes(k)||k.startsWith("nb:")||k.startsWith("blk:")||k.startsWith("co:")||k.startsWith("sub:")||k.startsWith("an:")||k.startsWith("fpt:")||k.startsWith("spt:")||k.startsWith("bpt:"))out.push(o);
+  if(small.includes(k)||k.startsWith("nb:")||k.startsWith("blk:")||k.startsWith("co:")||k.startsWith("sub:")||k.startsWith("an:")||k.startsWith("fpt:")||k.startsWith("spt:")||k.startsWith("bpt:")||k.startsWith("rd:")||k.startsWith("rpt:"))out.push(o);
   else if((k==="site"||k==="under"||k==="photo"||k==="dxf")&&U.moveLayers)out.push(o);}
  return out;}
 function pickDrag(e){
@@ -288,7 +289,7 @@ el.addEventListener("pointerdown",(e)=>{
  if(ctrl.ptrs.size===1 && !e.shiftKey){const o=pickDrag(e);if(o){snapshot();dragObj=o;U.sel=o.userData.dragKey;
    if(e.ctrlKey||e.metaKey){rotMode=true;rotStartX=e.clientX;rotStartRy=getRy(o.userData.dragKey);}
    else{rotMode=false;const gp=groundPoint(e);dragOff.set(o.position.x-gp.x,0,o.position.z-gp.z);dragStart={lx:o.position.x,lz:o.position.z,gx:gp.x,gz:gp.z};}
-   U.auto=false;syncBtns();}else{U.sel=null;}}
+   U.auto=false;syncBtns();renderSelCard();}else{if(U.sel){U.sel=null;renderSelCard();rebuild();}}}
 });
 el.addEventListener("pointermove",(e)=>{
  if(!ctrl.ptrs.has(e.pointerId))return;
@@ -369,8 +370,10 @@ const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
   if(k.startsWith("an:")){const a=U.annot[+k.slice(3)];if(a){a.x=+x.toFixed(1);a.z=+z.toFixed(1);}}
   if(k.startsWith("fpt:")){const p=U.tw.fencePts[+k.slice(4)];if(p){p.x=+x.toFixed(2);p.z=+z.toFixed(2);}}  // 位置はグループ内ローカル座標
   if(k.startsWith("spt:")){const p=(U.site.poly||[])[+k.slice(4)];if(p){p.x=+x.toFixed(2);p.z=+z.toFixed(2);}}
+  if(k.startsWith("rd:")){const r=U.roads[+k.slice(3)];if(r){r.dx=+(x-numv(U.site.dx,0)).toFixed(1);r.dz=+(z-numv(U.site.dz,0)).toFixed(1);}}
+  if(k.startsWith("rpt:")){const [ri,vi]=k.slice(4).split(":").map(Number);const r=U.roads[ri];const p=r&&r.pts&&r.pts[vi];if(p){p.x=+x.toFixed(2);p.z=+z.toFixed(2);}}
   if(k.startsWith("bpt:")){const [bi,vi]=k.slice(4).split(":").map(Number);const b=U.blocks[bi];const p=b&&b.poly&&b.poly[vi];if(p){p.x=+x.toFixed(2);p.z=+z.toFixed(2);}}
-  dragObj=null;renderPanel();}
+  dragObj=null;rebuild();renderPanel();}
  else if(dragObj&&rotMode){
    if(U.snap){const k=dragObj.userData.dragKey;const cur=getRy(k);setRy(k,Math.round(cur/15)*15);rebuild();}
    dragObj=null;rotMode=false;renderPanel();}
@@ -380,6 +383,13 @@ el.addEventListener("wheel",(e)=>{e.preventDefault(); if((e.ctrlKey||e.metaKey)&
  ctrl.r=Math.min(800,Math.max(20,ctrl.r*(1+e.deltaY*.001)));},{passive:false});
 function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
 el.addEventListener("dblclick",(e)=>{
+ if(U.polyInput.on&&U.polyInput.target==="road"&&U.polyInput.pts.length>=2){
+  // 道路：開いた折れ線として確定（連続する近接点は間引く）
+  const raw=U.polyInput.pts.slice(); const pts=[]; raw.forEach(p=>{const q=pts[pts.length-1];if(!q||Math.hypot(p.x-q.x,p.z-q.z)>0.3)pts.push(p);});
+  if(pts.length>=2){snapshot();U.roads.push({pts,w:Math.min(20,Math.max(3,numv(U.road.w,6))),dx:0,dz:0});U.sel="rd:"+(U.roads.length-1);}
+  U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;
+  rebuild();renderPanel();renderBar();toast("道路を追加しました。頂点をドラッグで修正、幅は敷地・地形タブで","ok");return;
+ }
  if(U.polyInput.on&&U.polyInput.pts.length>=3){
   if(U.polyInput.target==="site"){
    // 敷地形状（不整形地）として確定
@@ -439,6 +449,7 @@ function vertexWorldList(excludeKey){
  if(Array.isArray(U.site.poly))U.site.poly.forEach((p,i)=>{if("spt:"+i!==excludeKey)out.push({x:sdx+p.x,z:sdz+p.z});});
  (U.blocks||[]).forEach((b,bi)=>{if(b.shape==="poly"&&Array.isArray(b.poly)){const ox=sdx+numv(b.dx,0),oz=sdz+numv(b.dz,0);rotPts(b.poly,b.ry).forEach((p,i)=>{if(`bpt:${bi}:${i}`!==excludeKey)out.push({x:ox+p.x,z:oz+p.z});});}});
  if(U.tw.fenceShape==="poly"&&Array.isArray(U.tw.fencePts)){const ox=sdx+numv(U.tw.fenceDx,0),oz=sdz+numv(U.tw.fenceDz,0);rotPts(U.tw.fencePts,U.tw.fenceRy).forEach((p,i)=>{if("fpt:"+i!==excludeKey)out.push({x:ox+p.x,z:oz+p.z});});}
+ (U.roads||[]).forEach((r,ri)=>{const ox=sdx+numv(r.dx,0),oz=sdz+numv(r.dz,0);(r.pts||[]).forEach((p,i)=>{if(`rpt:${ri}:${i}`!==excludeKey)out.push({x:ox+p.x,z:oz+p.z});});});
  return out;
 }
 
@@ -584,6 +595,23 @@ function rebuild(){
  const roadDx=numv(U.road.dx,0), roadDz=numv(U.road.dz,0), roadRy=numv(U.road.ry,0)*Math.PI/180;
  const roadZ=sdz+sd/2+1.6+rw/2+roadDz;     // 車道中心Z（オフセット込み）
  const roadCx=sdx+roadDx;                   // 車道中心X（オフセット込み）
+ // ── 自分で引いた道路（折れ線＋幅員）：地図・図面の実際の道路をなぞったもの ──
+ (U.roads||[]).forEach((r,ri)=>{
+  const pts=r.pts||[]; if(pts.length<2)return;
+  const w=Math.min(20,Math.max(3,numv(r.w,6))); const rg=new THREE.Group(); rg.userData.dragKey="rd:"+ri;
+  const ox=sdx+numv(r.dx,0), oz=sdz+numv(r.dz,0); rg.position.set(ox,0,oz);
+  const rmat=L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.sel==="rd:"+ri||(U.sel||"").startsWith("rpt:"+ri+":"))?0x7f8896:0x8d929b});
+  for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1];const len=Math.hypot(b.x-a.x,b.z-a.z);if(len<0.05)continue;
+   const m=new THREE.Mesh(new THREE.BoxGeometry(len,0.1,w),rmat);const mx=(a.x+b.x)/2,mz=(a.z+b.z)/2;
+   m.position.set(mx,groundY(ox+mx,oz+mz)+0.055,mz);m.rotation.y=-Math.atan2(b.z-a.z,b.x-a.x);m.receiveShadow=!L;rg.add(m);
+   if(!L&&w>=6){const cl=new THREE.Mesh(new THREE.BoxGeometry(len,0.02,0.25),new THREE.MeshLambertMaterial({color:0xf2f4f6}));cl.position.set(mx,groundY(ox+mx,oz+mz)+0.075,mz);cl.rotation.y=m.rotation.y;rg.add(cl);}
+   if(i>0){const j=new THREE.Mesh(new THREE.CylinderGeometry(w/2,w/2,0.1,24),rmat);j.position.set(a.x,groundY(ox+a.x,oz+a.z)+0.055,a.z);rg.add(j);} // 折れ点を丸く継ぐ
+  }
+  if(!U._exporting&&!L&&(U.sel==="rd:"+ri||(U.sel||"").startsWith("rpt:"+ri+":"))){
+   addVertexTools(rg,pts,"rpt:"+ri+":",(x,z)=>groundY(ox+x,oz+z)+1.0,0x2E6FBE,0,true);
+  }
+  g.add(rg); dragMap["rd:"+ri]=rg;
+ });
  // 道路表示（地図下敷きを使うときはオフにできる）
  if(U.road.show!==false){
  // ── 車道グループ（dragKey=road：ドラッグ＝全体移動 / Ctrl＝回転）──
@@ -1285,6 +1313,7 @@ function loadProjectJSON(file){
    if(!U.roadwork)U.roadwork={mixerSize:"8t",pumpSize:"m4t",mountUp:0,permitPolice:"",permitRoad:"",permitOffice:""};
    if(!Array.isArray(U.subsurface))U.subsurface=[];
    if(!Array.isArray(U.annot))U.annot=[];
+   if(!Array.isArray(U.roads))U.roads=[];
    if(!U.ojt||typeof U.ojt!=="object")U.ojt={};
    if(U.road.sideDx==null)U.road.sideDx=0; if(U.road.sideDz==null)U.road.sideDz=0;
    if(!U.poles)U.poles={n:3,pitch:18,far:true,dx:0,dz:0,ry:0};
@@ -1621,7 +1650,7 @@ function applyState(p){
  Object.assign(U,p);
  U.under.tex=keep.ut;U.under.raw=keep.ur;U.under.pages=keep.up;U.under.page=keep.upg;U.photo.tex=keep.pt;U.dxf.ents=keep.de;U.dxf.raw=keep.dr;
  U.sel=null;U.polyInput={on:false,pts:[],target:null};U.calib={on:false,a:null,b:null};
- if(!Array.isArray(U.annot))U.annot=[];if(!Array.isArray(U.subsurface))U.subsurface=[];if(!U.ojt)U.ojt={};
+ if(!Array.isArray(U.annot))U.annot=[];if(!Array.isArray(U.subsurface))U.subsurface=[];if(!U.ojt)U.ojt={};if(!Array.isArray(U.roads))U.roads=[];
 }
 window.restoreDraft=()=>{
  const d=readDraft(); if(!d){toast("下書きがありません");return;}
@@ -1739,6 +1768,7 @@ const TAB_DESC={
  "下敷き":["図面・地図を敷く","配置図PDFや地理院地図を敷地の下に敷き、その上に建物を合わせます。"],
  "仮設":["工程と仮設計画","工程フェーズ（山留め→杭→躯体→鉄骨）を切り替え、クレーン・仮囲い・足場を検討。"],
  "施工/CAD":["重機・車両・注記","重機や車両を置いて干渉を確認。注記で『なぜこの配置か』を残せます（OJT・申し送り用）。"],
+ "検討":["判定・OJT・出力","判定の内訳と対処、OJT検討項目の進捗、検討シート・画像・BIMの出力をここから。"],
 };
 function tabDesc(tab){const d=TAB_DESC[tab];return d?`<div class="tab-desc"><b>${d[0]}</b><span>${d[1]}</span></div>`:"";}
 function ojtSection(tab){
@@ -1854,21 +1884,22 @@ function updateShoshiChips(){
 window.updateShoshiChips=updateShoshiChips;
 
 function renderPanel(){
- // 2階層タブ：3グループ → 各グループのサブタブ
+ // 段階バー：作業の流れ順（① 下地を貼る → ② なぞる → ③ 仮設を計画 → ④ 検討・出力）
+ // 内部のタブ名（U.tab）は従来どおり。表示名だけ流れに合わせる
+ const TAB_LABEL={"下敷き":"図面・地図を敷く","敷地・地形":"敷地・道路","形状":"建物","諸元":"諸元","近隣":"近隣","仮設":"工程・クレーン・仮囲い","施工/CAD":"重機・車両・注記","検討":"判定・OJT・出力"};
  const TAB_GROUPS=[
-   {key:"建物", icon:"🏢", tabs:["諸元","形状"]},
-   {key:"敷地・環境", icon:"🗺️", tabs:["敷地・地形","近隣","下敷き"]},
-   {key:"施工", icon:"🚧", tabs:["仮設","施工/CAD"]},
+   {key:"1", label:"下地を貼る", tabs:["下敷き"]},
+   {key:"2", label:"なぞる", tabs:["敷地・地形","形状","諸元","近隣"]},
+   {key:"3", label:"仮設を計画", tabs:["仮設","施工/CAD"]},
+   {key:"4", label:"検討・出力", tabs:["検討"]},
  ];
- if(!U.tabGroup)U.tabGroup="建物";
- const curG=TAB_GROUPS.find(g=>g.key===U.tabGroup)||TAB_GROUPS[0];
- // 現在のタブがグループ外なら、グループ先頭に合わせる
+ // 旧グループ名からの読み替え（保存済み案件との互換）
+ if(!U.tabGroup||!TAB_GROUPS.some(g=>g.key===U.tabGroup)){const g=TAB_GROUPS.find(g=>g.tabs.includes(U.tab));U.tabGroup=g?g.key:"2";}
+ const curG=TAB_GROUPS.find(g=>g.key===U.tabGroup)||TAB_GROUPS[1];
  if(!curG.tabs.includes(U.tab))U.tab=curG.tabs[0];
- // 上段：グループ
- const groupBar=TAB_GROUPS.map(g=>`<div class="tg ${U.tabGroup===g.key?"on":""}" onclick="U.tabGroup='${g.key}';U.tab='${g.tabs[0]}';renderPanel()">${g.icon} ${g.key}</div>`).join("");
- // 下段：サブタブ（グループ内に複数あるときだけ表示）
+ const groupBar=TAB_GROUPS.map(g=>`<div class="tg step ${U.tabGroup===g.key?"on":""}" onclick="U.tabGroup='${g.key}';U.tab='${g.tabs[0]}';renderPanel()"><span class="step-n">${g.key}</span><span class="step-l">${g.label}</span></div>`).join("");
  const subBar=curG.tabs.length>1
-   ? `<div id="subtabs">${curG.tabs.map(t=>`<div class="${U.tab===t?"on":""}" onclick="U.tab='${t}';renderPanel()">${t}</div>`).join("")}</div>`
+   ? `<div id="subtabs">${curG.tabs.map(t=>`<div class="${U.tab===t?"on":""}" onclick="U.tab='${t}';renderPanel()">${TAB_LABEL[t]||t}</div>`).join("")}</div>`
    : "";
  $("#tabs").innerHTML=`<div id="tabgroups">${groupBar}</div>${subBar}`;
  let h="";
@@ -2012,7 +2043,20 @@ function renderPanel(){
   ${SL("奥・左",U.site.h[2],"(v)=>SH(2,v)",-4,4,0.1)}
   ${SL("奥・右",U.site.h[3],"(v)=>SH(3,v)",-4,4,0.1)}`;
   // ④ 道路・歩道・側道
-  let secRoad=`${CK("道路を表示する",U.road.show!==false,"(v)=>S('road.show',v)")}
+  const drawingRoad=(U.polyInput.on&&U.polyInput.target==="road");
+ let secRoad=`<div style="font-size:11px;font-weight:700;color:#2552A0;margin-bottom:4px">実際の道路をなぞって入れる（地図・図面どおり）</div>
+  ${drawingRoad
+   ?`<div style="background:#FFF3DD;border:1.5px dashed var(--amber);border-radius:8px;padding:8px 10px;font-size:11.5px;line-height:1.7;margin-bottom:6px"><b>道路をなぞり中（${U.polyInput.pts.length}点）</b><br>道路の<b>中心線</b>に沿ってクリック、<b>ダブルクリックで確定</b>（閉じません）。<button class="btn" style="margin-top:6px;font-size:11px" onclick="U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar()">中止</button></div>`
+   :`<button class="addbtn" style="margin-bottom:6px" onclick="U.polyInput.on=true;U.polyInput.target='road';U.polyInput.pts=[];renderPanel();renderBar()">✏️ 道路の中心線をなぞる（クリック→ダブルクリック）</button>`}
+  ${(U.roads||[]).map((r,i)=>{const sel=(U.sel==="rd:"+i||(U.sel||"").startsWith("rpt:"+i+":"));let len=0;for(let k=0;k<(r.pts||[]).length-1;k++)len+=Math.hypot(r.pts[k+1].x-r.pts[k].x,r.pts[k+1].z-r.pts[k].z);
+    return `<div class="card" style="${sel?'border-color:#F2A33C;background:#FFFBF0':''}" onclick="U.sel='rd:${i}';rebuild();renderPanel()">
+     <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:11.5px">道路 ${i+1}　${len.toFixed(0)}m・${(r.pts||[]).length}点</b><button class="del" onclick="event.stopPropagation();snapshot();U.roads.splice(${i},1);U.sel=null;rebuild();renderPanel()">削除</button></div>
+     ${SL("幅員 m",r.w,`(v)=>{U.roads[${i}].w=v;rebuildThrottled();}`,3,20,0.5)}
+     <div style="font-size:10px;color:var(--mut)">選択中は青い頂点をドラッグで修正（他の角に吸着）。道路全体は面をドラッグで移動。</div></div>`;}).join("")}
+  ${(U.roads||[]).length?`<div class="hint" style="margin:0 0 8px">※道路使用検討（縦列・残車道幅）は下の「前面道路 幅員」の値で計算します。実道路の幅を合わせてください。</div>`:""}
+  <div style="border-top:1px solid var(--hair);margin:8px 0"></div>
+  <div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:4px">自動の前面道路（敷地の前に自動配置）</div>
+  ${CK("自動の前面道路を表示する",U.road.show!==false,"(v)=>S('road.show',v)")}
   <div style="font-size:10px;color:var(--mut);margin:-2px 0 8px">地図や図面を下敷きにして道路もそこに写っている場合は、オフにすると重なりません。</div>
   ${SL("前面道路 幅員 m",U.road.w,"(v)=>S('road.w',v)",4,20,0.5)}
   ${SL("道路の傾斜（左→右の高低差 m）",U.road.slope,"(v)=>S('road.slope',v)",-3,3,0.1)}
@@ -2317,8 +2361,26 @@ function renderPanel(){
     </div>`;}).join("");
   }else h+=`<div class="hint">検討意図や注意点を図に直接書き込めます。<b>範囲で囲う</b>＝色枠でエリアを強調、<b>文字を置く</b>＝任意位置にラベル。地面に貼り付くので視点を回しても位置が保たれ、PNG出力にも写ります。ドラッグ＝移動／Ctrl＋ドラッグ＝回転。<b>OJTでの申し送りや、なぜこの配置かの説明に。</b></div>`;
  }
+ if(U.tab==="検討"){
+  const cs=collectChecks(); const ico={ok:"●",warn:"▲",ng:"✕",na:"－"}; const col={ok:"#2E7D5B",warn:"#C77F1A",ng:"#B0433A",na:"#6A7385"};
+  const nNg=cs.filter(c=>c.lv==="ng").length,nW=cs.filter(c=>c.lv==="warn").length;
+  h=`<div style="display:flex;gap:8px;margin-bottom:10px">
+    <div style="flex:1;text-align:center;padding:8px;border-radius:10px;background:rgba(46,125,91,.09);color:#2E7D5B"><b style="font-size:20px;display:block">${cs.filter(c=>c.lv==="ok").length}</b><span style="font-size:10.5px">OK</span></div>
+    <div style="flex:1;text-align:center;padding:8px;border-radius:10px;background:rgba(242,163,60,.12);color:#C77F1A"><b style="font-size:20px;display:block">${nW}</b><span style="font-size:10.5px">注意</span></div>
+    <div style="flex:1;text-align:center;padding:8px;border-radius:10px;background:rgba(176,67,58,.09);color:#B0433A"><b style="font-size:20px;display:block">${nNg}</b><span style="font-size:10.5px">要検討</span></div></div>`
+  +cs.map(c=>`<div class="card" style="padding:9px 11px;border-left:4px solid ${col[c.lv]}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:12px">${ico[c.lv]} ${c.label}</b><span style="font-family:ui-monospace;font-size:12px;font-weight:700;color:${col[c.lv]}">${c.val}</span></div><div style="font-size:11px;color:var(--mut);margin-top:3px">${c.note}</div></div>`).join("")
+  +`<div class="hint" style="margin:0 0 10px">目安判定です。正式な可否は関係機関・法規で確認してください。道路使用の詳細は「② なぞる → 敷地・道路」の道路使用検討へ。</div>`
+  +`<div style="font-size:11px;font-weight:700;color:var(--mut);margin:6px 0 4px">出力</div>
+    <div class="grid2" style="margin-bottom:6px"><button class="btn primary" onclick="exportSheet()">📄 検討シート（A4）</button><button class="btn" onclick="savePNG()">🖼 PNG画像</button></div>
+    <div class="grid2" style="margin-bottom:10px"><button class="btn" onclick="exportOBJ()">🧱 BIM出力</button><button class="btn" onclick="aiPromptMenu()">✨ AIプロンプト</button></div>`;
+  // OJT：全タブ分をまとめて
+  const allT=Object.keys(OJT_CHECKS); const tot=allT.reduce((s,t)=>s+OJT_CHECKS[t].length,0), done=allT.reduce((s,t)=>s+OJT_CHECKS[t].filter(i=>U.ojt&&U.ojt[i.k]).length,0);
+  h+=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin:6px 0 4px">🎓 OJT検討項目　${done} / ${tot}</div>`+allT.map(t=>ojtSection(t)).join("");
+  $("#body").innerHTML=tabDesc("検討")+h; renderSelCard(); return;
+ }
  h=tabDesc(U.tab)+h+ojtSection(U.tab);
  $("#body").innerHTML=h;
+ renderSelCard();
 }
 // ───── 検討判定HUD（左下）：OK/注意/NGを3D画面上に常時表示 ─────
 // 判定項目を集約（検討シート出力でも共用）
@@ -2376,7 +2438,7 @@ function renderHUD(){
 }
 window.renderHUD=renderHUD;
 function renderTitle(){
- renderHUD();
+ renderHUD(); if(typeof renderSelCard==="function")renderSelCard();
  const modeLabel={build:`仮設計画イメージ（${Math.min(U.p.floors,U.tw.step)}階 躯体時）`,demo:"既存解体フェーズ ― 重機配置検討",retain:`山留め・掘削フェーズ（GL-${numv(U.tw.pitDepth,4)}m）`,pile:"杭工事フェーズ ― 杭配置・既存杭の重ね合わせ",steel:`鉄骨建て方フェーズ（〜${Math.min(U.p.floors,U.tw.step)}階）`,plan:"BimGen ― 営業概算BIM"}[U.tw.mode]||"BimGen";
  const st=U._stats||{floorArea:0,maxFloors:0};
  // 敷地面積・建築面積は実測値（諸元入力）を優先、空欄なら形状から算出
@@ -2475,6 +2537,7 @@ function buildBIMMeta(){
     color:a.color, x_m:numv(a.x,0), z_m:numv(a.z,0),
     width_m:a.type==="zone"?posv(a.w,6):null, depth_m:a.type==="zone"?posv(a.d,6):null,
     rotation_deg:numv(a.ry,0)})),
+  roads_traced:(U.roads||[]).map(r=>({width_m:numv(r.w,6), offset_m:{dx:numv(r.dx,0),dz:numv(r.dz,0)}, centerline_m:(r.pts||[]).map(p=>({x:numv(p.x,0),z:numv(p.z,0)}))})),
   fence:U.tw.fence?{shape:U.tw.fenceShape==="poly"?"polygon":"rect", height_m:numv(U.tw.fenceH,3), gate:U.tw.fenceGate||"front",
     offset_m:{dx:numv(U.tw.fenceDx,0),dz:numv(U.tw.fenceDz,0)}, rotation_deg:numv(U.tw.fenceRy,0),
     points_m:U.tw.fenceShape==="poly"?(U.tw.fencePts||[]).map(p=>({x:numv(p.x,0),z:numv(p.z,0)})):null,
@@ -2818,6 +2881,13 @@ function resetToDefault(){
  _hist.length=0;
 }
 function deepMerge(t,s){for(const k in s){if(s[k]&&typeof s[k]==="object"&&!Array.isArray(s[k])&&t[k]&&typeof t[k]==="object"){deepMerge(t[k],s[k]);}else t[k]=s[k];}return t;}
+window.newBlank=()=>{
+ resetToDefault();
+ U.p.name="新規案件（図面から）"; U.blocks=[]; U.road.show=false; U.tw.fence=false; U.tw.crane=false; U.tw.scaffold=false; U.tw.ev=false; U.tw.mixer=false; U.tw.poles=false; U.nbs=[];
+ U.tab="下敷き"; U.tabGroup="敷地・環境";
+ closeStart(); rebuild();renderPanel();renderBar();view("top");
+ toast("白紙で開始。まず下敷きタブで図面・地図を敷き、敷地→建物→道路の順になぞってください","ok");
+};
 window.newFromTemplate=(key)=>{
  const tp=TEMPLATES.find(t=>t.key===key); if(!tp)return;
  resetToDefault();
@@ -2849,6 +2919,7 @@ window.openStart=()=>{
   ${(()=>{const d=readDraft();if(!d||!draftEnabled())return "";const t=new Date(d.savedAt).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
     return `<button class="start-act resume" onclick="restoreDraft()">⟲ 前回の続きから<small>自動退避 ${t}　${_esc(d.name||"（案件名未入力）")}</small></button>`;})()}
   <div class="start-row">
+   <button class="start-act" style="background:rgba(46,111,190,.08);border-color:rgba(46,111,190,.35)" onclick="newBlank()">📐 図面・地図から始める（白紙）<small>建物・道路なし。下敷きを敷いてなぞる</small></button>
    <button class="start-act demo" onclick="openDemoCase()">▶ デモ案件を開く<small>傾斜地・仮囲い・クレーン・注記が入った状態</small></button>
    <button class="start-act" onclick="document.getElementById('json-file').click();closeStart()">📂 保存した案件を開く<small>.json / .bsjson</small></button>
    <button class="start-act" onclick="closeStart()">→ このまま続ける<small>現在の内容を編集</small></button>
@@ -2858,6 +2929,88 @@ window.openStart=()=>{
  </div>`;
  s.style.display="";s.classList.remove("hide");
 };
+
+// ───── キャンバス上の描く道具（どのタブにいても使える） ─────
+function startDraw(target){
+ // target: site / block / road / fence
+ if(U.polyInput.on&&U.polyInput.target===target){U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar();return;}
+ U.polyInput.on=true;U.polyInput.pts=[];U.polyInput.target=(target==="block"?null:target);
+ if(target==="site"){U.tabGroup="2";U.tab="敷地・地形";}
+ if(target==="block"){U.tabGroup="2";U.tab="形状";}
+ if(target==="road"){U.tabGroup="2";U.tab="敷地・地形";}
+ if(target==="fence"){U.tabGroup="3";U.tab="仮設";U.tw.fence=true;}
+ view("top"); renderPanel(); renderBar();
+ const msg={site:"敷地の外周を",block:"建物の外周を",road:"道路の中心線を",fence:"仮囲いの線を"}[target];
+ toast(msg+"クリックでなぞり、ダブルクリックで確定");
+}
+window.startDraw=startDraw;
+function renderTools(){
+ let el=document.getElementById("tools");
+ if(!el){el=document.createElement("div");el.id="tools";document.body.appendChild(el);}
+ const on=(t)=>U.polyInput.on&&((t==="block"&&U.polyInput.target==null)||U.polyInput.target===t);
+ const b=(t,ic,lab)=>`<button class="tool ${on(t)?"on":""}" title="${lab}（クリック→ダブルクリックで確定）" onclick="startDraw('${t}')"><span>${ic}</span>${lab}</button>`;
+ el.innerHTML=`<div class="tool-grp">${b("site","▭","敷地")}${b("block","🏢","建物")}${b("road","🛣","道路")}${b("fence","🚧","仮囲い")}</div>
+  <div class="tool-grp">
+   <button class="tool ${U.dim.on?"on":""}" title="2点クリックで距離を測る" onclick="S('dim.on',!U.dim.on,false);if(!U.dim.on){U.dim.a=null;U.dim.b=null;}rebuild();renderBar()"><span>📏</span>寸法</button>
+   <button class="tool ${U.snap!==false?"on":""}" title="頂点・道路への吸着、15°刻み回転" onclick="U.snap=!U.snap;renderBar();renderPanel()"><span>🧲</span>吸着</button>
+   <button class="tool ${U.moveLayers?"on":""}" title="敷地・下敷き・図面をドラッグで動かす" onclick="U.moveLayers=!U.moveLayers;renderBar()"><span>🖐</span>下地移動</button>
+  </div>
+  ${U.polyInput.on?`<div class="tool-hint">なぞり中：${U.polyInput.pts.length}点　<b>ダブルクリックで確定</b>　<a href="#" onclick="U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar();return false">中止</a></div>`:""}`;
+}
+window.renderTools=renderTools;
+
+// ───── 選択中の物の属性カード（右上バーの下）：クリックした物のパラメータだけを出す ─────
+function renderSelCard(){
+ let el=document.getElementById("selcard");
+ if(!el){el=document.createElement("div");el.id="selcard";document.body.appendChild(el);}
+ const k=U.sel; if(!k){el.style.display="none";return;}
+ let title="",body="",del="";
+ const rowSL=(lab,val,fn,mn,mx,st)=>SL(lab,val,fn,mn,mx,st);
+ if(k.startsWith("co:")){const i=+k.slice(3),c=U.cobj[i];if(!c){el.style.display="none";return;}const t=COBJ_TYPES[c.type]||{label:c.type,sizes:[]};
+  title="🚚 "+t.label;
+  body=`<label class="f"><span>サイズ</span><select onchange="setCOSize(${i},this.value)">${(t.sizes||[]).map(s=>`<option value="${s.key}" ${c.size===s.key?"selected":""}>${s.label}</option>`).join("")}</select></label>
+   ${rowSL("向き °",numv(c.ry,0),`(v)=>{snapshot('co.ry');U.cobj[${i}].ry=v;rebuildThrottled();}`,0,359,1)}
+   ${c._warn?`<div style="font-size:11px;color:#B0433A;font-weight:700">⚠ 歩行帯と干渉しています</div>`:""}`;
+  del=`delCO(${i})`;}
+ else if(k.startsWith("an:")){const i=+k.slice(3),a=U.annot[i];if(!a){el.style.display="none";return;}
+  title=a.type==="zone"?"🟧 範囲マーカー":"🔤 文字注記";
+  body=`<label class="f"><span>色</span><select onchange="U.annot[${i}].color=this.value;rebuild();renderPanel()">${ANNOT_COLORS.map(c=>`<option value="${c.key}" ${a.color===c.key?"selected":""}>${c.label}</option>`).join("")}</select></label>`
+   +(a.type==="zone"?`<div class="grid2">${rowSL("幅 m",posv(a.w,6),`(v)=>{U.annot[${i}].w=v;rebuildThrottled();}`,1,40,0.5)}${rowSL("奥行 m",posv(a.d,6),`(v)=>{U.annot[${i}].d=v;rebuildThrottled();}`,1,40,0.5)}</div>`
+    :`<button class="btn" style="width:100%;margin:4px 0" onclick="editAnnotText(${i})">✎ 文字を編集：「${(a.text||"").slice(0,12)}」</button>${rowSL("文字サイズ m",posv(a.fsize,2.5),`(v)=>{U.annot[${i}].fsize=v;rebuildThrottled();}`,0.8,10,0.5)}`);
+  del=`delAnnot(${i})`;}
+ else if(k.startsWith("sub:")){const i=+k.slice(4),s=U.subsurface[i];if(!s){el.style.display="none";return;}
+  title="🟨 "+((SUBSURFACE_TYPES[s.kind]||{}).label||"地下支障物");
+  body=`<div class="grid2">${rowSL("幅 m",posv(s.w,3),`(v)=>{U.subsurface[${i}].w=v;rebuildThrottled();}`,0.5,20,0.5)}${rowSL("長さ m",posv(s.d,14),`(v)=>{U.subsurface[${i}].d=v;rebuildThrottled();}`,2,80,1)}</div>`;
+  del=`delSub(${i})`;}
+ else if(k.startsWith("rd:")||k.startsWith("rpt:")){const i=+(k.startsWith("rd:")?k.slice(3):k.slice(4).split(":")[0]),r=U.roads[i];if(!r){el.style.display="none";return;}
+  title="🛣 道路 "+(i+1)+"（なぞった道路）";
+  body=`${rowSL("幅員 m",r.w,`(v)=>{U.roads[${i}].w=v;rebuildThrottled();}`,3,20,0.5)}<div style="font-size:10.5px;color:var(--mut)">青い頂点をドラッグで修正。面をドラッグで全体移動。</div>`;
+  del=`snapshot();U.roads.splice(${i},1);U.sel=null;rebuild();renderPanel()`;}
+ else if(k.startsWith("blk:")||k.startsWith("bpt:")){const i=+(k.startsWith("blk:")?k.slice(4):k.slice(4).split(":")[0]),b=U.blocks[i];if(!b){el.style.display="none";return;}
+  const isPoly=(b.shape==="poly"&&Array.isArray(b.poly));
+  title="🏢 "+(b.label||"建物")+(isPoly?"（多角形）":"");
+  body=`<div class="grid2"><label class="f"><span>開始階</span><input type="number" value="${b.f1}" oninput="SB(${b.id},'f1',this.value)"></label><label class="f"><span>終了階</span><input type="number" value="${b.f2}" oninput="SB(${b.id},'f2',this.value)"></label></div>`
+   +(isPoly?"":`<div class="grid2"><label class="f"><span>間口 m</span><input type="number" step="0.1" value="${b.w}" oninput="SB(${b.id},'w',this.value)"></label><label class="f"><span>奥行 m</span><input type="number" step="0.1" value="${b.d}" oninput="SB(${b.id},'d',this.value)"></label></div>`)
+   +rowSL("回転 °（1度刻み）",numv(b.ry,0),`(v)=>SB(${b.id},'ry',v)`,0,359,1);
+  del=`delB(${b.id})`;}
+ else if(k.startsWith("nb:")){const i=+k.slice(3),n=U.nbs[i];if(!n){el.style.display="none";return;}
+  title="🏘 近隣建物";
+  body=`<div class="grid3">${rowSL("幅",posv(n.w,8),`(v)=>SN(${i},'w',v)`,2,60,0.5)}${rowSL("奥行",posv(n.d,10),`(v)=>SN(${i},'d',v)`,2,60,0.5)}${rowSL("高さ",posv(n.h,10),`(v)=>SN(${i},'h',v)`,3,100,0.5)}</div>`;
+  del=`delN(${i})`;}
+ else if(k==="fence"||k.startsWith("fpt:")){
+  title="🚧 仮囲い"+(U.tw.fenceShape==="poly"?`（任意形状・${(U.tw.fencePts||[]).length}頂点・${fencePerimeter().toFixed(0)}m）`:"（矩形）");
+  body=rowSL("パネル高さ m",U.tw.fenceH,"(v)=>S('tw.fenceH',v)",2,8,0.5)+`<div class="grid2"><button class="btn" style="font-size:11px" onclick="U.tabGroup='3';U.tab='仮設';renderPanel()">詳細を開く</button><button class="btn" style="font-size:11px" onclick="startDraw('fence')">✏️ なぞり直す</button></div>`;}
+ else if(k==="crane"){const cs=CRANE_SPECS[U.tw.craneModel]||{};
+  title="🏗 タワークレーン";
+  body=`<label class="f"><span>機種</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(m=>`<option value="${m}" ${U.tw.craneModel===m?"selected":""}>${m}　作業半径${CRANE_SPECS[m].work}m／${CRANE_SPECS[m].cap}t</option>`).join("")}</select></label><div style="font-size:11px;color:var(--mut)">作業半径 ${cs.work||"-"}m・尾部旋回 ${cs.tail||"-"}m</div>`;}
+ else if(k==="site"||k.startsWith("spt:")){
+  title="▭ 敷地"+(Array.isArray(U.site.poly)?`（多角形・${U.site.poly.length}頂点・${siteArea().toFixed(0)}㎡）`:`（${posv(U.site.w,25)}×${posv(U.site.d,20)}m）`);
+  body=Array.isArray(U.site.poly)?`<div style="font-size:10.5px;color:var(--mut)">青い頂点をドラッグで修正。辺の長さを表示中。</div>`:`<div class="grid2">${rowSL("間口 m",U.site.w,"(v)=>S('site.w',v)",5,120,0.5)}${rowSL("奥行 m",U.site.d,"(v)=>S('site.d',v)",5,120,0.5)}</div>`;}
+ else {el.style.display="none";return;}
+ el.style.display="";
+ el.innerHTML=`<div class="sc-h"><span>${title}</span><span class="sc-x" onclick="U.sel=null;rebuild();renderPanel()">✕</span></div><div class="sc-b">${body}${del?`<button class="btn" style="width:100%;margin-top:6px;font-size:11px;color:#B0433A" onclick="${del}">🗑 削除（↶で戻せます）</button>`:""}</div>`;
+}
+window.renderSelCard=renderSelCard;
 
 // ───── プレゼン表示（パネル・バーを隠して3Dを全面に。顧客・会議用）─────
 window.togglePresent=()=>{
@@ -2884,7 +3037,8 @@ function renderBar(){
   ${mn("表示",[
     {label:"グリッド",fn:"U.grid.show=!U.grid.show;rebuild();renderBar()",on:U.grid.show},
     {label:"敷地/下敷き移動モード",fn:"U.moveLayers=!U.moveLayers;renderBar()",on:U.moveLayers},
-    {label:"線画（AI下絵）",fn:"U.line=!U.line;rebuild();renderBar()",on:U.line}])}
+    {label:"線画（AI下絵）",fn:"U.line=!U.line;rebuild();renderBar()",on:U.line},null,
+    {label:"吸着（頂点・道路・15°回転）",fn:"U.snap=!U.snap;renderBar();renderPanel()",on:U.snap!==false}])}
   <button class="btn" onclick="saveProjectJSON()" style="border:1.5px solid var(--amber)" title="案件を保存（暗号化可）">💾 保存</button>
   <button class="btn" onclick="document.getElementById('json-file').click()" style="border:1.5px solid var(--amber)" title="保存した案件を開く">📂 読込</button>
   <input type="file" id="json-file" accept=".json,.bsjson" style="display:none" onchange="loadProjectJSON(this.files[0]); this.value=''">
@@ -2895,6 +3049,7 @@ function renderBar(){
     {label:"AIプロンプト生成",fn:"aiPromptMenu()"},null,
     {label:"💬 意見・要望を送る",fn:"openFeedback()"}],"border:1.5px solid #2E7D5B;color:#2E7D5B")}`;
 }
+const _renderBarOrig=renderBar; renderBar=function(){_renderBarOrig();renderTools();};
 window.toggleMenu=(btn)=>{const m=btn.parentElement;const was=m.classList.contains("open");closeMenus();if(!was)m.classList.add("open");};
 window.closeMenus=()=>{document.querySelectorAll(".mn.open").forEach(x=>x.classList.remove("open"));};
 document.addEventListener("pointerdown",(e)=>{if(!e.target.closest(".mn"))closeMenus();});
