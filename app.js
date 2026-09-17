@@ -30,6 +30,7 @@ const U={
            permitPolice:"",permitRoad:"",permitOffice:""}, // 道路使用条件メモ（警察/道路局/建設事務所）
  subsurface:[],  // 地下の支障物（経路帯・範囲マーカー）{kind,x,z,w,d,ry}
  ojt:{},         // OJT検討項目の✓状態 {key:true}
+ layers:{building:true,nbs:true,fence:true,crane:true,cobj:true,annot:true,sub:true,roads:true,under:true},  // 表示レイヤー
  roads:[],       // 自分で引く道路 {pts:[{x,z}...](敷地原点基準), w:幅員, dx,dz}
  annot:[],       // 注記（地面貼り付け）{type:"zone"|"text", x,z,w,d,ry,color,text,fsize}
  poles:{n:3,pitch:18,far:true,dx:0,dz:0,ry:0},
@@ -227,7 +228,10 @@ function pickDrag(e){
  const v=new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
  ray.setFromCamera(v,camera);
  const hits=ray.intersectObjects(dragCandidates(),true);
- for(const h of hits){let o=h.object;while(o&&!o.userData.dragKey)o=o.parent;if(o)return o;}
+ for(const h of hits){
+  // 非表示（レイヤーで隠した）物は拾わない：親をたどって visible=false があれば無視
+  let vis=true;for(let q=h.object;q;q=q.parent){if(q.visible===false){vis=false;break;}} if(!vis)continue;
+  let o=h.object;while(o&&!o.userData.dragKey)o=o.parent;if(o)return o;}
  return null;
 }
 const el=renderer.domElement; el.style.touchAction="none";
@@ -360,7 +364,7 @@ const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
     // スナップ：前面道路の歩行帯/敷鉄板ラインに近ければZを吸着、角度は道路平行(0°)へ寄せる
     if(U.snap!==false){
      const roadZ=numv(U.site.dz,0)+posv(U.site.d,18)/2+1.6+Math.min(20,Math.max(4,numv(U.road.w,8)))/2;
-     if(Math.abs(nz-roadZ)<1.5){nz=+roadZ.toFixed(1);}              // 道路中心へ吸着
+     if(U.road.show!==false&&Math.abs(nz-roadZ)<1.5){nz=+roadZ.toFixed(1);}   // 自動道路が表示中のときだけ中心へ吸着
      // 近くの敷鉄板に平行寄せ
      U.cobj.forEach((o,oi)=>{if(o!==c&&o.type==="temp"&&o.size==="plate"){
        if(Math.hypot(numv(o.x,0)-nx,numv(o.z,0)-nz)<3){c.ry=numv(o.ry,0);}}});
@@ -1245,6 +1249,7 @@ function rebuild(){
 
  scene.add(g);model=g;
  ctrl.ty=Math.max(builtH,H*.6)*.45;
+ applyLayers(g);
  renderTitle();
  if(typeof scheduleDraft==="function")scheduleDraft();
 }
@@ -1314,6 +1319,7 @@ function loadProjectJSON(file){
    if(!Array.isArray(U.subsurface))U.subsurface=[];
    if(!Array.isArray(U.annot))U.annot=[];
    if(!Array.isArray(U.roads))U.roads=[];
+   if(!U.layers||typeof U.layers!=="object")U.layers={building:true,nbs:true,fence:true,crane:true,cobj:true,annot:true,sub:true,roads:true,under:true};
    if(!U.ojt||typeof U.ojt!=="object")U.ojt={};
    if(U.road.sideDx==null)U.road.sideDx=0; if(U.road.sideDz==null)U.road.sideDz=0;
    if(!U.poles)U.poles={n:3,pitch:18,far:true,dx:0,dz:0,ry:0};
@@ -2930,6 +2936,36 @@ window.openStart=()=>{
  s.style.display="";s.classList.remove("hide");
 };
 
+// ───── レイヤー（表示の絞り込み）：dragKey で対象を判定して非表示にする ─────
+const LAYER_DEF=[
+ ["building","建物",k=>k.startsWith("blk:")],
+ ["nbs","近隣建物・既存",k=>k.startsWith("nb:")||k==="demo"],
+ ["fence","仮囲い",k=>k==="fence"],
+ ["crane","クレーン・LSEV",k=>k==="crane"||k==="ev"],
+ ["cobj","重機・車両",k=>k.startsWith("co:")||k==="mixer"||k==="rough"],
+ ["annot","注記",k=>k.startsWith("an:")],
+ ["sub","地下支障物",k=>k.startsWith("sub:")],
+ ["roads","道路",k=>k.startsWith("rd:")||k==="road"||k==="roadwalk"||k==="roadside"],
+ ["under","下敷き・写真",k=>k==="under"||k==="photo"],
+];
+function applyLayers(root){
+ const L=U.layers||{}; const off=LAYER_DEF.filter(d=>L[d[0]]===false);
+ if(!off.length)return;
+ root.traverse(o=>{const k=o.userData&&o.userData.dragKey;if(!k)return;if(off.some(d=>d[2](k)))o.visible=false;});
+}
+window.toggleLayer=(key,v)=>{if(!U.layers)U.layers={};U.layers[key]=v;rebuild();renderLayers();};
+window.renderLayers=()=>{
+ let el=document.getElementById("layers"); if(!el){el=document.createElement("div");el.id="layers";document.body.appendChild(el);}
+ if(!U._layersOpen){el.style.display="none";return;}
+ el.style.display="";
+ const L=U.layers||{};
+ el.innerHTML=`<div class="sc-h"><span>👁 レイヤー</span><span class="sc-x" onclick="U._layersOpen=false;renderLayers()">✕</span></div><div class="sc-b">
+  ${LAYER_DEF.map(d=>`<label class="chk" style="margin-bottom:5px"><input type="checkbox" ${L[d[0]]!==false?"checked":""} onchange="toggleLayer('${d[0]}',this.checked)">${d[1]}</label>`).join("")}
+  <div class="grid2" style="margin-top:6px"><button class="btn" style="font-size:11px" onclick="LAYER_DEF.forEach(d=>U.layers[d[0]]=true);rebuild();renderLayers()">全部表示</button><button class="btn" style="font-size:11px" onclick="LAYER_DEF.forEach(d=>U.layers[d[0]]=false);U.layers.building=true;U.layers.under=true;rebuild();renderLayers()">建物と下敷きだけ</button></div>
+  <div class="hint" style="margin-top:6px">打合せで「今はクレーンの話」に絞るときに。PNG・検討シートにも反映されます。</div></div>`;
+};
+window.toggleLayers=()=>{U._layersOpen=!U._layersOpen;renderLayers();};
+
 // ───── キャンバス上の描く道具（どのタブにいても使える） ─────
 function startDraw(target){
  // target: site / block / road / fence
@@ -2944,32 +2980,49 @@ function startDraw(target){
  toast(msg+"クリックでなぞり、ダブルクリックで確定");
 }
 window.startDraw=startDraw;
+function _toolsPos(){try{return JSON.parse(localStorage.getItem("bimgen_tools_pos")||"null");}catch(e){return null;}}
+function _toolsSave(p){try{localStorage.setItem("bimgen_tools_pos",JSON.stringify(p));}catch(e){}}
+window.toolsReset=()=>{try{localStorage.removeItem("bimgen_tools_pos");}catch(e){}const el=document.getElementById("tools");if(el){el.style.left="";el.style.top="";el.style.right="";el.style.bottom="";el.style.transform="";}};
+window.toolsToggle=()=>{U._toolsMin=!U._toolsMin;renderTools();};
 function renderTools(){
  let el=document.getElementById("tools");
- if(!el){el=document.createElement("div");el.id="tools";document.body.appendChild(el);}
+ if(!el){el=document.createElement("div");el.id="tools";document.body.appendChild(el);
+  // つまみをドラッグで移動
+  let drag=null;
+  el.addEventListener("pointerdown",(e)=>{const g=e.target.closest(".tool-grip");if(!g)return;e.preventDefault();const r=el.getBoundingClientRect();drag={dx:e.clientX-r.left,dy:e.clientY-r.top};el.setPointerCapture(e.pointerId);});
+  el.addEventListener("pointermove",(e)=>{if(!drag)return;const x=Math.max(0,Math.min(innerWidth-60,e.clientX-drag.dx)),y=Math.max(0,Math.min(innerHeight-40,e.clientY-drag.dy));el.style.left=x+"px";el.style.top=y+"px";el.style.right="auto";el.style.bottom="auto";el.style.transform="none";});
+  el.addEventListener("pointerup",(e)=>{if(!drag)return;drag=null;_toolsSave({x:parseFloat(el.style.left),y:parseFloat(el.style.top)});});
+  const p=_toolsPos(); if(p&&isFinite(p.x)&&isFinite(p.y)){el.style.left=Math.min(p.x,innerWidth-80)+"px";el.style.top=Math.min(p.y,innerHeight-50)+"px";el.style.right="auto";el.style.bottom="auto";el.style.transform="none";}
+ }
+ if(U._toolsMin){el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ドラッグで移動">⠿</span><button class="tool" style="min-width:auto" onclick="toolsToggle()" title="道具を表示"><span>✏️</span>道具</button></div>`;return;}
  const on=(t)=>U.polyInput.on&&((t==="block"&&U.polyInput.target==null)||U.polyInput.target===t);
  const b=(t,ic,lab)=>`<button class="tool ${on(t)?"on":""}" title="${lab}（クリック→ダブルクリックで確定）" onclick="startDraw('${t}')"><span>${ic}</span>${lab}</button>`;
- el.innerHTML=`<div class="tool-grp">${b("site","▭","敷地")}${b("block","🏢","建物")}${b("road","🛣","道路")}${b("fence","🚧","仮囲い")}</div>
+ el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ドラッグで移動／ダブルクリックで初期位置" ondblclick="toolsReset()">⠿</span>${b("site","▭","敷地")}${b("block","🏢","建物")}${b("road","🛣","道路")}${b("fence","🚧","仮囲い")}</div>
   <div class="tool-grp">
    <button class="tool ${U.dim.on?"on":""}" title="2点クリックで距離を測る" onclick="S('dim.on',!U.dim.on,false);if(!U.dim.on){U.dim.a=null;U.dim.b=null;}rebuild();renderBar()"><span>📏</span>寸法</button>
    <button class="tool ${U.snap!==false?"on":""}" title="頂点・道路への吸着、15°刻み回転" onclick="U.snap=!U.snap;renderBar();renderPanel()"><span>🧲</span>吸着</button>
    <button class="tool ${U.moveLayers?"on":""}" title="敷地・下敷き・図面をドラッグで動かす" onclick="U.moveLayers=!U.moveLayers;renderBar()"><span>🖐</span>下地移動</button>
+   <button class="tool" title="道具をしまう" onclick="toolsToggle()" style="min-width:34px"><span>▾</span></button>
   </div>
   ${U.polyInput.on?`<div class="tool-hint">なぞり中：${U.polyInput.pts.length}点　<b>ダブルクリックで確定</b>　<a href="#" onclick="U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar();return false">中止</a></div>`:""}`;
 }
 window.renderTools=renderTools;
 
 // ───── 選択中の物の属性カード（右上バーの下）：クリックした物のパラメータだけを出す ─────
-function renderSelCard(){
+let _selCardKey=null;
+function renderSelCard(force){
  let el=document.getElementById("selcard");
  if(!el){el=document.createElement("div");el.id="selcard";document.body.appendChild(el);}
- const k=U.sel; if(!k){el.style.display="none";return;}
+ const k=U.sel; if(!k){el.style.display="none";_selCardKey=null;return;}
+ // 同じ物を表示中でカード内を操作している最中（スライダー等）は作り直さない
+ if(!force&&_selCardKey===k&&el.contains(document.activeElement))return;
+ _selCardKey=k;
  let title="",body="",del="";
  const rowSL=(lab,val,fn,mn,mx,st)=>SL(lab,val,fn,mn,mx,st);
  if(k.startsWith("co:")){const i=+k.slice(3),c=U.cobj[i];if(!c){el.style.display="none";return;}const t=COBJ_TYPES[c.type]||{label:c.type,sizes:[]};
   title="🚚 "+t.label;
   body=`<label class="f"><span>サイズ</span><select onchange="setCOSize(${i},this.value)">${(t.sizes||[]).map(s=>`<option value="${s.key}" ${c.size===s.key?"selected":""}>${s.label}</option>`).join("")}</select></label>
-   ${rowSL("向き °",numv(c.ry,0),`(v)=>{snapshot('co.ry');U.cobj[${i}].ry=v;rebuildThrottled();}`,0,359,1)}
+   ${rowSL("向き °",numv(c.ry,0),`(v)=>{snapshot('co.ry.${i}');U.cobj[${i}].ry=v;rebuildThrottled();}`,0,359,1)}
    ${c._warn?`<div style="font-size:11px;color:#B0433A;font-weight:700">⚠ 歩行帯と干渉しています</div>`:""}`;
   del=`delCO(${i})`;}
  else if(k.startsWith("an:")){const i=+k.slice(3),a=U.annot[i];if(!a){el.style.display="none";return;}
@@ -3038,7 +3091,8 @@ function renderBar(){
     {label:"グリッド",fn:"U.grid.show=!U.grid.show;rebuild();renderBar()",on:U.grid.show},
     {label:"敷地/下敷き移動モード",fn:"U.moveLayers=!U.moveLayers;renderBar()",on:U.moveLayers},
     {label:"線画（AI下絵）",fn:"U.line=!U.line;rebuild();renderBar()",on:U.line},null,
-    {label:"吸着（頂点・道路・15°回転）",fn:"U.snap=!U.snap;renderBar();renderPanel()",on:U.snap!==false}])}
+    {label:"吸着（頂点・道路・15°回転）",fn:"U.snap=!U.snap;renderBar();renderPanel()",on:U.snap!==false},null,
+    {label:"👁 レイヤー（表示の絞り込み）",fn:"toggleLayers()",on:!!U._layersOpen}])}
   <button class="btn" onclick="saveProjectJSON()" style="border:1.5px solid var(--amber)" title="案件を保存（暗号化可）">💾 保存</button>
   <button class="btn" onclick="document.getElementById('json-file').click()" style="border:1.5px solid var(--amber)" title="保存した案件を開く">📂 読込</button>
   <input type="file" id="json-file" accept=".json,.bsjson" style="display:none" onchange="loadProjectJSON(this.files[0]); this.value=''">
