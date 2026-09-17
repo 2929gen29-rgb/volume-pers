@@ -218,7 +218,7 @@ function panBy(dxp,dyp){
 }
 function dragCandidates(){const small=["crane","ev","mixer","rough","poles","demo","road","roadwalk","roadside","fence"];const out=[];
  for(const[k,o]of Object.entries(dragMap)){
-  if(small.includes(k)||k.startsWith("nb:")||k.startsWith("blk:")||k.startsWith("co:")||k.startsWith("sub:")||k.startsWith("an:")||k.startsWith("fpt:"))out.push(o);
+  if(small.includes(k)||k.startsWith("nb:")||k.startsWith("blk:")||k.startsWith("co:")||k.startsWith("sub:")||k.startsWith("an:")||k.startsWith("fpt:")||k.startsWith("spt:")||k.startsWith("bpt:"))out.push(o);
   else if((k==="site"||k==="under"||k==="photo"||k==="dxf")&&U.moveLayers)out.push(o);}
  return out;}
 function pickDrag(e){
@@ -296,9 +296,16 @@ el.addEventListener("pointermove",(e)=>{
  if(dragObj&&rotMode&&ctrl.ptrs.size===1){setRy(dragObj.userData.dragKey,rotStartRy+(e.clientX-rotStartX)*0.7);rebuild();return;}
  if(dragObj&&ctrl.ptrs.size===1){const gp=groundPoint(e);
   const dk=dragObj.userData.dragKey||"";
-  if(dk.startsWith("fpt:")&&dragStart){ // 仮囲い頂点：親の回転を打ち消した差分で動かす
-   const ry=numv(U.tw.fenceRy,0)*Math.PI/180, dx=gp.x-dragStart.gx, dz=gp.z-dragStart.gz;   // R(-θ)：local=(dx cosθ - dz sinθ, dx sinθ + dz cosθ)
-   dragObj.position.x=dragStart.lx+dx*Math.cos(ry)-dz*Math.sin(ry); dragObj.position.z=dragStart.lz+dx*Math.sin(ry)+dz*Math.cos(ry);
+  if(dragObj.userData.parentRy!=null&&dragStart){ // 頂点ハンドル：親の回転を打ち消した差分で動かし、他の頂点へ吸着
+   const th=numv(dragObj.userData.parentRy,0)*Math.PI/180, c=Math.cos(th), s=Math.sin(th);
+   const pw=dragObj.parent; const ox=pw.position.x, oz=pw.position.z;
+   const wx0=ox+dragStart.lx*c+dragStart.lz*s, wz0=oz-dragStart.lx*s+dragStart.lz*c;
+   let wx=wx0+(gp.x-dragStart.gx), wz=wz0+(gp.z-dragStart.gz);
+   if(U.snap!==false){
+    let best=null,bd=0.6; for(const q of vertexWorldList(dk)){const d=Math.hypot(q.x-wx,q.z-wz);if(d<bd){bd=d;best=q;}}
+    if(best){wx=best.x;wz=best.z;}else{wx=Math.round(wx*10)/10;wz=Math.round(wz*10)/10;}
+   }
+   const dx=wx-ox, dz=wz-oz; dragObj.position.x=dx*c-dz*s; dragObj.position.z=dx*s+dz*c;
   }else{dragObj.position.x=gp.x+dragOff.x;dragObj.position.z=gp.z+dragOff.z;}
   return;}
  if(ctrl.ptrs.size===1){
@@ -361,6 +368,8 @@ const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
   if(k.startsWith("sub:")){const s=U.subsurface[+k.slice(4)];if(s){s.x=+x.toFixed(1);s.z=+z.toFixed(1);}}
   if(k.startsWith("an:")){const a=U.annot[+k.slice(3)];if(a){a.x=+x.toFixed(1);a.z=+z.toFixed(1);}}
   if(k.startsWith("fpt:")){const p=U.tw.fencePts[+k.slice(4)];if(p){p.x=+x.toFixed(2);p.z=+z.toFixed(2);}}  // 位置はグループ内ローカル座標
+  if(k.startsWith("spt:")){const p=(U.site.poly||[])[+k.slice(4)];if(p){p.x=+x.toFixed(2);p.z=+z.toFixed(2);}}
+  if(k.startsWith("bpt:")){const [bi,vi]=k.slice(4).split(":").map(Number);const b=U.blocks[bi];const p=b&&b.poly&&b.poly[vi];if(p){p.x=+x.toFixed(2);p.z=+z.toFixed(2);}}
   dragObj=null;renderPanel();}
  else if(dragObj&&rotMode){
    if(U.snap){const k=dragObj.userData.dragKey;const cur=getRy(k);setRy(k,Math.round(cur/15)*15);rebuild();}
@@ -400,6 +409,37 @@ function terrainH(x,z,sw,sd,h){ // h:[前左,前右,奥左,奥右] 前=+z
  const u=Math.min(1,Math.max(0,(x+sw/2)/sw)), v=Math.min(1,Math.max(0,(z+sd/2)/sd));
  const back=h[2]+(h[3]-h[2])*u, front=h[0]+(h[1]-h[0])*u;
  return back+(front-back)*v;
+}
+
+// ───── なぞり道具：頂点ハンドル・辺の長さラベル・点列の回転（rebuildから呼ぶ）─────
+// 回転の向きは矩形ブロック（rotation.y=θ）と同じ：world=(x cosθ + z sinθ, -x sinθ + z cosθ)
+function rotPts(pts,deg){const t=numv(deg,0)*Math.PI/180,c=Math.cos(t),s=Math.sin(t);return pts.map(p=>({x:p.x*c+p.z*s,z:-p.x*s+p.z*c}));}
+const _lblCache={};
+function edgeLabelSprite(text){
+ let tex=_lblCache[text];
+ if(!tex){const cv=document.createElement("canvas");const px=56;const c=cv.getContext("2d");c.font=`bold ${px}px sans-serif`;const w=Math.ceil(c.measureText(text).width);cv.width=w+px*0.7;cv.height=px*1.5;
+  const c2=cv.getContext("2d");c2.font=`bold ${px}px sans-serif`;c2.textBaseline="middle";c2.fillStyle="rgba(255,255,255,0.92)";
+  const r=px*0.35,W=cv.width,H=cv.height;c2.beginPath();c2.moveTo(r,0);c2.lineTo(W-r,0);c2.quadraticCurveTo(W,0,W,r);c2.lineTo(W,H-r);c2.quadraticCurveTo(W,H,W-r,H);c2.lineTo(r,H);c2.quadraticCurveTo(0,H,0,H-r);c2.lineTo(0,r);c2.quadraticCurveTo(0,0,r,0);c2.closePath();c2.fill();
+  c2.fillStyle="#16243D";c2.fillText(text,px*0.35,H/2);tex=new THREE.CanvasTexture(cv);tex.minFilter=THREE.LinearFilter;_lblCache[text]=tex;}
+ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false,depthWrite:false,transparent:true}));
+ const asp=tex.image.width/tex.image.height; sp.scale.set(1.6*asp,1.6,1); return sp;
+}
+function addVertexTools(parent,pts,keyPrefix,yAt,color,ryDeg,showLabels){
+ const n=pts.length;
+ pts.forEach((p,i)=>{
+  const key=keyPrefix+i, sel=(U.sel===key);
+  const hm=new THREE.Mesh(new THREE.SphereGeometry(sel?0.55:0.42,12,12),new THREE.MeshLambertMaterial({color:sel?0xE8442B:color}));
+  hm.position.set(p.x,yAt(p.x,p.z),p.z); hm.userData.dragKey=key; hm.userData.parentRy=numv(ryDeg,0); parent.add(hm); dragMap[key]=hm;
+ });
+ if(showLabels){for(let i=0;i<n;i++){const a=pts[i],b=pts[(i+1)%n];const len=Math.hypot(b.x-a.x,b.z-a.z);if(len<0.3)continue;
+  const sp=edgeLabelSprite(len.toFixed(1)+"m");const mx=(a.x+b.x)/2,mz=(a.z+b.z)/2;sp.position.set(mx,yAt(mx,mz)+0.6,mz);parent.add(sp);}}
+}
+function vertexWorldList(excludeKey){
+ const out=[]; const sdx=numv(U.site.dx,0), sdz=numv(U.site.dz,0);
+ if(Array.isArray(U.site.poly))U.site.poly.forEach((p,i)=>{if("spt:"+i!==excludeKey)out.push({x:sdx+p.x,z:sdz+p.z});});
+ (U.blocks||[]).forEach((b,bi)=>{if(b.shape==="poly"&&Array.isArray(b.poly)){const ox=sdx+numv(b.dx,0),oz=sdz+numv(b.dz,0);rotPts(b.poly,b.ry).forEach((p,i)=>{if(`bpt:${bi}:${i}`!==excludeKey)out.push({x:ox+p.x,z:oz+p.z});});}});
+ if(U.tw.fenceShape==="poly"&&Array.isArray(U.tw.fencePts)){const ox=sdx+numv(U.tw.fenceDx,0),oz=sdz+numv(U.tw.fenceDz,0);rotPts(U.tw.fencePts,U.tw.fenceRy).forEach((p,i)=>{if("fpt:"+i!==excludeKey)out.push({x:ox+p.x,z:oz+p.z});});}
+ return out;
 }
 
 // ───── 工程フェーズ描画（山留め・掘削 / 杭工事 / 鉄骨建て方）※rebuildから呼ぶ ─────
@@ -606,6 +646,7 @@ function rebuild(){
   const geo=new THREE.ShapeGeometry(shape);
   geo.rotateX(-Math.PI/2);            // XY平面 → 地面(XZ)へ
   geo.translate(0,0.12,0);
+  if(!U._exporting&&!L&&(U.sel==="site"||(U.sel||"").startsWith("spt:")))addVertexTools(siteG,sp,"spt:",()=>0.9,0x2E6FBE,0,true);
   const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0xb8b2a6:0xc8ccd2,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND,side:THREE.DoubleSide}));
   sm.receiveShadow=!L;siteG.add(sm);
   // 外周ライン
@@ -649,7 +690,7 @@ function rebuild(){
   const nFfull=f2-f1+1;
   // ───── 自由多角形ブロック ─────
   if(b.shape==="poly" && Array.isArray(b.poly) && b.poly.length>=3){
-   const pts=b.poly; // [{x,z}...] m単位（敷地原点基準）
+   const pts=rotPts(b.poly,b.ry); // [{x,z}...] m単位（ブロック原点基準・回転適用済み）
    // 多角形面積（シューレース公式・x-z平面）
    let area2=0; for(let i=0;i<pts.length;i++){const p=pts[i],q=pts[(i+1)%pts.length];area2+=p.x*q.z-q.x*p.z;}
    const area=Math.abs(area2)/2;
@@ -675,6 +716,10 @@ function rebuild(){
    const pm=new THREE.Mesh(eg, polyMat);
    pm.position.set(ox,y0+0.12,oz); pm.castShadow=!L; pm.receiveShadow=!L;
    pm.userData.dragKey="blk:"+bi; g.add(pm); dragMap["blk:"+bi]=pm;
+   if(!U._exporting&&!L&&(U.sel==="blk:"+bi||(U.sel||"").startsWith("bpt:"+bi+":"))){
+    const hg=new THREE.Group(); hg.position.set(ox,0,oz); hg.rotation.y=numv(b.ry,0)*Math.PI/180; g.add(hg);
+    addVertexTools(hg,b.poly,"bpt:"+bi+":",()=>y0+bh+0.9,0xF2A33C,b.ry,true);
+   }
    if(L){const ee=new THREE.LineSegments(new THREE.EdgesGeometry(eg,12),new THREE.LineBasicMaterial({color:0x16243d}));ee.position.set(ox,y0+0.12,oz);g.add(ee);}
    // ── 各階の窓ライン（外周にぐるりと帯／詳細検証モードで表示・サンプル同様の見た目に）──
    if(!L && DET && nF>=1){
@@ -846,12 +891,8 @@ function rebuild(){
     if(hasGate&&!L){[(len-gw)/2/len,(len+gw)/2/len].forEach(t=>{const px=a.x+(b.x-a.x)*t,pz=a.z+(b.z-a.z)*t;const gy2=panelY(px,pz);
      const p=new THREE.Mesh(new THREE.BoxGeometry(.18,fh+.4,.18),mat(0x9aa1ab));p.position.set(px,gy2+(fh+.4)/2,pz);fG.add(p);});}
    }
-   // 頂点ハンドル（ドラッグで修正）：選択中 or 仮設タブ表示中に出す
-   if(!U._exporting&&!L){pts.forEach((p,i)=>{
-    const hm=new THREE.Mesh(new THREE.SphereGeometry(0.45,12,12),new THREE.MeshLambertMaterial({color:(U.sel==="fpt:"+i)?0xE8442B:0xF2A33C}));
-    hm.position.set(p.x,panelY(p.x,p.z)+fh+0.5,p.z); hm.userData.dragKey="fpt:"+i; fG.add(hm); dragMap["fpt:"+i]=hm;
-    // 辺の長さラベル（次の頂点との距離）は選択中のみ
-   });}
+   if(!U._exporting&&!L){const selF=(U.sel==="fence"||(U.sel||"").startsWith("fpt:"));
+    addVertexTools(fG,pts,"fpt:",(x,z)=>panelY(x,z)+fh+0.5,0xF2A33C,U.tw.fenceRy,selF);}
   }else{
    edge("front");edge("back");edge("left");edge("right");
   }
@@ -1895,6 +1936,7 @@ function renderPanel(){
    ${isPoly?`<div class="hint" style="margin:0 0 4px">自由多角形（${b.poly.length}頂点）　1層面積 ≒ <b>${polyArea.toFixed(1)} m²</b></div>`:`<div class="hint" style="margin:0 0 4px">床面積 ≒ <b>${(posv(b.w,10)*posv(b.d,10)).toFixed(1)} m²</b>（間口×奥行）</div>`}
    ${SL("位置 左右",b.dx,`(v)=>SB(${b.id},'dx',v)`,-30,30,0.5)}
    ${SL("位置 前後",b.dz,`(v)=>SB(${b.id},'dz',v)`,-30,30,0.5)}
+   ${SL("回転 °（1度刻み）",numv(b.ry,0),`(v)=>SB(${b.id},'ry',v)`,0,359,1)}
   </div>`;}).join("")
   +(U.blocks.length===0?`<div class="hint" style="background:#FFF3DD;border:1px solid var(--amber);border-radius:8px;padding:8px 10px;margin-bottom:8px">建物ブロックがありません。下のボタンで矩形を追加するか、多角形入力で建物を作成してください。</div>`:"")
   +`<button class="addbtn" onclick="addB()">＋ 矩形ブロックを追加</button>`
@@ -1929,7 +1971,7 @@ function renderPanel(){
     ? `<div style="background:#EEF6EF;border:1.5px solid #2E7D5B;border-radius:8px;padding:7px 10px;font-size:11.5px;line-height:1.6">多角形敷地（${U.site.poly.length}頂点）で表示中。<br><button class="btn" style="margin-top:5px;color:#B0433A" onclick="U.site.poly=null;rebuild();renderPanel()">矩形敷地に戻す</button></div>`
     : (U.polyInput.on&&U.polyInput.target==="site"
        ? `<div style="background:#FFF3DD;border:1.5px dashed var(--amber);border-radius:8px;padding:8px 10px;font-size:11.5px;line-height:1.7"><b>敷地形状の入力モード中</b><br>下絵・地面をクリックして敷地外周の頂点を打ち、<b>ダブルクリックで閉じる</b>と敷地になります。<br>現在 ${U.polyInput.pts.length} 点<br><button class="btn" style="margin-top:6px" onclick="U.polyInput.pts.pop();rebuild();renderPanel()">1つ戻す</button> <button class="btn" style="margin-top:6px;color:#B0433A" onclick="U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar()">中止</button></div>`
-       : `<button class="addbtn" onclick="U.polyInput.on=true;U.polyInput.target='site';U.polyInput.pts=[];renderPanel();renderBar()">✏️ 敷地を多角形で描く</button><div class="hint">配置図PDFを下敷きにして敷地境界をなぞると、不整形地も正確に再現できます。</div>`)}`;
+       : `${Array.isArray(U.site.poly)?`<div class="hint" style="margin:0 0 6px">敷地をクリックで選択すると<b>青い頂点</b>が出ます。ドラッグで修正、辺の長さも表示。<button class="btn" style="font-size:11px;margin-left:6px" onclick="U.sel='site';rebuild();renderPanel()">頂点を表示</button></div>`:""}<button class="addbtn" onclick="U.polyInput.on=true;U.polyInput.target='site';U.polyInput.pts=[];renderPanel();renderBar()">✏️ 敷地を多角形で描く</button><div class="hint">配置図PDFを下敷きにして敷地境界をなぞると、不整形地も正確に再現できます。</div>`)}`;
   // ③ 位置・地盤（GL・高低差）
   let secPos=`${SL("敷地位置 左右",U.site.dx,"(v)=>S('site.dx',v)",-80,80,0.5)}
   ${SL("敷地位置 前後",U.site.dz,"(v)=>S('site.dz',v)",-80,80,0.5)}
