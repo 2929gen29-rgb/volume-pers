@@ -300,3 +300,20 @@ body.present #tools{display:none}
 #selcard label.f>span{font-size:11px}
 body.present #selcard{display:none}
 @media (max-width:720px){#selcard{right:8px;top:auto;bottom:118px;width:min(262px,calc(100vw - 16px));max-height:40vh}}
+
+/* ───── スマホ：右上バーを最上段に横スクロール、パネルはその下 ───── */
+@media (max-width:720px){
+  #bar{left:8px;right:8px;top:8px;max-width:none;flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;gap:6px;padding-bottom:4px;scrollbar-width:none}
+  #bar::-webkit-scrollbar{display:none}
+  #bar .btn{flex:none;white-space:nowrap;padding:8px 10px;font-size:12px}
+  #panel{top:58px;max-height:calc(100% - 66px)}
+}
+/* ───── 道具バーのつまみ・折りたたみ ───── */
+.tool-grip{display:flex;align-items:center;padding:0 6px;color:var(--mut);cursor:grab;font-size:16px;user-select:none;touch-action:none}
+.tool-grip:active{cursor:grabbing}
+/* ───── レイヤーカード ───── */
+#layers{position:fixed;right:290px;top:64px;z-index:7;width:232px;background:rgba(252,253,254,.92);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
+  border:1px solid rgba(255,255,255,.75);border-radius:var(--r-md);box-shadow:var(--sh-lg);font-size:12px}
+body.present #layers{display:none!important}
+@media (max-width:720px){#layers{right:8px;top:58px;width:min(232px,calc(100vw - 16px))}}
