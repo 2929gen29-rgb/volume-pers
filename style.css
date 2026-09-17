@@ -50,7 +50,7 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:var(--font);backgroun
 #bar{position:fixed;top:14px;right:14px;display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;max-width:62vw;z-index:5}
 
 /* ───── パネル ───── */
-#panel{position:fixed;top:14px;left:14px;width:270px;max-height:calc(100% - 28px);overflow-y:auto;
+#panel{position:fixed;top:14px;left:14px;width:330px;max-height:calc(100% - 28px);overflow-y:auto;
   background:rgba(252,253,254,.82);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
   border-radius:var(--r-lg);box-shadow:var(--sh-lg);z-index:5;
   border:1px solid rgba(255,255,255,.7)}
@@ -61,12 +61,12 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:var(--font);backgroun
 .brand-mark{width:24px;height:20px;flex:none}
 #tabs{border-bottom:1px solid var(--hair)}
 #tabgroups{display:flex;background:rgba(242,245,249,.6)}
-#tabgroups .tg{flex:1;text-align:center;padding:11px 2px;font-size:12px;font-weight:600;cursor:pointer;
+#tabgroups .tg{flex:1;text-align:center;padding:12px 2px;font-size:13px;font-weight:600;cursor:pointer;
   color:var(--mut);border-bottom:2px solid transparent;transition:all .2s var(--ease)}
 #tabgroups .tg:hover{color:var(--slate);background:rgba(233,238,244,.7)}
 #tabgroups .tg.on{color:var(--navy);border-color:var(--amber);background:rgba(255,255,255,.9)}
 #subtabs{display:flex;flex-wrap:wrap;background:transparent;border-top:1px solid var(--hair)}
-#subtabs div{flex:1;text-align:center;padding:8px 0;font-size:10.5px;font-weight:600;cursor:pointer;color:var(--mut);
+#subtabs div{flex:1;text-align:center;padding:9px 0;font-size:11.5px;font-weight:600;cursor:pointer;color:var(--mut);
   border-bottom:2px solid transparent;transition:color .15s var(--ease),border-color .15s var(--ease)}
 #subtabs div:hover{color:var(--slate)}
 #subtabs div.on{color:var(--navy);border-color:var(--amber)}
@@ -75,7 +75,7 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:var(--font);backgroun
 /* ───── フォーム ───── */
 label.f{display:block;margin-bottom:8px}
 label.f span{font-size:10.5px;color:var(--mut);font-weight:700}
-input[type=text],input[type=number],select,textarea{width:100%;margin-top:4px;padding:8px 11px;font-size:13px;
+input[type=text],input[type=number],select,textarea{width:100%;margin-top:4px;padding:9px 11px;font-size:13.5px;
   border:1px solid var(--line);border-radius:var(--r-sm);background:var(--field);outline:none;color:var(--ink);
   font-family:ui-monospace,Consolas,monospace;transition:border-color .2s var(--ease),box-shadow .2s var(--ease)}
 input[type=text],select,textarea{font-family:inherit}
@@ -95,7 +95,7 @@ input[type=range]{width:100%;accent-color:var(--amber)}
   border:1px solid rgba(242,163,60,.35);border-radius:var(--r-md);cursor:pointer;letter-spacing:.01em;
   transition:background .2s var(--ease),border-color .2s var(--ease)}
 .addbtn:hover{background:rgba(242,163,60,.14);border-color:rgba(242,163,60,.5)}
-.hint{font-size:10.5px;color:var(--mut);line-height:1.7;margin-top:7px}
+.hint{font-size:11px;color:var(--mut);line-height:1.7;margin-top:7px}
 .del{border:none;background:none;color:#C0433A;font-weight:600;cursor:pointer;font-size:12px;
   padding:3px 6px;border-radius:6px;transition:background .15s var(--ease)}
 .del:hover{background:rgba(192,67,58,.09)}
@@ -146,8 +146,8 @@ input[type=range]{width:100%;accent-color:var(--amber)}
 .sec{border:1px solid var(--hair);border-radius:var(--r-md);margin-bottom:8px;overflow:hidden;background:#fff;
   transition:border-color .2s var(--ease)}
 .sec.open{border-color:var(--line)}
-.sec-h{display:flex;justify-content:space-between;align-items:center;padding:11px 13px;cursor:pointer;
-  font-size:12px;font-weight:600;color:var(--navy);background:rgba(247,249,252,.7);user-select:none;
+.sec-h{display:flex;justify-content:space-between;align-items:center;padding:12px 13px;cursor:pointer;
+  font-size:13px;font-weight:600;color:var(--navy);background:rgba(247,249,252,.7);user-select:none;
   transition:background .2s var(--ease);letter-spacing:.01em}
 .sec-h:hover{background:rgba(238,242,248,.9)}
 .sec.open .sec-h{border-bottom:1px solid var(--hair)}
@@ -252,3 +252,51 @@ body.present #title{transform:none}
 .mn-sep{height:1px;background:var(--hair);margin:4px 6px}
 .start-act.resume{width:100%;background:rgba(46,111,190,.08);border-color:rgba(46,111,190,.35);margin-bottom:9px}
 .start-act.resume:hover{background:rgba(46,111,190,.14)}
+
+/* ───── パネル：ラベル・スライダーを一段見やすく ───── */
+#body{font-size:12.5px}
+#body label.f>span,#body .f>span{font-size:11.5px}
+#body .chk{font-size:13px}
+.tab-desc{display:flex;gap:8px;align-items:flex-start;padding:9px 11px;margin:0 0 10px;border-radius:10px;
+  background:rgba(46,111,190,.07);border:1px solid rgba(46,111,190,.18);font-size:11.5px;line-height:1.6;color:#2E4057}
+.tab-desc b{color:#2552A0;white-space:nowrap}
+@media (max-width:720px){#panel{width:min(330px,calc(100vw - 28px))}}
+
+/* ───── 工程フェーズボタン ───── */
+.phase-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
+.btn.phase{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;font-size:11px;line-height:1.2}
+.btn.phase span{font-size:16px;line-height:1}
+.btn.phase.active{background:var(--navy);color:#fff}
+
+/* ───── 段階バー（作業の流れ） ───── */
+#tabgroups .tg.step{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px 8px}
+.step-n{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--hair);color:var(--mut);font-size:12px;font-weight:800}
+#tabgroups .tg.step.on .step-n{background:var(--amber);color:#3a2604}
+.step-l{font-size:11px;font-weight:600;letter-spacing:.01em}
+@media (max-width:720px){.step-l{font-size:10px}}
+
+/* ───── キャンバス上の描く道具 ───── */
+#tools{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:6;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 720px)}
+.tool-grp{display:flex;gap:3px;padding:4px;border-radius:14px;background:rgba(252,253,254,.86);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border:1px solid rgba(255,255,255,.75);box-shadow:var(--sh-md)}
+.tool{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:52px;padding:5px 7px;border:none;border-radius:10px;background:transparent;
+  font-family:inherit;font-size:10px;font-weight:600;color:var(--navy);cursor:pointer;transition:background .15s var(--ease),transform .15s var(--ease)}
+.tool span{font-size:17px;line-height:1.1}
+.tool:hover{background:rgba(233,238,244,.9)}
+.tool.on{background:var(--amber);color:#3a2604}
+.tool-hint{font-size:11px;font-weight:600;color:#fff;background:rgba(22,36,61,.9);padding:6px 12px;border-radius:99px;box-shadow:var(--sh-md)}
+.tool-hint a{color:#FFD27A;margin-left:6px}
+body.present #tools{display:none}
+@media (max-width:1100px){#tools{top:auto;bottom:70px;max-width:calc(100vw - 20px)}}
+@media (max-width:720px){#tools{bottom:60px}.tool{min-width:44px;font-size:9px;padding:4px 5px}.tool span{font-size:15px}}
+
+/* ───── 選択中の物の属性カード ───── */
+#selcard{position:fixed;right:14px;top:64px;z-index:6;width:262px;max-height:calc(100vh - 260px);overflow-y:auto;
+  background:rgba(252,253,254,.9);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
+  border:1px solid rgba(255,255,255,.75);border-radius:var(--r-md);box-shadow:var(--sh-lg);font-size:12px}
+.sc-h{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:linear-gradient(135deg,#22375a,#16243D);color:#fff;font-size:12px;font-weight:700;border-radius:var(--r-md) var(--r-md) 0 0}
+.sc-x{cursor:pointer;opacity:.7;padding:0 4px}.sc-x:hover{opacity:1}
+.sc-b{padding:9px 12px 10px}
+#selcard label.f>span{font-size:11px}
+body.present #selcard{display:none}
+@media (max-width:720px){#selcard{right:8px;top:auto;bottom:118px;width:min(262px,calc(100vw - 16px));max-height:40vh}}
