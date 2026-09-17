@@ -33,7 +33,7 @@ const U={
  annot:[],       // 注記（地面貼り付け）{type:"zone"|"text", x,z,w,d,ry,color,text,fsize}
  poles:{n:3,pitch:18,far:true,dx:0,dz:0,ry:0},
  demo:{w:22,d:14,h:9,dx:0,dz:0,ry:0},
- tw:{mode:"plan",step:8,crane:true,craneModel:"JCL022", craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceAll:false,fenceDx:0,fenceDz:0,fenceRy:0,fenceW:0,fenceD:0,scaffold:true,poles:true,mixer:true,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
+ tw:{mode:"plan",step:8,fenceShape:"rect",fencePts:[],fenceGateSeg:0,pitDepth:4,retainMargin:1,pilePitch:5,pileDia:0.8,pileLen:15,oldPiles:false,oldPitch:4,oldRot:0,oldExtend:2,oldDx:0,oldDz:0,steelPitch:7,crane:true,craneModel:"JCL022", craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceAll:false,fenceDx:0,fenceDz:0,fenceRy:0,fenceW:0,fenceD:0,scaffold:true,poles:true,mixer:true,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
  under:{tex:null,show:true,width:40,opacity:.65,rot:0,dx:0,dz:0,pages:1,page:1,raw:null,gsiKind:"std",gsiZoom:17,gsiStatus:""},
  photo:{tex:null,show:true,width:160,opacity:.8,rot:0,dx:0,dz:0},
  nbs:[], line:false, auto:true, tab:"諸元", tabGroup:"建物", moveLayers:false,
@@ -194,7 +194,7 @@ sun.position.set(80,120,60);sun.castShadow=true;sun.shadow.mapSize.set(_shadowRe
 Object.assign(sun.shadow.camera,{left:-140,right:140,top:140,bottom:-140,far:600});
 scene.add(sun);
 const ctrl={theta:Math.PI/4+.3,phi:1.05,r:150,ty:18,cx:0,cz:0,ptrs:new Map(),pinch:0,panMid:null};
-let model=null, dragMap={}, dragObj=null, dragOff=new THREE.Vector3();
+let model=null, dragMap={}, dragObj=null, dragOff=new THREE.Vector3(), dragStart=null;
 const ray=new THREE.Raycaster();
 
 function groundPoint(e){
@@ -218,7 +218,7 @@ function panBy(dxp,dyp){
 }
 function dragCandidates(){const small=["crane","ev","mixer","rough","poles","demo","road","roadwalk","roadside","fence"];const out=[];
  for(const[k,o]of Object.entries(dragMap)){
-  if(small.includes(k)||k.startsWith("nb:")||k.startsWith("blk:")||k.startsWith("co:")||k.startsWith("sub:")||k.startsWith("an:"))out.push(o);
+  if(small.includes(k)||k.startsWith("nb:")||k.startsWith("blk:")||k.startsWith("co:")||k.startsWith("sub:")||k.startsWith("an:")||k.startsWith("fpt:"))out.push(o);
   else if((k==="site"||k==="under"||k==="photo"||k==="dxf")&&U.moveLayers)out.push(o);}
  return out;}
 function pickDrag(e){
@@ -287,14 +287,20 @@ el.addEventListener("pointerdown",(e)=>{
   rebuild();renderBar();return;}
  if(ctrl.ptrs.size===1 && !e.shiftKey){const o=pickDrag(e);if(o){snapshot();dragObj=o;U.sel=o.userData.dragKey;
    if(e.ctrlKey||e.metaKey){rotMode=true;rotStartX=e.clientX;rotStartRy=getRy(o.userData.dragKey);}
-   else{rotMode=false;const gp=groundPoint(e);dragOff.set(o.position.x-gp.x,0,o.position.z-gp.z);}
+   else{rotMode=false;const gp=groundPoint(e);dragOff.set(o.position.x-gp.x,0,o.position.z-gp.z);dragStart={lx:o.position.x,lz:o.position.z,gx:gp.x,gz:gp.z};}
    U.auto=false;syncBtns();}else{U.sel=null;}}
 });
 el.addEventListener("pointermove",(e)=>{
  if(!ctrl.ptrs.has(e.pointerId))return;
  const prev=ctrl.ptrs.get(e.pointerId);ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);
  if(dragObj&&rotMode&&ctrl.ptrs.size===1){setRy(dragObj.userData.dragKey,rotStartRy+(e.clientX-rotStartX)*0.7);rebuild();return;}
- if(dragObj&&ctrl.ptrs.size===1){const gp=groundPoint(e);dragObj.position.x=gp.x+dragOff.x;dragObj.position.z=gp.z+dragOff.z;return;}
+ if(dragObj&&ctrl.ptrs.size===1){const gp=groundPoint(e);
+  const dk=dragObj.userData.dragKey||"";
+  if(dk.startsWith("fpt:")&&dragStart){ // 仮囲い頂点：親の回転を打ち消した差分で動かす
+   const ry=numv(U.tw.fenceRy,0)*Math.PI/180, dx=gp.x-dragStart.gx, dz=gp.z-dragStart.gz;   // R(-θ)：local=(dx cosθ - dz sinθ, dx sinθ + dz cosθ)
+   dragObj.position.x=dragStart.lx+dx*Math.cos(ry)-dz*Math.sin(ry); dragObj.position.z=dragStart.lz+dx*Math.sin(ry)+dz*Math.cos(ry);
+  }else{dragObj.position.x=gp.x+dragOff.x;dragObj.position.z=gp.z+dragOff.z;}
+  return;}
  if(ctrl.ptrs.size===1){
    if(e.shiftKey){ // Shift+ドラッグ＝パン（注視点を平行移動）
     panBy(e.clientX-prev[0], e.clientY-prev[1]);
@@ -354,6 +360,7 @@ const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
     c.x=nx;c.z=nz;}}
   if(k.startsWith("sub:")){const s=U.subsurface[+k.slice(4)];if(s){s.x=+x.toFixed(1);s.z=+z.toFixed(1);}}
   if(k.startsWith("an:")){const a=U.annot[+k.slice(3)];if(a){a.x=+x.toFixed(1);a.z=+z.toFixed(1);}}
+  if(k.startsWith("fpt:")){const p=U.tw.fencePts[+k.slice(4)];if(p){p.x=+x.toFixed(2);p.z=+z.toFixed(2);}}  // 位置はグループ内ローカル座標
   dragObj=null;renderPanel();}
  else if(dragObj&&rotMode){
    if(U.snap){const k=dragObj.userData.dragKey;const cur=getRy(k);setRy(k,Math.round(cur/15)*15);rebuild();}
@@ -370,6 +377,12 @@ el.addEventListener("dblclick",(e)=>{
    U.site.poly=U.polyInput.pts.slice();
    U.polyInput.on=false; U.polyInput.pts=[]; U.polyInput.target=null;
    rebuild();renderPanel();renderBar();
+  }else if(U.polyInput.target==="fence"){
+   // 仮囲いの任意形状として確定（敷地原点基準・fenceDx/Dz/Ry は0に戻す）
+   snapshot();
+   U.tw.fencePts=U.polyInput.pts.slice(); U.tw.fenceShape="poly"; U.tw.fenceDx=0; U.tw.fenceDz=0; U.tw.fenceRy=0; U.tw.fenceGateSeg=0;
+   U.polyInput.on=false; U.polyInput.pts=[]; U.polyInput.target=null;
+   rebuild();renderPanel();renderBar(); toast("仮囲いを任意形状で作成しました。頂点（橙の球）をドラッグで修正できます","ok");
   }else{
    U.blocks.push({id:Date.now(),label:"多角形",f1:1,f2:Math.max(1,Math.round(posv(U.p.floors,3))),shape:"poly",poly:U.polyInput.pts.slice(),dx:0,dz:0,ry:0});
    U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;
@@ -389,6 +402,108 @@ function terrainH(x,z,sw,sd,h){ // h:[前左,前右,奥左,奥右] 前=+z
  return back+(front-back)*v;
 }
 
+// ───── 工程フェーズ描画（山留め・掘削 / 杭工事 / 鉄骨建て方）※rebuildから呼ぶ ─────
+//  1階を含む矩形ブロックの外形を「建物範囲」として扱う（多角形ブロックは外接矩形で近似）
+function _footprints(ctx){
+ const out=[];
+ (U.blocks||[]).forEach(b=>{
+  const f1=Math.max(1,Math.round(posv(b.f1,1))); if(f1!==1)return;
+  let W,D;
+  if(b.shape==="poly"&&Array.isArray(b.poly)&&b.poly.length>=3){
+   const xs=b.poly.map(p=>p.x),zs=b.poly.map(p=>p.z);W=Math.max(...xs)-Math.min(...xs);D=Math.max(...zs)-Math.min(...zs);
+   out.push({W,D,x:ctx.sdx+(Math.max(...xs)+Math.min(...xs))/2,z:ctx.sdz+(Math.max(...zs)+Math.min(...zs))/2,ry:0,f2:Math.round(posv(b.f2,1))});
+  }else{
+   W=posv(b.w,Math.sqrt(posv(b.area,200)*posv(b.ratio,1.5)));D=posv(b.d,Math.sqrt(posv(b.area,200)/posv(b.ratio,1.5)));
+   out.push({W,D,x:ctx.sdx+numv(b.dx,0),z:ctx.sdz+numv(b.dz,0),ry:numv(b.ry,0)*Math.PI/180,f2:Math.round(posv(b.f2,1))});
+  }
+ });
+ return out;
+}
+function buildPhase(ctx){
+ const {g,L,mat,gl,fh,floorsAll,stepN,phase}=ctx;
+ const fps=_footprints(ctx); if(!fps.length)return;
+ const tw=U.tw;
+ const grp=new THREE.Group(); g.add(grp);
+ const add=(geo,c,x,y,z,ry,o={})=>{const m=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff,wireframe:true}):new THREE.MeshLambertMaterial(Object.assign({color:c},o)));m.position.set(x,y,z);m.rotation.y=ry||0;m.castShadow=!L&&!o.transparent;grp.add(m);return m;};
+ const ghost=(fp)=>{ // 完成形の透かし（位置関係の把握用）
+  const H=floorsAll*fh; add(new THREE.BoxGeometry(fp.W,H,fp.D),0x9fb3d1,fp.x,gl+H/2,fp.z,fp.ry,{transparent:true,opacity:0.10,depthWrite:false});
+ };
+ if(phase==="retain"){
+  const depth=Math.max(1,numv(tw.pitDepth,4)), mg=Math.max(0.3,numv(tw.retainMargin,1.0)), wallH=depth+0.8;
+  fps.forEach(fp=>{
+   const W=fp.W+mg*2, D=fp.D+mg*2;
+   // 掘削底（根切り底）と土の側面（暗色）
+   add(new THREE.BoxGeometry(W,0.15,D),0x6b5a48,fp.x,gl-depth,fp.z,fp.ry);
+   // 山留め壁（4面・鋼矢板/親杭横矢板のイメージ：GL+0.8mまで立ち上げ）
+   const t=0.25, wc=0x7d8794;
+   const face=(w,h,x,z,r)=>{const m=add(new THREE.BoxGeometry(w,h,t),wc,0,0,0,0);m.position.set(x,gl-depth+h/2,z);m.rotation.y=r;};
+   // ローカル→回転
+   const rot=(lx,lz)=>({x:fp.x+lx*Math.cos(fp.ry)-lz*Math.sin(fp.ry),z:fp.z+lx*Math.sin(fp.ry)+lz*Math.cos(fp.ry)});
+   let p;
+   p=rot(0,-D/2);face(W,wallH,p.x,p.z,fp.ry);  p=rot(0,D/2);face(W,wallH,p.x,p.z,fp.ry);
+   p=rot(-W/2,0);face(D,wallH,p.x,p.z,fp.ry+Math.PI/2); p=rot(W/2,0);face(D,wallH,p.x,p.z,fp.ry+Math.PI/2);
+   // 腹起し・切梁（1段：GL-1.5m）
+   if(depth>=2.5){const y=gl-1.5, bc=0xc9a33a;
+    add(new THREE.BoxGeometry(W-0.5,0.3,0.3),bc,fp.x,y,fp.z,fp.ry);
+    add(new THREE.BoxGeometry(0.3,0.3,D-0.5),bc,fp.x,y,fp.z,fp.ry);
+    const n=Math.max(1,Math.round(W/6)); for(let i=1;i<n;i++){const lx=-W/2+W*i/n; const q=rot(lx,0); add(new THREE.BoxGeometry(0.3,0.3,D-0.5),bc,q.x,y,q.z,fp.ry);}
+   }
+   // 掘削深さの寸法ラベル（注記と同じ座布団方式）
+   ghost(fp);
+  });
+ }
+ if(phase==="pile"){
+  let pitch=Math.max(2,numv(tw.pilePitch,5)), dia=Math.max(0.3,numv(tw.pileDia,0.8)), len=Math.max(3,numv(tw.pileLen,15));
+  const pileGrid=(fp,pt,rOff,color,opacity,yTop,tag)=>{
+   const nx=Math.max(1,Math.floor(fp.W/pt)), nz=Math.max(1,Math.floor(fp.D/pt));
+   const sx=(fp.W-(nx-1)*pt)/2, sz=(fp.D-(nz-1)*pt)/2;
+   const rot=(lx,lz)=>({x:fp.x+lx*Math.cos(fp.ry+rOff)-lz*Math.sin(fp.ry+rOff),z:fp.z+lx*Math.sin(fp.ry+rOff)+lz*Math.cos(fp.ry+rOff)});
+   const geo=new THREE.CylinderGeometry(dia/2,dia/2,len,12);
+   for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const lx=-fp.W/2+sx+i*pt, lz=-fp.D/2+sz+j*pt; const q=rot(lx,lz);
+    add(geo,color,q.x,gl+yTop-len/2,q.z,0,opacity<1?{transparent:true,opacity,depthWrite:false}:{});}
+   return nx*nz;
+  };
+  let nNew=0,nOld=0;
+  // 負荷上限：新設杭が300本を超える場合はピッチを自動で広げる（実演での重さ対策）
+  {const est=fps.reduce((s,fp)=>s+Math.max(1,Math.floor(fp.W/pitch))*Math.max(1,Math.floor(fp.D/pitch)),0);
+   if(est>300){const k=Math.sqrt(est/300);pitch=+(pitch*k).toFixed(1);U._pileNote=`表示負荷のためピッチを${pitch}mに自動調整（本数上限300）`;}else U._pileNote="";}
+  fps.forEach(fp=>{
+   nNew+=pileGrid(fp,pitch,0,0xb9bec7,1,0.3);              // 新設杭：杭頭がGL+0.3mに見える
+   if(tw.oldPiles){ // 既存杭（撤去/残置の検討用）：赤・半透明・ピッチと角度をずらせる
+    const oW=fp.W+numv(tw.oldExtend,2)*2,oD=fp.D+numv(tw.oldExtend,2)*2; let op=Math.max(2,numv(tw.oldPitch,4));
+    const oEst=Math.max(1,Math.floor(oW/op))*Math.max(1,Math.floor(oD/op)); if(oEst>300)op=+(op*Math.sqrt(oEst/300)).toFixed(1);
+    nOld+=pileGrid({W:oW,D:oD,x:fp.x+numv(tw.oldDx,0),z:fp.z+numv(tw.oldDz,0),ry:fp.ry},op,numv(tw.oldRot,0)*Math.PI/180,0xd64545,0.45,-0.3);
+   }
+   ghost(fp);
+  });
+  U._pileCount={n:nNew,old:nOld};
+ }
+ if(phase==="steel"){
+  let pitch=Math.max(3,numv(tw.steelPitch,7)); const nF=Math.max(1,Math.min(floorsAll,stepN)), topY=gl+nF*fh;
+  // 負荷上限：柱本数×階数が大きい場合はスパンを自動で広げる
+  {const est=fps.reduce((s,fp)=>s+(Math.round(fp.W/pitch)+1)*(Math.round(fp.D/pitch)+1),0)*nF;
+   if(est>1500){pitch=+(pitch*Math.sqrt(est/1500)).toFixed(1);}}
+  const col=0x9a5c3a; // 錆止め塗装の鉄骨色
+  fps.forEach(fp=>{
+   const nx=Math.max(2,Math.round(fp.W/pitch)+1), nz=Math.max(2,Math.round(fp.D/pitch)+1);
+   const px=fp.W/(nx-1), pz=fp.D/(nz-1);
+   const rot=(lx,lz)=>({x:fp.x+lx*Math.cos(fp.ry)-lz*Math.sin(fp.ry),z:fp.z+lx*Math.sin(fp.ry)+lz*Math.cos(fp.ry)});
+   const colGeo=new THREE.BoxGeometry(0.45,nF*fh,0.45);
+   for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const q=rot(-fp.W/2+i*px,-fp.D/2+j*pz);add(colGeo,col,q.x,gl+nF*fh/2,q.z,fp.ry);}
+   // 各階の梁（X方向・Z方向）
+   for(let f=1;f<=nF;f++){const y=gl+f*fh-0.3;
+    for(let j=0;j<nz;j++){const q=rot(0,-fp.D/2+j*pz);add(new THREE.BoxGeometry(fp.W,0.5,0.28),col,q.x,y,q.z,fp.ry);}
+    for(let i=0;i<nx;i++){const q=rot(-fp.W/2+i*px,0);add(new THREE.BoxGeometry(0.28,0.5,fp.D),col,q.x,y,q.z,fp.ry);}
+    // デッキプレート（床）：薄い板・半透明
+    add(new THREE.BoxGeometry(fp.W,0.08,fp.D),0xb8c0cc,fp.x,y+0.3,fp.z,fp.ry,{transparent:true,opacity:0.55});
+   }
+   // 基礎（既存の基礎スカート相当）
+   add(new THREE.BoxGeometry(fp.W,1.2,fp.D),0xb4b8be,fp.x,gl-0.55,fp.z,fp.ry);
+   ghost(fp);
+  });
+ }
+}
+
 // ───── モデル再構築 ─────
 function rebuild(){
  if(model){scene.remove(model);model.traverse(o=>{o.geometry&&o.geometry.dispose();o.material&&(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose&&m.dispose());});}
@@ -406,7 +521,11 @@ function rebuild(){
 
  const floorsAll=Math.min(60,Math.max(1,Math.round(posv(U.p.floors,14))));
  const H=posv(U.p.height,42), fh=H/floorsAll;
- const built=U.tw.mode==="build"?Math.min(floorsAll,Math.max(1,Math.round(numv(U.tw.step,1)))):floorsAll;
+ const PH=U.tw.mode||"plan";
+ const PH_GROUND=(PH==="retain"||PH==="pile");        // 地下工事フェーズ：建物は描かず地盤を透かす
+ const PH_STEEL=(PH==="steel");                        // 鉄骨建て方：フレームのみ
+ const stepN=Math.min(floorsAll,Math.max(1,Math.round(numv(U.tw.step,1))));
+ const built=(PH==="build")?stepN:(PH_GROUND||PH_STEEL)?0:floorsAll;   // 0＝統計だけ計算して躯体は描かない
  const sw=posv(U.site.w,30), sd=posv(U.site.d,18), gl=numv(U.site.gl,0), hh=U.site.h.map(v=>numv(v,0));
  const sdx=numv(U.site.dx,0), sdz=numv(U.site.dz,0);
 
@@ -471,7 +590,8 @@ function rebuild(){
   const ww=numv(U.roadcond.walk,2.5);
   const wz=sdz+sd/2+1.6+rw+ww/2+roadDz;  // 車道の外側に歩道
   walkZone={x:sdx+roadDx,z:wz,w:sw+60,d:ww};
-  box(g,sw+60,0.04,ww,0x6EA46E,sdx+roadDx,0.09,wz,{shadow:false});
+  // 緑帯の表示は既定オフ（判定ロジックは維持）。roadcond.showWalk=true で表示
+  if(U.roadcond.showWalk)box(g,sw+60,0.04,ww,0x6EA46E,sdx+roadDx,0.09,wz,{shadow:false});
  }
 
  // 敷地（地形メッシュ・ドラッグ可）
@@ -486,7 +606,7 @@ function rebuild(){
   const geo=new THREE.ShapeGeometry(shape);
   geo.rotateX(-Math.PI/2);            // XY平面 → 地面(XZ)へ
   geo.translate(0,0.12,0);
-  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:U.tw.mode==="build"?0xb8b2a6:0xc8ccd2,side:THREE.DoubleSide}));
+  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0xb8b2a6:0xc8ccd2,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND,side:THREE.DoubleSide}));
   sm.receiveShadow=!L;siteG.add(sm);
   // 外周ライン
   const lp=[]; sp.forEach(p=>lp.push(p.x,0.14,-p.z)); lp.push(sp[0].x,0.14,-sp[0].z);
@@ -498,7 +618,7 @@ function rebuild(){
   for(let j=0;j<=seg;j++)for(let i=0;i<=seg;i++){const x=-sw/2+sw*i/seg,z=-sd/2+sd*j/seg;vts.push(x,terrainH(x,z,sw,sd,hh)+0.12,z);}
   for(let j=0;j<seg;j++)for(let i=0;i<seg;i++){const a=j*(seg+1)+i;idx.push(a,a+seg+1,a+1,a+1,a+seg+1,a+seg+2);}
   const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.BufferAttribute(new Float32Array(vts),3));geo.setIndex(idx);geo.computeVertexNormals();
-  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:U.tw.mode==="build"?0xb8b2a6:0xc8ccd2}));
+  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0xb8b2a6:0xc8ccd2,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND}));
   sm.receiveShadow=!L;siteG.add(sm);
   if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo,5),new THREE.LineBasicMaterial({color:0x8a94a8}));siteG.add(e);}
  }
@@ -642,6 +762,9 @@ function rebuild(){
   bg.position.set(dx,0,dz); bg.rotation.y=ry; g.add(bg); dragMap["blk:"+bi]=bg;
  });
  // 既存解体フェーズ：解体予定の既存建物（ダミー）
+ if(PH_GROUND||PH_STEEL){
+  buildPhase({g,L,mat,box,cylm,gl,fh,floorsAll,stepN,sdx,sdz,sw,sd,groundY,phase:PH});
+ }
  if(U.tw.mode==="demo"){
   const dw=posv(U.demo.w,22), dd=posv(U.demo.d,14), dh=posv(U.demo.h,9);
   const dg=new THREE.Group(); dg.userData.dragKey="demo";
@@ -680,7 +803,7 @@ function rebuild(){
  const builtH=gl+built*fh;
 
  // 仮囲い（ゲート開口・高さ可変・全モード対応・ドラッグ移動/回転可）
- if(U.tw.fence && (U.tw.mode==="build" || U.tw.fenceAll)){
+ if(U.tw.fence && (U.tw.mode==="build" || PH_GROUND || PH_STEEL || U.tw.fenceAll)){
   const fG=new THREE.Group(); fG.userData.dragKey="fence";
   const fh=Math.max(2,Math.min(8,numv(U.tw.fenceH,3)));        // パネル高さ
   const gate=U.tw.fenceGate||"front";                           // ゲート位置
@@ -705,13 +828,39 @@ function rebuild(){
    if(side==="left"){ if(gate==="left"){const seg=(fd-gw)/2;panel(seg,-half,-fd/2+seg/2,Math.PI/2);panel(seg,-half,fd/2-seg/2,Math.PI/2);} else panel(fd,-half,0,Math.PI/2);}
    if(side==="right"){ if(gate==="right"){const seg=(fd-gw)/2;panel(seg,half,-fd/2+seg/2,Math.PI/2);panel(seg,half,fd/2-seg/2,Math.PI/2);} else panel(fd,half,0,Math.PI/2);}
   };
-  edge("front");edge("back");edge("left");edge("right");
+  if(U.tw.fenceShape==="poly"&&Array.isArray(U.tw.fencePts)&&U.tw.fencePts.length>=3){
+   // ── 任意形状：頂点列に沿ってパネルを敷く（長い辺は約4mごとに分割して傾斜に追従）──
+   const pts=U.tw.fencePts; const n=pts.length; const gseg=Math.max(0,Math.min(n-1,Math.round(numv(U.tw.fenceGateSeg,0))));
+   for(let i=0;i<n;i++){
+    const a=pts[i], b=pts[(i+1)%n];
+    const len=Math.hypot(b.x-a.x,b.z-a.z); if(len<0.05)continue;
+    const ang=-Math.atan2(b.z-a.z,b.x-a.x);            // three の rotation.y は左手系なので符号反転
+    const hasGate=(gate!=="none")&&(i===gseg)&&len>gw+1;
+    const segs=[]; // [t0,t1] の区間（0..1）
+    if(hasGate){const g0=(len-gw)/2/len,g1=(len+gw)/2/len;segs.push([0,g0],[g1,1]);}else segs.push([0,1]);
+    for(const [t0,t1] of segs){
+     const L2=(t1-t0)*len; const nch=Math.max(1,Math.ceil(L2/4)); // 4mごと
+     for(let c=0;c<nch;c++){const u0=t0+(t1-t0)*c/nch,u1=t0+(t1-t0)*(c+1)/nch,um=(u0+u1)/2;
+      panel((u1-u0)*len,a.x+(b.x-a.x)*um,a.z+(b.z-a.z)*um,ang);}
+    }
+    if(hasGate&&!L){[(len-gw)/2/len,(len+gw)/2/len].forEach(t=>{const px=a.x+(b.x-a.x)*t,pz=a.z+(b.z-a.z)*t;const gy2=panelY(px,pz);
+     const p=new THREE.Mesh(new THREE.BoxGeometry(.18,fh+.4,.18),mat(0x9aa1ab));p.position.set(px,gy2+(fh+.4)/2,pz);fG.add(p);});}
+   }
+   // 頂点ハンドル（ドラッグで修正）：選択中 or 仮設タブ表示中に出す
+   if(!U._exporting&&!L){pts.forEach((p,i)=>{
+    const hm=new THREE.Mesh(new THREE.SphereGeometry(0.45,12,12),new THREE.MeshLambertMaterial({color:(U.sel==="fpt:"+i)?0xE8442B:0xF2A33C}));
+    hm.position.set(p.x,panelY(p.x,p.z)+fh+0.5,p.z); hm.userData.dragKey="fpt:"+i; fG.add(hm); dragMap["fpt:"+i]=hm;
+    // 辺の長さラベル（次の頂点との距離）は選択中のみ
+   });}
+  }else{
+   edge("front");edge("back");edge("left");edge("right");
+  }
   fG.position.set(sdx+numv(U.tw.fenceDx,0),0,sdz+numv(U.tw.fenceDz,0));
   fG.rotation.y=numv(U.tw.fenceRy,0)*Math.PI/180;
   g.add(fG); dragMap.fence=fG;}
 
  // タワークレーン（ドラッグ可・カタログ仕様連動）
- if(U.tw.crane&&U.tw.mode==="build"){
+ if(U.tw.crane&&(U.tw.mode==="build"||PH_STEEL)){
   const spec=craneSpec(U.tw.craneModel);
   const mh=builtH+16, jib=spec.jib, work=spec.work;
   const cg=new THREE.Group();cg.userData.dragKey="crane";
@@ -769,7 +918,7 @@ function rebuild(){
   g.add(mg);dragMap.mixer=mg;}
 
  // ラフタークレーン（ドラッグ可）
- if(U.tw.rough&&U.tw.mode==="build"&&!L){
+ if(U.tw.rough&&(U.tw.mode==="build"||PH_GROUND)&&!L){
   const rg=new THREE.Group();rg.userData.dragKey="rough";
   box(rg,2.7,1.3,9,0xe8b820,0,1.1,0);box(rg,2.4,1.8,2.4,0xe8b820,0,2.4,2.8);
   [[1.9,3.6],[1.9,-3.6],[-1.9,3.6],[-1.9,-3.6]].forEach(([ox,oz])=>box(rg,.4,1,.4,0x7d7f84,ox,.5,oz));
@@ -1028,11 +1177,12 @@ function rebuild(){
  scene.add(g);model=g;
  ctrl.ty=Math.max(builtH,H*.6)*.45;
  renderTitle();
+ if(typeof scheduleDraft==="function")scheduleDraft();
 }
 
 // ───── 案件データの保存・読込 (JSON / AES暗号化対応) ─────
 function saveProjectJSON(){
- const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
+ const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="_pileCount"||k==="_pileNote"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
  // 互換のためのメタ情報（将来バージョンで古いデータを安全に開くための目印）
  saveState._meta={app:"BimGen",appVer:APP_VER,schema:2,savedAt:new Date().toISOString()};
  const jsonStr=JSON.stringify(saveState,null,2);
@@ -1376,10 +1526,12 @@ function toast(msg,type){
  clearTimeout(el._t); el._t=setTimeout(()=>{el.className="";},type==="err"?4500:2600);
 }
 window.toast=toast;
+window.addEventListener("error",(e)=>{try{toast("エラー："+(e.message||"不明")+"（F12で詳細）","err");}catch(_){}});
+window.addEventListener("unhandledrejection",(e)=>{try{toast("エラー："+((e.reason&&e.reason.message)||"処理に失敗しました"),"err");}catch(_){}});
 
 // ───── Undo（操作の取り消し：Uのスナップショットを最大30段階保持）─────
 const _hist=[]; let _histLast=0, _histKey="";
-const _SNAP_SKIP=(k)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus");
+const _SNAP_SKIP=(k)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="_pileCount"||k==="_pileNote"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus");
 // key: 同じ操作（スライダー連続など）は700ms以内なら1回にまとめる
 function snapshot(key){
  const now=Date.now();
@@ -1403,6 +1555,7 @@ function undo(){
  U.sel=null;U.polyInput={on:false,pts:[],target:null};U.calib={on:false,a:null,b:null};
  _histKey="";
  rebuild();renderPanel();renderBar();
+ const ub=document.getElementById("undo-btn");if(ub)ub.disabled=!_hist.length;
  toast("1つ前の状態に戻しました");
 }
 window.undo=undo;
@@ -1417,8 +1570,10 @@ function saveDraft(){
  }catch(e){/* 容量超過等は無視 */}
 }
 function scheduleDraft(){clearTimeout(_draftT);_draftT=setTimeout(saveDraft,2000);}
-setInterval(saveDraft,30000);
+setInterval(saveDraft,15000);
 window.addEventListener("beforeunload",saveDraft);
+window.addEventListener("pagehide",saveDraft);                       // iOS/Android：タブ切替・閉じる
+document.addEventListener("visibilitychange",()=>{if(document.hidden)saveDraft();});
 function readDraft(){try{const j=localStorage.getItem(DRAFT_KEY);return j?JSON.parse(j):null;}catch(e){return null;}}
 function applyState(p){
  const keep={ut:U.under.tex,ur:U.under.raw,up:U.under.pages,upg:U.under.page,pt:U.photo.tex,de:U.dxf.ents,dr:U.dxf.raw};
@@ -1443,7 +1598,9 @@ document.addEventListener("keydown",(e)=>{
  }
 });
 
-window.S=(path,v,re=true)=>{snapshot(path);const ks=path.split(".");let o=U;while(ks.length>1)o=o[ks.shift()];o[ks[0]]=v;if(re)rebuildThrottled();};
+window.S=(path,v,re=true)=>{snapshot(path);const ks=path.split(".");let o=U;while(ks.length>1)o=o[ks.shift()];o[ks[0]]=v;
+ if(path==="tw.fenceGateSeg"){if(v<0){U.tw.fenceGate="none";}else{if(U.tw.fenceGate==="none")U.tw.fenceGate="front";}}
+ if(re)rebuildThrottled();};
 // ───── 折りたたみセクション（アコーディオン）─────
 // 使い方：SEC("見出し", "中身HTML", { key:"一意キー", open:既定で開くか, icon:"絵文字" })
 // ───── OJT検討項目（社内OJTチェックリスト 2024改訂・躯体編 から、BimGenで検討できる項目を抽出）─────
@@ -1476,6 +1633,73 @@ const OJT_CHECKS={
   {k:"c4",src:"7-1",  t:"搬入出経路に通行規制・高さ規制はないか", how:"車両を配置し道路条件・歩行帯との干渉を確認"},
  ],
 };
+// 仮囲いセクション（矩形／任意形状）：各工程フェーズで共用
+function fenceSectionHtml(){
+ const poly=(U.tw.fenceShape==="poly"), n=(U.tw.fencePts||[]).length, drawing=(U.polyInput.on&&U.polyInput.target==="fence");
+ let h=CK("仮囲いを表示",U.tw.fence,"(v)=>S('tw.fence',v)");
+ if(!U.tw.fence)return h;
+ h+=`<div style="padding-left:10px">
+  <div style="display:flex;gap:6px;margin:4px 0 8px">
+   <button class="btn ${!poly?"active":""}" style="flex:1;font-size:11px" onclick="snapshot();U.tw.fenceShape='rect';rebuild();renderPanel()">矩形</button>
+   <button class="btn ${poly?"active":""}" style="flex:1;font-size:11px" onclick="snapshot();U.tw.fenceShape='poly';if(!(U.tw.fencePts||[]).length)fenceFromSite(1);rebuild();renderPanel()">任意形状（なぞる）</button>
+  </div>
+  ${SL("パネル高さ m",U.tw.fenceH,"(v)=>S('tw.fenceH',v)",2,8,0.5)}`;
+ if(poly){
+  h+=drawing
+   ?`<div style="background:#FFF3DD;border:1.5px dashed var(--amber);border-radius:8px;padding:8px 10px;font-size:11.5px;line-height:1.7"><b>仮囲いをなぞり中（${U.polyInput.pts.length}点）</b><br>図面・地面をクリックして頂点を打ち、<b>ダブルクリックで閉じる</b>。<button class="btn" style="margin-top:6px;font-size:11px" onclick="U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar()">中止</button></div>`
+   :`<button class="addbtn" style="margin-bottom:6px" onclick="U.polyInput.on=true;U.polyInput.target='fence';U.polyInput.pts=[];renderPanel();renderBar()">✏️ 図面をなぞって囲いを描く（クリック→ダブルクリックで閉じる）</button>
+     <div class="grid2" style="margin-bottom:6px">
+      <button class="btn" style="font-size:11px" onclick="snapshot();fenceFromSite(1);rebuild();renderPanel()">敷地の外周から作る</button>
+      <button class="btn" style="font-size:11px" onclick="snapshot();fenceFromSite(-1)||fenceFromSite(1);rebuild();renderPanel()">敷地より1m内側</button>
+     </div>
+     <div style="font-size:11px;color:var(--navy);font-weight:700;margin:2px 0 4px">頂点 ${n} 点　　外周 ${fencePerimeter().toFixed(1)} m</div>
+     <div class="hint" style="margin:0 0 6px">橙の球（頂点）をドラッグで修正。囲い全体はパネルをドラッグ／Ctrl＋ドラッグで回転。</div>
+     <label class="f"><span>ゲート（出入口）を置く辺</span><select onchange="S('tw.fenceGateSeg',+this.value)"><option value="-1" ${U.tw.fenceGate==="none"?"selected":""}>開口なし</option>${Array.from({length:n},(_,i)=>`<option value="${i}" ${U.tw.fenceGate!=="none"&&Math.round(numv(U.tw.fenceGateSeg,0))===i?"selected":""}>辺 ${i+1}（${fenceSegLen(i).toFixed(1)}m）</option>`).join("")}</select></label>
+     <div class="grid2"><button class="btn" style="font-size:11px" onclick="snapshot();fenceAddVertex();rebuild();renderPanel()">＋ 頂点を追加</button><button class="btn" style="font-size:11px;color:#B0433A" onclick="snapshot();fenceRemoveVertex();rebuild();renderPanel()">－ 最後の頂点を削除</button></div>`;
+ }else{
+  h+=`<label class="f"><span>ゲート（出入口）位置</span><select onchange="S('tw.fenceGate',this.value)">
+     <option value="front" ${U.tw.fenceGate==="front"?"selected":""}>前面（道路側）</option>
+     <option value="left" ${U.tw.fenceGate==="left"?"selected":""}>左側</option>
+     <option value="right" ${U.tw.fenceGate==="right"?"selected":""}>右側</option>
+     <option value="none" ${U.tw.fenceGate==="none"?"selected":""}>開口なし（全周閉鎖）</option>
+   </select></label>
+   <div style="font-size:10.5px;font-weight:700;color:var(--mut);margin:6px 0 2px">図面に合わせる（3Dで直接ドラッグ／Ctrl＋ドラッグ回転も可）</div>
+   ${SL("囲い 間口 m（0=敷地に合わせる）",U.tw.fenceW,"(v)=>S('tw.fenceW',v)",0,60,0.5)}
+   ${SL("囲い 奥行 m（0=敷地に合わせる）",U.tw.fenceD,"(v)=>S('tw.fenceD',v)",0,60,0.5)}
+   ${SL("位置 左右",U.tw.fenceDx,"(v)=>S('tw.fenceDx',v)",-30,30,0.5)}
+   ${SL("位置 前後",U.tw.fenceDz,"(v)=>S('tw.fenceDz',v)",-30,30,0.5)}
+   ${SL("回転 °",U.tw.fenceRy,"(v)=>S('tw.fenceRy',v)",0,360,5)}
+   <button class="btn" style="width:100%;margin-top:4px;font-size:11px;color:#B0433A" onclick="snapshot();U.tw.fenceW=0;U.tw.fenceD=0;U.tw.fenceDx=0;U.tw.fenceDz=0;U.tw.fenceRy=0;rebuild();renderPanel()">↺ 仮囲いの位置と寸法をリセット</button>`;
+ }
+ return h+`</div>`;
+}
+// 敷地外周（矩形／多角形）から仮囲い頂点を作る。inset: 外周からの内側オフセット(m)。
+function fenceFromSite(inset){
+ inset=numv(inset,0);
+ if(Array.isArray(U.site.poly)&&U.site.poly.length>=3){
+  U.tw.fencePts=U.site.poly.map(p=>({x:+p.x.toFixed(2),z:+p.z.toFixed(2)}));   // 多角形敷地：そのまま（オフセットは手で頂点を動かす）
+ }else{
+  const w=posv(U.site.w,25)/2-inset, d=posv(U.site.d,20)/2-inset; if(w<1||d<1)return false;
+  U.tw.fencePts=[{x:-w,z:-d},{x:w,z:-d},{x:w,z:d},{x:-w,z:d}];
+ }
+ U.tw.fenceShape="poly"; U.tw.fenceDx=0; U.tw.fenceDz=0; U.tw.fenceRy=0; U.tw.fenceGateSeg=2; return true;
+}
+function fenceSegLen(i){const p=U.tw.fencePts||[];if(p.length<2)return 0;const a=p[i],b=p[(i+1)%p.length];return Math.hypot(b.x-a.x,b.z-a.z);}
+function fencePerimeter(){const p=U.tw.fencePts||[];let s=0;for(let i=0;i<p.length;i++)s+=fenceSegLen(i);return s;}
+function fenceAddVertex(){const p=U.tw.fencePts||[];if(p.length<2)return;const a=p[p.length-1],b=p[0];p.push({x:+((a.x+b.x)/2).toFixed(2),z:+((a.z+b.z)/2).toFixed(2)});}
+function fenceRemoveVertex(){const p=U.tw.fencePts||[];if(p.length>3)p.pop();else toast("頂点は3点以上必要です","err");}
+window.fenceFromSite=fenceFromSite;window.fenceAddVertex=fenceAddVertex;window.fenceRemoveVertex=fenceRemoveVertex;window.fenceSegLen=fenceSegLen;window.fencePerimeter=fencePerimeter;
+// 各タブ冒頭の「このタブでやること」
+const TAB_DESC={
+ "諸元":["案件の基本情報","用途・階数・面積を入れると法規値（建蔽率・容積率）が自動で出ます。案件名と住所は必ず入力。"],
+ "形状":["建物のかたち","建物ブロックの幅・奥行・階範囲・位置・回転。複数ブロックで L字・段差も表現できます。"],
+ "敷地・地形":["敷地・道路・傾斜","敷地寸法、傾斜（高い方向と高低差）、前面道路。住所検索で標高と地図が使えます。道路使用検討もここ。"],
+ "近隣":["周辺環境","隣接建物を置いて離隔・日影・圧迫感を確認。既存建物の解体も想定できます。"],
+ "下敷き":["図面・地図を敷く","配置図PDFや地理院地図を敷地の下に敷き、その上に建物を合わせます。"],
+ "仮設":["工程と仮設計画","工程フェーズ（山留め→杭→躯体→鉄骨）を切り替え、クレーン・仮囲い・足場を検討。"],
+ "施工/CAD":["重機・車両・注記","重機や車両を置いて干渉を確認。注記で『なぜこの配置か』を残せます（OJT・申し送り用）。"],
+};
+function tabDesc(tab){const d=TAB_DESC[tab];return d?`<div class="tab-desc"><b>${d[0]}</b><span>${d[1]}</span></div>`:"";}
 function ojtSection(tab){
  const items=OJT_CHECKS[tab]; if(!items)return "";
  if(!U.ojt)U.ojt={};
@@ -1872,10 +2096,9 @@ function renderPanel(){
   <div class="hint">写真の上に近隣ボリュームを置けば、日当たり・見え方・揚重範囲の近隣説明に使えます。ドラッグ＝移動／Ctrl＋ドラッグ＝回転。</div>`;
  }
  if(U.tab==="仮設"){
-  h=`<div style="display:flex;gap:5px;margin-bottom:9px">
-   <button class="btn ${U.tw.mode==="plan"?"active":""}" style="flex:1;padding:7px 4px;font-size:11px" onclick="setMode('plan')">完成</button>
-   <button class="btn ${U.tw.mode==="demo"?"active":""}" style="flex:1;padding:7px 4px;font-size:11px" onclick="setMode('demo')">既存解体</button>
-   <button class="btn ${U.tw.mode==="build"?"active":""}" style="flex:1;padding:7px 4px;font-size:11px" onclick="setMode('build')">施工中</button></div>`;
+  const PHASES=[["demo","既存解体","🏚"],["retain","山留め・掘削","⛏"],["pile","杭工事","🪵"],["steel","鉄骨建て方","🏗"],["build","躯体・仮設","🚧"],["plan","完成","🏢"]];
+  h=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:4px">工程フェーズ（施工の流れ順）</div>
+  <div class="phase-grid">${PHASES.map(([k,l,ic])=>`<button class="btn phase ${U.tw.mode===k?"active":""}" onclick="setMode('${k}')"><span>${ic}</span>${l}</button>`).join("")}</div>`;;
   if(U.tw.mode==="plan"){
    const secPlanFence = CK("仮囲いを表示（完成イメージにも重ねる）",U.tw.fenceAll,"(v)=>S('tw.fenceAll',v)")
     +(U.tw.fenceAll?`<div style="padding-left:10px">
@@ -1903,28 +2126,47 @@ function renderPanel(){
    +CK("生コン車／ダンプ（ドラッグ可）",U.tw.mixer,"(v)=>S('tw.mixer',v)")
    +`<div class="hint">Ctrl＋ドラッグで重機の向きを回転できます。</div>`;
   }
+  if(U.tw.mode==="retain"){
+   const pc=U._pileCount;
+   h+=`<div class="hint" style="margin:0 0 8px">建物範囲の外周に山留め壁を立て、掘削底までを表示。地盤を透かして地下の状況を確認できます（腹起し・切梁は掘削2.5m以上で1段表示）。</div>`
+   +SL("掘削深さ（根切り底 GL-）m",U.tw.pitDepth,"(v)=>S('tw.pitDepth',v)",1,12,0.5)
+   +SL("山留め壁の余裕（建物外周から）m",U.tw.retainMargin,"(v)=>S('tw.retainMargin',v)",0.3,3,0.1)
+   +`<div style="border-top:1px solid var(--hair);margin:8px 0"></div>`
+   +fenceSectionHtml()
+   +CK("バックホウ／ラフター（ドラッグ可）",U.tw.rough,"(v)=>S('tw.rough',v)")
+   +`<div class="hint">検討の観点：近隣建物との離隔（沈下・傾き）、地下埋設物（施工/CADの地下支障物）、残土搬出の車両動線。<b>OJT 3-3〜3-11</b> を参照。</div>`;
+  }
+  else if(U.tw.mode==="pile"){
+   const pc=U._pileCount||{n:0,old:0};
+   h+=`<div class="hint" style="margin:0 0 8px">建物範囲に新設杭を格子配置（灰色）。既存杭をONにすると赤・半透明で重ね、<b>干渉・撤去要否</b>を立体で確認できます。</div>`
+   +`<div class="grid3">${SL("杭ピッチ m",U.tw.pilePitch,"(v)=>S('tw.pilePitch',v)",2,10,0.5)}${SL("杭径 m",U.tw.pileDia,"(v)=>S('tw.pileDia',v)",0.3,2.5,0.1)}${SL("杭長 m",U.tw.pileLen,"(v)=>S('tw.pileLen',v)",3,60,1)}</div>`
+   +`<div style="font-size:11px;color:var(--navy);font-weight:700;margin:2px 0 6px">新設杭 ${pc.n} 本${U.tw.oldPiles?`　／　既存杭 <span style="color:#B0433A">${pc.old} 本</span>`:""}</div>`
+   +(U._pileNote?`<div style="font-size:10px;color:#C77F1A;margin:-4px 0 6px">${U._pileNote}</div>`:"")
+   +`<div style="border-top:1px solid var(--hair);margin:8px 0"></div>`
+   +CK("既存杭を重ねて表示（赤・半透明）",U.tw.oldPiles,"(v)=>S('tw.oldPiles',v)")
+   +(U.tw.oldPiles?`<div style="padding-left:10px">${SL("既存杭ピッチ m",U.tw.oldPitch,"(v)=>S('tw.oldPitch',v)",2,10,0.5)}${SL("既存杭の角度ずれ °",U.tw.oldRot,"(v)=>S('tw.oldRot',v)",0,90,1)}
+      <div class="grid2">${SL("既存範囲の拡がり m",U.tw.oldExtend,"(v)=>S('tw.oldExtend',v)",0,10,0.5)}${SL("既存の位置ずれ 左右 m",U.tw.oldDx,"(v)=>S('tw.oldDx',v)",-10,10,0.5)}</div>${SL("既存の位置ずれ 前後 m",U.tw.oldDz,"(v)=>S('tw.oldDz',v)",-10,10,0.5)}</div>`:"")
+   +`<div style="border-top:1px solid var(--hair);margin:8px 0"></div>`
+   +fenceSectionHtml()
+   +CK("杭打機（ラフター相当・ドラッグ可）",U.tw.rough,"(v)=>S('tw.rough',v)")
+   +`<div class="hint">図面から正確な杭位置を起こす機能ではなく、<b>配置の当たりを立体で確認するもの</b>です。正確な位置は杭伏図で。<b>OJT 3-16・7-3</b> を参照。</div>`;
+  }
+  else if(U.tw.mode==="steel"){
+   h+=`<div class="hint" style="margin:0 0 8px">鉄骨の柱・梁・デッキを建て方の進捗に応じて表示。クレーンの作業半径で最遠の柱まで届くかを確認できます。</div>`
+   +SL("建て方の進捗（〜階）",U.tw.step,"(v)=>S('tw.step',v)",1,Math.max(1,Math.round(posv(U.p.floors,14))),1)
+   +SL("柱スパン（目安）m",U.tw.steelPitch,"(v)=>S('tw.steelPitch',v)",3,12,0.5)
+   +`<div style="border-top:1px solid var(--hair);margin:8px 0"></div>`
+   +CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")
+   +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${k}　作業半径${CRANE_SPECS[k].work}m／${CRANE_SPECS[k].cap}t</option>`).join("")}</select></label></div>`:"")
+   +fenceSectionHtml()
+   +`<div class="hint">検討の観点：揚重機の作業半径と定格荷重、建て方順序、強風時対策。<b>OJT 15-13・19章</b> を参照。</div>`;
+  }
   else if(U.tw.mode==="build"){
    const secCrane = SL("躯体の進捗（〜階）",U.tw.step,"(v)=>S('tw.step',v)",1,Math.max(1,Math.round(posv(U.p.floors,14))),1)
     +CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")
     +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${CRANE_SPECS[k].label}</option>`).join("")}</select></label><div style="font-size:10px;color:#2552A0;margin:-2px 0 4px">作業半径 ${craneSpec(U.tw.craneModel).work}m ／ 定格 ${craneSpec(U.tw.craneModel).cap}t ／ 尾部 ${craneSpec(U.tw.craneModel).tail}m</div>${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}${CK("作業半径・尾部旋回の円",U.tw.radius,"(v)=>S('tw.radius',v)")}</div>`:"")
     +CK("ラフタークレーン（ドラッグ可）",U.tw.rough,"(v)=>S('tw.rough',v)");
-   const secFence = CK("仮囲いを表示",U.tw.fence,"(v)=>S('tw.fence',v)")
-    +(U.tw.fence?`<div style="padding-left:10px">
-       ${SL("パネル高さ m",U.tw.fenceH,"(v)=>S('tw.fenceH',v)",2,8,0.5)}
-       <label class="f"><span>ゲート（出入口）位置</span><select onchange="S('tw.fenceGate',this.value)">
-         <option value="front" ${U.tw.fenceGate==="front"?"selected":""}>前面（道路側）</option>
-         <option value="left" ${U.tw.fenceGate==="left"?"selected":""}>左側</option>
-         <option value="right" ${U.tw.fenceGate==="right"?"selected":""}>右側</option>
-         <option value="none" ${U.tw.fenceGate==="none"?"selected":""}>開口なし（全周閉鎖）</option>
-       </select></label>
-       <div style="font-size:10.5px;font-weight:700;color:var(--mut);margin:6px 0 2px">図面に合わせる（3Dで直接ドラッグ／Ctrl＋ドラッグ回転も可）</div>
-       ${SL("囲い 間口 m（0=敷地に合わせる）",U.tw.fenceW,"(v)=>S('tw.fenceW',v)",0,60,0.5)}
-       ${SL("囲い 奥行 m（0=敷地に合わせる）",U.tw.fenceD,"(v)=>S('tw.fenceD',v)",0,60,0.5)}
-       ${SL("位置 左右",U.tw.fenceDx,"(v)=>S('tw.fenceDx',v)",-30,30,0.5)}
-       ${SL("位置 前後",U.tw.fenceDz,"(v)=>S('tw.fenceDz',v)",-30,30,0.5)}
-       ${SL("回転 °",U.tw.fenceRy,"(v)=>S('tw.fenceRy',v)",0,360,5)}
-       <button class="btn" style="width:100%;margin-top:4px;font-size:11px;color:#B0433A" onclick="U.tw.fenceW=0;U.tw.fenceD=0;U.tw.fenceDx=0;U.tw.fenceDz=0;U.tw.fenceRy=0;rebuild();renderPanel()">↺ 仮囲いを敷地基準にリセット</button>
-       </div>`:"")
+   const secFence = fenceSectionHtml()
     +CK("外部足場＋養生シート",U.tw.scaffold,"(v)=>S('tw.scaffold',v)");
    const secVeh = CK("ロングスパンEV（ドラッグ可）",U.tw.ev,"(v)=>S('tw.ev',v)")
     +CK("生コン車（ドラッグ可）",U.tw.mixer,"(v)=>S('tw.mixer',v)")
@@ -1979,7 +2221,8 @@ function renderPanel(){
    <div style="font-size:10.5px;font-weight:600;color:var(--mut);margin-bottom:3px">道路条件（歩行帯・干渉判定）</div>
    ${SL("車道 幅員 m",U.roadcond.lane,"(v)=>{S('roadcond.lane',v,false);S('road.w',v);}",4,20,0.5)}
    ${SL("歩道 幅員 m",U.roadcond.walk,"(v)=>S('roadcond.walk',v)",0,6,0.5)}
-   <div class="hint">緑の歩行帯が自動生成され、重機が重なると赤く警告します。</div>
+   ${CK("歩行帯を緑帯で表示",!!U.roadcond.showWalk,"(v)=>S('roadcond.showWalk',v)")}
+   <div class="hint">歩道幅から歩行帯を判定し、重機が重なると赤く警告します（緑帯は非表示でも判定は働きます）。</div>
    <div style="border-top:1px solid var(--hair);margin:8px 0 6px"></div>
    <div style="font-size:10.5px;font-weight:600;color:var(--mut);margin-bottom:3px">CAD図面（DXF）読込</div>
    <input type="file" accept=".dxf" style="font-size:11px;width:100%;margin-bottom:6px" onchange="loadDXF(this.files[0])">`;
@@ -2032,7 +2275,7 @@ function renderPanel(){
     </div>`;}).join("");
   }else h+=`<div class="hint">検討意図や注意点を図に直接書き込めます。<b>範囲で囲う</b>＝色枠でエリアを強調、<b>文字を置く</b>＝任意位置にラベル。地面に貼り付くので視点を回しても位置が保たれ、PNG出力にも写ります。ドラッグ＝移動／Ctrl＋ドラッグ＝回転。<b>OJTでの申し送りや、なぜこの配置かの説明に。</b></div>`;
  }
- h+=ojtSection(U.tab);
+ h=tabDesc(U.tab)+h+ojtSection(U.tab);
  $("#body").innerHTML=h;
 }
 // ───── 検討判定HUD（左下）：OK/注意/NGを3D画面上に常時表示 ─────
@@ -2078,6 +2321,7 @@ function renderHUD(){
  }
  if(U.tw.mode==="demo"){el.style.display="none";return;}
  el.style.display="";
+ if(U._hudMin===undefined&&window.innerWidth<720)U._hudMin=true;   // スマホは初期折りたたみ
  const cs=collectChecks();
  const ico={ok:"●",warn:"▲",ng:"✕",na:"－"};
  const cls={ok:"ok",warn:"warn",ng:"ng",na:"na"};
@@ -2091,7 +2335,7 @@ function renderHUD(){
 window.renderHUD=renderHUD;
 function renderTitle(){
  renderHUD();
- const modeLabel={build:`仮設計画イメージ（${Math.min(U.p.floors,U.tw.step)}階 躯体時）`,demo:"既存解体フェーズ ― 重機配置検討",plan:"BimGen ― 営業概算BIM"}[U.tw.mode]||"BimGen";
+ const modeLabel={build:`仮設計画イメージ（${Math.min(U.p.floors,U.tw.step)}階 躯体時）`,demo:"既存解体フェーズ ― 重機配置検討",retain:`山留め・掘削フェーズ（GL-${numv(U.tw.pitDepth,4)}m）`,pile:"杭工事フェーズ ― 杭配置・既存杭の重ね合わせ",steel:`鉄骨建て方フェーズ（〜${Math.min(U.p.floors,U.tw.step)}階）`,plan:"BimGen ― 営業概算BIM"}[U.tw.mode]||"BimGen";
  const st=U._stats||{floorArea:0,maxFloors:0};
  // 敷地面積・建築面積は実測値（諸元入力）を優先、空欄なら形状から算出
  const site = posv(U.p.siteArea,0) || siteArea();
@@ -2189,6 +2433,10 @@ function buildBIMMeta(){
     color:a.color, x_m:numv(a.x,0), z_m:numv(a.z,0),
     width_m:a.type==="zone"?posv(a.w,6):null, depth_m:a.type==="zone"?posv(a.d,6):null,
     rotation_deg:numv(a.ry,0)})),
+  fence:U.tw.fence?{shape:U.tw.fenceShape==="poly"?"polygon":"rect", height_m:numv(U.tw.fenceH,3), gate:U.tw.fenceGate||"front",
+    offset_m:{dx:numv(U.tw.fenceDx,0),dz:numv(U.tw.fenceDz,0)}, rotation_deg:numv(U.tw.fenceRy,0),
+    points_m:U.tw.fenceShape==="poly"?(U.tw.fencePts||[]).map(p=>({x:numv(p.x,0),z:numv(p.z,0)})):null,
+    size_m:U.tw.fenceShape==="poly"?null:{w:numv(U.tw.fenceW,0)||posv(U.site.w,25),d:numv(U.tw.fenceD,0)||posv(U.site.d,20)}}:null,
   subsurface:(U.subsurface||[]).map(s=>({kind:s.kind, x_m:numv(s.x,0), z_m:numv(s.z,0),
     width_m:posv(s.w,3), length_m:posv(s.d,14), rotation_deg:numv(s.ry,0)}))
  };
@@ -2370,7 +2618,7 @@ function savePNG(){
  ui.forEach((e,i)=>e.style.display=prevDisp[i]);
  const a=document.createElement("a");
  a.href=url;
- a.download=`${U.p.name||"BimGen"}_${U.tw.mode==="build"?"仮設計画":U.tw.mode==="demo"?"既存解体":U.line?"線画下絵":"パース"}.png`;
+ a.download=`${U.p.name||"BimGen"}_${({build:"仮設計画",demo:"既存解体",retain:"山留め掘削",pile:"杭工事",steel:"鉄骨建て方"})[U.tw.mode]||(U.line?"線画下絵":"パース")}.png`;
  a.click();
 }
 // ───── 検討シート出力（A4横1枚のHTML：印刷→PDF可。打合せ・報告・OJT記録用）─────
@@ -2386,6 +2634,10 @@ function _shot(viewKey){
 }
 const _esc=(s)=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 function exportSheet(){
+ // ポップアップ制限対策：クリック直後に空タブを確保（後で内容を書き込む）
+ let pop=null; try{pop=window.open("","_blank");}catch(e){pop=null;}
+ if(pop){try{pop.document.write("<title>検討シートを作成中…</title><p style='font-family:sans-serif;padding:24px;color:#555'>検討シートを作成しています…</p>");}catch(e){}}
+ toast("検討シートを作成中…");
  // 3D撮影（グリッド・ガイド非表示）
  const prevGrid=U.grid.show; U._exporting=true; if(U.grid.show)U.grid.show=false; rebuild();
  const imgBird=_shot("bird"), imgTop=_shot("top");
@@ -2480,7 +2732,12 @@ ${subRows?`<h2>地下支障物（参考）</h2><table><tr><th>種別</th><th>幅
  const blob=new Blob([html],{type:"text/html;charset=utf-8"});
  const url=URL.createObjectURL(blob);
  const a=document.createElement("a"); a.href=url; a.download=`${(U.p.name||"BimGen").replace(/[\\/:*?"<>|]/g,"_")}_検討シート.html`; a.click();
- setTimeout(()=>{const w=window.open(url,"_blank");if(!w)toast("検討シートを保存しました（ブラウザで開いて印刷→PDF）","ok");else toast("検討シートを保存し、別タブで開きました","ok");},200);
+ if(pop){
+  try{pop.document.open();pop.document.write(html);pop.document.close();toast("検討シートを別タブで開き、ファイルも保存しました","ok");}
+  catch(e){try{pop.location=url;}catch(e2){}toast("検討シートを保存しました","ok");}
+ }else{
+  toast("検討シートを保存しました。別タブが開かない場合はブラウザのポップアップを許可してください（ダウンロードしたHTMLを開いても同じ内容です）","ok");
+ }
 }
 window.exportSheet=exportSheet;
 // ───── スタート画面・テンプレート（新規案件を1クリックで起こす）─────
