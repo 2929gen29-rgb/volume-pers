@@ -34,7 +34,7 @@
   --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px;
 }
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;overflow:hidden;font-family:var(--font);background:var(--bg);color:var(--ink);
+html,body{margin:0;height:100%;height:100dvh;overflow:hidden;font-family:var(--font);background:var(--bg);color:var(--ink);
   -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-size:13px}
 #view{position:fixed;inset:0}
 a{color:var(--accent)}
@@ -500,3 +500,55 @@ body.simple #mbar{display:flex}
 body.simple #toast{bottom:calc(80px + env(safe-area-inset-bottom))}
 body.simple #start{padding:8px}body.simple .start-card{padding:16px 14px 14px}
 body.simple.present #mtop,body.simple.present #mbar{display:none!important}
+
+/* ───────────── P0：スマホ簡易モード v2（閉じやすさ・Safe Area・自動ズーム・モード表示） ───────────── */
+/* #3 Safe Area（PWA・ホーム画面追加時） */
+body.simple #mtop{height:calc(52px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top)}
+body.simple #mbar{height:calc(64px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom)}
+body.simple #msheet{bottom:calc(64px + env(safe-area-inset-bottom));max-height:min(62vh,62dvh)}
+body.simple #toast{bottom:calc(84px + env(safe-area-inset-bottom))}
+/* #4 iOS自動ズーム防止：簡易モードの入力は16px以上（ピンチは禁止しない） */
+body.simple input,body.simple select,body.simple textarea,body.simple .ms-sel{font-size:16px!important}
+.ms-sel{flex:1;min-height:52px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-family:inherit;color:var(--ink)}
+/* #2 シートの閉じる：右上×（48px）・つまみ・タイトル */
+.ms-top{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:10px;background:var(--surface);margin:0 -14px 6px;padding:4px 8px 6px 14px;border-bottom:1px solid var(--hair)}
+.ms-top .ms-grip{position:absolute;left:50%;top:6px;transform:translateX(-50%);margin:0}
+.ms-title{flex:1;font-size:15px;font-weight:700;color:var(--navy);padding-top:10px}
+.ms-x{width:48px;height:48px;border:none;background:var(--surface-2);border-radius:12px;font-size:26px;line-height:1;color:var(--ink);font-family:inherit;margin-top:6px}
+.ms-x:active{background:#E4E8EE}
+/* 閲覧／編集モード表示 */
+.mmode{flex:none;font-size:12px;font-weight:700;padding:6px 10px;border-radius:99px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2);font-family:inherit;min-height:32px}
+.mmode.edit{background:var(--accent);border-color:var(--accent);color:#fff}
+.mb{border:none;font-family:inherit;min-height:32px}
+/* 仮設シート：十字パッド */
+.ms-pad{display:flex;flex-direction:column;align-items:center;gap:6px;margin:4px 0 10px}
+.ms-pad-mid{display:flex;gap:6px}
+.ms-sq{width:56px;height:52px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font-size:20px;font-family:inherit;color:var(--ink)}
+.ms-sq:active{background:#E4E8EE}
+/* かんたん案件作成フォーム */
+.qc{display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
+.qc label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mut)}
+.qc input,.qc select{min-height:44px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;font-family:inherit;color:var(--ink);background:var(--surface)}
+.qc-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.qc-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+/* #5 詳細版でも常時見える「簡易表示へ戻る」ピル（タッチ端末のみ表示・JSで制御） */
+#mpill{position:fixed;left:50%;transform:translateX(-50%);top:calc(60px + env(safe-area-inset-top));z-index:31;display:none;height:40px;padding:0 16px;font-size:13px;
+  background:var(--navy);color:#fff;border-color:var(--navy);box-shadow:var(--sh-lg)}
+/* #6 タッチ端末：メニューは固定パネルとして開く（横スクロールのバーに切り取られない） */
+@media (pointer:coarse){
+  .mn-pop{position:fixed;left:8px;right:8px;top:calc(56px + env(safe-area-inset-top));min-width:0;max-height:60vh;overflow-y:auto}
+  .mn-item{min-height:48px;font-size:15px;padding:10px 14px}
+  .btn{min-height:40px}
+  #bar{padding-top:calc(6px + env(safe-area-inset-top))}
+}
+/* スタート画面：実案件で見る */
+.start-real{display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;text-align:left;padding:14px 16px;margin:0 0 12px;
+  background:var(--navy);color:#fff;border:1px solid var(--navy);border-radius:10px;cursor:pointer;font-family:inherit;transition:background var(--t) var(--ease)}
+.start-real:hover{background:var(--navy-2)}
+.start-real b{font-size:15px;line-height:1.3}
+.start-real small{font-size:11.5px;color:#C9D3E3;line-height:1.5}
+.sr-tag{font-size:10px;font-weight:700;letter-spacing:.06em;background:var(--accent);padding:2px 8px;border-radius:99px}
+body.simple .start-real b{font-size:16px}
+body.simple .start-card{max-height:calc(100dvh - 16px)}
+body.simple .start-tpl{min-height:64px}
+.start-x{margin-left:auto;width:48px;height:48px;border:1px solid var(--line);background:var(--surface-2);border-radius:12px;font-size:26px;line-height:1;color:var(--ink);font-family:inherit;flex:none}
+.start-x:active{background:#E4E8EE}
