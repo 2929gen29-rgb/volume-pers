@@ -196,6 +196,12 @@ renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 mount.appendChild(renderer.domElement);
 const scene=new THREE.Scene();
+// 空のグラデーション（上：淡い青 → 地平：白っぽい）。テクスチャなのでPNG・検討シートにも写る
+let _skyTex=null;
+function skyTexture(){ if(_skyTex)return _skyTex;
+ const cv=document.createElement("canvas");cv.width=4;cv.height=256;const c=cv.getContext("2d");
+ const gr=c.createLinearGradient(0,0,0,256);gr.addColorStop(0,"#9cc2ea");gr.addColorStop(0.55,"#d6e6f5");gr.addColorStop(1,"#f2f5f8");
+ c.fillStyle=gr;c.fillRect(0,0,4,256);_skyTex=new THREE.CanvasTexture(cv);_skyTex.minFilter=THREE.LinearFilter;return _skyTex;}
 const camera=new THREE.PerspectiveCamera(40,1,0.5,5000);
 scene.add(new THREE.HemisphereLight(0xffffff,0x9aa0a8,.75));
 const sun=new THREE.DirectionalLight(0xfff4e0,1.0);
@@ -639,8 +645,9 @@ function rebuild(){
  if(model){scene.remove(model);model.traverse(o=>{o.geometry&&o.geometry.dispose();o.material&&(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose&&m.dispose());});}
  dragMap={};
  const g=new THREE.Group(); const L=U.line; const DET=true;  // 詳細表現に一本化（概算モードは廃止）
- scene.background=new THREE.Color(L?0xffffff:0xdce6f0);
- scene.fog=L?null:new THREE.Fog(0xdce6f0,400,1100);
+ if(L){scene.background=new THREE.Color(0xffffff);scene.fog=null;}
+ else if(U.sky!==false){scene.background=skyTexture();scene.fog=new THREE.Fog(0xe4ecf4,320,1000);}
+ else{scene.background=new THREE.Color(0xdce6f0);scene.fog=new THREE.Fog(0xdce6f0,400,1100);}
   sun.castShadow=!L;
  {const az=numv(U.sun.az,135)*Math.PI/180, alt=Math.max(8,numv(U.sun.alt,55))*Math.PI/180, R=180;
   sun.position.set(R*Math.cos(alt)*Math.sin(az),R*Math.sin(alt),R*Math.cos(alt)*Math.cos(az));}
@@ -835,18 +842,27 @@ function rebuild(){
     addVertexTools(hg,b.poly,"bpt:"+bi+":",()=>y0+bh+0.9,0xF2A33C,b.ry,true);
    }
    if(L){const ee=new THREE.LineSegments(new THREE.EdgesGeometry(eg,12),new THREE.LineBasicMaterial({color:0x16243d}));ee.position.set(ox,y0+0.12,oz);g.add(ee);}
-   // ── 各階の窓ライン（外周にぐるりと帯／詳細検証モードで表示・サンプル同様の見た目に）──
+   // ── 各階のファサード：スラブの縁（外側に薄く出る帯）＋光沢のあるガラス帯。矩形ブロックと同じ「階が読める」見た目に ──
    if(!L && DET && nF>=1){
-    // 多角形の外周ライン（閉路）をベースに、各階の窓ベルトを縁取り線で表現
-    const ringPts=[]; pts.forEach(p=>ringPts.push(p.x,0,-p.z)); ringPts.push(pts[0].x,0,-pts[0].z);
-    const winCol = isApt?0x3a587a : isOff?0x9fc0e8 : 0x4a6a90;
+    const cx=pts.reduce((s,p)=>s+p.x,0)/pts.length, cz=pts.reduce((s,p)=>s+p.z,0)/pts.length;
+    const mkShape=(sc)=>{const sh=new THREE.Shape();pts.forEach((p,i)=>{const x=cx+(p.x-cx)*sc,z=cz+(p.z-cz)*sc;i?sh.lineTo(x,-z):sh.moveTo(x,-z);});sh.closePath();return sh;};
+    const glassCol=isOff?0x7fa8d8:(U.p.use==="ホテル")?0x6a7f9c:(U.p.use==="病院・医療")?0x9fc0e0:0x33507a;
+    const glassMat=new THREE.MeshPhongMaterial({color:glassCol,shininess:110,specular:0xa8c4e8,transparent:true,opacity:isOff?0.6:0.82,depthWrite:false});
+    const lipMat=new THREE.MeshLambertMaterial({color:isApt?0xe9ecf0:(U.p.use==="倉庫・物流")?0x9aa1a9:0xdfe3e8});
+    const gGeo=new THREE.ExtrudeGeometry(mkShape(1.006),{depth:fh*0.58,bevelEnabled:false}); gGeo.rotateX(-Math.PI/2);
+    const lGeo=new THREE.ExtrudeGeometry(mkShape(1.03),{depth:0.22,bevelEnabled:false}); lGeo.rotateX(-Math.PI/2);
     for(let fl=0; fl<nF; fl++){
-     const yWin=y0+fl*fh+fh*0.55+0.12;
-     const arr=ringPts.slice(); for(let vi=1;vi<arr.length;vi+=3)arr[vi]=yWin;
-     const wg=new THREE.BufferGeometry(); wg.setAttribute("position",new THREE.BufferAttribute(new Float32Array(arr),3));
-     const wl=new THREE.Line(wg,new THREE.LineBasicMaterial({color:winCol,transparent:true,opacity:0.85}));
-     wl.position.set(ox,0,oz); g.add(wl);
+     const yb=y0+0.12+fl*fh;
+     const gm=new THREE.Mesh(gGeo,glassMat); gm.position.set(ox,yb+fh*0.42,oz); g.add(gm);              // ガラス帯（上側58%）
+     const lm=new THREE.Mesh(lGeo,lipMat); lm.position.set(ox,yb+fh-0.22,oz); lm.castShadow=true; g.add(lm); // 階スラブの縁
+     if(fl===0){const base=new THREE.Mesh(lGeo,lipMat); base.position.set(ox,yb,oz); g.add(base);}             // 基壇
     }
+    // 共同住宅：前面（道路側）を向く辺にバルコニーの手すり壁
+    if(isApt){const railMat=new THREE.MeshLambertMaterial({color:0xd7dbe1,transparent:true,opacity:0.9});
+     for(let i=0;i<pts.length;i++){const a=pts[i],b2=pts[(i+1)%pts.length];const dz=b2.z-a.z,dx=b2.x-a.x;const len=Math.hypot(dx,dz);if(len<3)continue;
+      const nx=-dz/len, nz=dx/len; const outward=(((a.x+b2.x)/2-cx)*nx+((a.z+b2.z)/2-cz)*nz)>0?1:-1; if(nz*outward<0.6)continue;
+      for(let fl=0;fl<nF;fl++){const yb=y0+0.12+fl*fh; const r=new THREE.Mesh(new THREE.BoxGeometry(len-0.6,1.1,0.12),railMat);
+       r.position.set(ox+(a.x+b2.x)/2+nx*outward*0.75,yb+0.55,oz+(a.z+b2.z)/2+nz*outward*0.75); r.rotation.y=-Math.atan2(dz,dx); g.add(r);}}}
    }
    // 屋上パラペット相当（簡易）
    if(bTo===f2&&U.tw.mode==="plan"&&!L){const cap=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:0.8,bevelEnabled:false}),new THREE.MeshLambertMaterial({color:isApt?0xcfd3d9:isOff?0x33425a:0xcfd3d9}));cap.geometry.rotateX(-Math.PI/2);cap.position.set(ox,y0+bh+0.12,oz);g.add(cap);}
@@ -3471,7 +3487,8 @@ function renderBar(){
     {label:"敷地/下敷き移動モード",fn:"U.moveLayers=!U.moveLayers;renderBar()",on:U.moveLayers},
     {label:"線画（AI下絵）",fn:"U.line=!U.line;rebuild();renderBar()",on:U.line},null,
     {label:"吸着（頂点・道路・15°回転）",fn:"U.snap=!U.snap;renderBar();renderPanel()",on:U.snap!==false},null,
-    {label:"👁 レイヤー（表示の絞り込み）",fn:"toggleLayers()",on:!!U._layersOpen}])}
+    {label:"👁 レイヤー（表示の絞り込み）",fn:"toggleLayers()",on:!!U._layersOpen},null,
+    {label:"🌤 空と霧（見た目）",fn:"U.sky=(U.sky===false);rebuild();renderBar()",on:U.sky!==false}])}
   <button class="btn" onclick="saveProjectJSON()" style="border:1.5px solid var(--amber)" title="案件を保存（暗号化可）">💾 保存</button>
   <button class="btn" onclick="document.getElementById('json-file').click()" style="border:1.5px solid var(--amber)" title="保存した案件を開く">📂 読込</button>
   <input type="file" id="json-file" accept=".json,.bsjson" style="display:none" onchange="loadProjectJSON(this.files[0]); this.value=''">
