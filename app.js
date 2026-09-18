@@ -2543,7 +2543,9 @@ function renderPanel(){
   +`<div class="hint" style="margin:0 0 10px">目安判定です。正式な可否は関係機関・法規で確認してください。道路使用の詳細は「② なぞる → 敷地・道路」の道路使用検討へ。</div>`
   +`<div style="font-size:11px;font-weight:700;color:var(--mut);margin:6px 0 4px">出力</div>
     <div class="grid2" style="margin-bottom:6px"><button class="btn primary" onclick="exportSheet()">📄 検討シート（A4）</button><button class="btn" onclick="savePNG()">🖼 PNG画像</button></div>
-    <div class="grid2" style="margin-bottom:10px"><button class="btn" onclick="exportOBJ()">🧱 BIM出力</button><button class="btn" onclick="aiPromptMenu()">✨ AIプロンプト</button></div>`;
+    <div class="grid2" style="margin-bottom:6px"><button class="btn" style="border:1.5px solid #2E7D5B;color:#2E7D5B" onclick="exportIFC()">🧱 IFC出力（GLOOBE等）</button><button class="btn" onclick="exportOBJ()">OBJ/JSON出力</button></div>
+    <div class="grid2" style="margin-bottom:10px"><button class="btn" onclick="aiPromptMenu()">✨ AIプロンプト</button><span></span></div>
+    <div class="hint" style="margin:-4px 0 10px">IFC（IFC2X3）には、階（階高付き）・各階の床スラブと概算ボリューム・屋上スラブ・敷地（多角形・標高・緯度経度・住所）・諸元のプロパティ・近隣建物・仮囲い・クレーン・重機・道路が入ります。BIM側での階設定・敷地入力の手間を減らせます。</div>`;
   // OJT：全タブ分をまとめて
   const allT=Object.keys(OJT_CHECKS); const tot=allT.reduce((s,t)=>s+OJT_CHECKS[t].length,0), done=allT.reduce((s,t)=>s+OJT_CHECKS[t].filter(i=>U.ojt&&U.ojt[i.k]).length,0);
   h+=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin:6px 0 4px">🎓 OJT検討項目　${done} / ${tot}</div>`+allT.map(t=>ojtSection(t)).join("");
@@ -2745,6 +2747,120 @@ function buildBIMMeta(){
     width_m:posv(s.w,3), length_m:posv(s.d,14), rotation_deg:numv(s.ry,0)}))
  };
 }
+// ───── IFC 出力（IFC2X3・GLOOBE等のBIMソフトへ）─────
+//  構成：IfcProject > IfcSite（敷地多角形・標高・緯度経度・住所）> IfcBuilding（諸元Pset）> IfcBuildingStorey×階（階高）
+//        各階：IfcSlab（床）＋ IfcBuildingElementProxy（階のボリューム）。敷地直下：近隣建物・仮囲い・クレーン・施工オブジェクト（Proxy）
+//  座標：IFC X=東=world X、IFC Y=北=−world Z、IFC Z=上。単位 m。
+function ifcExport(){
+ const E=[]; let n=0;
+ const add=(s)=>{n++;E.push("#"+n+"="+s+";");return "#"+n;};
+ const S=(t)=>{ // IFC文字列：' を '' に、非ASCIIは \X2\..\X0\（UTF-16BE）
+  t=String(t==null?"":t); let out="",buf="";const flush=()=>{if(buf){out+="\\X2\\"+buf+"\\X0\\";buf="";}};
+  for(const ch of t){const c=ch.codePointAt(0);if(c<128){flush();out+=(ch==="'"?"''":ch);}else{buf+=c.toString(16).toUpperCase().padStart(4,"0");}}
+  flush();return "'"+out+"'";};
+ const R=(v)=>{const x=+(+v).toFixed(4);let s=String(x);if(!s.includes(".")&&!s.includes("E"))s+=".";return s;};
+ const A="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
+ const guid=()=>{let g=A[Math.floor(Math.random()*4)];for(let i=1;i<22;i++)g+=A[Math.floor(Math.random()*64)];return "'"+g+"'";};
+ const P2=(x,y)=>add(`IFCCARTESIANPOINT((${R(x)},${R(y)}))`);
+ const P3=(x,y,z)=>add(`IFCCARTESIANPOINT((${R(x)},${R(y)},${R(z)}))`);
+ const toIFC=(wx,wz)=>({x:wx,y:-wz});
+ // 基本
+ const person=add("IFCPERSON($,$,$,$,$,$,$,$)"), org=add(`IFCORGANIZATION($,${S("BimGen")},$,$,$)`);
+ const po=add(`IFCPERSONANDORGANIZATION(${person},${org},$)`), app=add(`IFCAPPLICATION(${org},${S(APP_VER)},${S("BimGen")},${S("BimGen")})`);
+ const ts=Math.floor(Date.now()/1000);
+ const OH=add(`IFCOWNERHISTORY(${po},${app},$,.ADDED.,$,$,$,${ts})`);
+ const dX=add("IFCDIRECTION((1.,0.,0.))"), dZ=add("IFCDIRECTION((0.,0.,1.))"), o3=P3(0,0,0);
+ const wcs=add(`IFCAXIS2PLACEMENT3D(${o3},${dZ},${dX})`);
+ const ctx=add(`IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-05,${wcs},$)`);
+ const uL=add("IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.)"),uA=add("IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.)"),uV=add("IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.)"),uAng=add("IFCSIUNIT(*,.PLANEANGLEUNIT.,$,.RADIAN.)");
+ const units=add(`IFCUNITASSIGNMENT((${uL},${uA},${uV},${uAng}))`);
+ const meta=buildBIMMeta();
+ const proj=add(`IFCPROJECT(${guid()},${OH},${S(U.p.name||"BimGen Project")},${S("BimGenから出力した初期検討モデル（概算）")},$,$,$,(${ctx}),${units})`);
+ // 配置ユーティリティ
+ const place=(parent,x,y,z)=>{const p=P3(x,y,z);const ax=add(`IFCAXIS2PLACEMENT3D(${p},${dZ},${dX})`);return add(`IFCLOCALPLACEMENT(${parent||"$"},${ax})`);};
+ const extrude=(pts2,z0,h)=>{ // pts2: [{x,y}] IFC座標（閉じない）。z0 から h 押し出し
+  const ids=pts2.map(p=>P2(p.x,p.y)); const poly=add(`IFCPOLYLINE((${ids.join(",")},${ids[0]}))`);
+  const prof=add(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,${poly})`);
+  const ax=add(`IFCAXIS2PLACEMENT3D(${P3(0,0,z0)},${dZ},${dX})`);
+  const solid=add(`IFCEXTRUDEDAREASOLID(${prof},${ax},${dZ},${R(h)})`);
+  const shape=add(`IFCSHAPEREPRESENTATION(${ctx},'Body','SweptSolid',(${solid}))`);
+  return add(`IFCPRODUCTDEFINITIONSHAPE($,$,(${shape}))`);};
+ const rectPts=(cx,cz,w,d,ryDeg)=>{const t=numv(ryDeg,0)*Math.PI/180,c=Math.cos(t),s=Math.sin(t);
+  return [[-w/2,-d/2],[w/2,-d/2],[w/2,d/2],[-w/2,d/2]].map(([lx,lz])=>toIFC(cx+lx*c+lz*s,cz-lx*s+lz*c));};
+ const pset=(obj,name,props)=>{const ps=props.filter(p=>p[1]!=null&&p[1]!=="").map(p=>add(`IFCPROPERTYSINGLEVALUE(${S(p[0])},$,${typeof p[1]==="number"?`IFCREAL(${R(p[1])})`:`IFCTEXT(${S(p[1])})`},$)`));
+  if(!ps.length)return; const set=add(`IFCPROPERTYSET(${guid()},${OH},${S(name)},$,(${ps.join(",")}))`); add(`IFCRELDEFINESBYPROPERTIES(${guid()},${OH},$,$,(${obj}),${set})`);};
+ // 敷地
+ const sdx=numv(U.site.dx,0), sdz=numv(U.site.dz,0), gl=numv(U.site.gl,0);
+ const sitePts=Array.isArray(U.site.poly)&&U.site.poly.length>=3?U.site.poly.map(p=>toIFC(sdx+p.x,sdz+p.z)):rectPts(sdx,sdz,posv(U.site.w,25),posv(U.site.d,20),0);
+ const dms=(deg)=>{const sg=deg<0?-1:1;const a=Math.abs(deg);const d=Math.floor(a),m=Math.floor((a-d)*60),s=Math.floor(((a-d)*60-m)*60),us=Math.round((((a-d)*60-m)*60-s)*1e6);return `(${sg*d},${sg*m},${sg*s},${sg*us})`;};
+ const lat=U.geo&&U.geo.lat!=null?dms(U.geo.lat):"$", lon=U.geo&&U.geo.lon!=null?dms(U.geo.lon):"$";
+ const addr=add(`IFCPOSTALADDRESS($,$,$,$,(${S(U.p.addr||"")}),$,$,$,$,${S("JP")})`);
+ const sitePl=place(null,0,0,0);
+ const siteShape=extrude(sitePts,gl-0.3,0.3);
+ const site=add(`IFCSITE(${guid()},${OH},${S("敷地")},${S(U.p.addr||"")},$,${sitePl},${siteShape},$,.ELEMENT.,${lat},${lon},${U.geo&&U.geo.elev!=null?R(U.geo.elev):"$"},$,${addr})`);
+ add(`IFCRELAGGREGATES(${guid()},${OH},$,$,${proj},(${site}))`);
+ pset(site,"BimGen_Site",[["敷地面積_m2",meta.site.area_m2],["間口_m",meta.site.width_m],["奥行_m",meta.site.depth_m],["設計GL_m",gl],["高低差_m",meta.site.slope.heightDiff_m],["勾配前後_pct",meta.site.slope.gradeFrontBack_pct],["勾配左右_pct",meta.site.slope.gradeLeftRight_pct],["前面道路幅員_m",meta.road.width_m],["標高_m",meta.geo.elevation_m],["住所",U.p.addr||""]]);
+ // 建物
+ const bldPl=place(sitePl,0,0,0);
+ const bld=add(`IFCBUILDING(${guid()},${OH},${S(U.p.name||"建物")},${S(U.p.use||"")},$,${bldPl},$,$,.ELEMENT.,${R(gl)},$,${addr})`);
+ add(`IFCRELAGGREGATES(${guid()},${OH},$,$,${site},(${bld}))`);
+ const b=meta.building;
+ pset(bld,"BimGen_Building",[["用途",U.p.use],["構造",U.p.struct],["階数",b.floorsAbove],["最高高さ_m",b.totalHeight_m],["階高_m",b.typicalFloorHeight_m],["延床面積_m2",b.totalFloorArea_m2],["建築面積_m2",b.buildingArea_m2],["施工床面積_m2",b.constructionFloorArea_m2],["専有面積_m2",b.privateArea_m2],["戸数",b.units],["建蔽率_pct",meta.legal.buildingCoverage_pct],["容積率_pct",meta.legal.floorAreaRatio_pct],["備考",U.p.note||""]]);
+ // 階
+ const nF=b.floorsAbove, fh=b.typicalFloorHeight_m; const storeys=[];
+ for(let f=1;f<=nF;f++){const el=gl+(f-1)*fh;const pl=place(bldPl,0,0,el);const st=add(`IFCBUILDINGSTOREY(${guid()},${OH},${S(f+"F")},$,$,${pl},$,$,.ELEMENT.,${R(el)})`);storeys.push({f,st,pl,el});}
+ add(`IFCRELAGGREGATES(${guid()},${OH},$,$,${bld},(${storeys.map(s=>s.st).join(",")}))`);
+ // 各階：床スラブ＋ボリューム
+ const blockPts=(bk)=>{const ox=sdx+numv(bk.dx,0),oz=sdz+numv(bk.dz,0);
+  if(bk.shape==="poly"&&Array.isArray(bk.poly)&&bk.poly.length>=3)return rotPts(bk.poly,bk.ry).map(p=>toIFC(ox+p.x,oz+p.z));
+  return rectPts(ox,oz,posv(bk.w,10),posv(bk.d,10),bk.ry);};
+ storeys.forEach(s=>{const els=[];
+  (U.blocks||[]).forEach((bk,bi)=>{const f1=Math.max(1,Math.round(posv(bk.f1,1))),f2=Math.max(f1,Math.round(posv(bk.f2,1)));if(s.f<f1||s.f>f2)return;
+   const pts=blockPts(bk);
+   const slab=add(`IFCSLAB(${guid()},${OH},${S((bk.label||"建物")+" "+s.f+"F 床")},$,$,${place(s.pl,0,0,0)},${extrude(pts,0,0.2)},$,.FLOOR.)`);
+   const vol=add(`IFCBUILDINGELEMENTPROXY(${guid()},${OH},${S((bk.label||"建物")+" "+s.f+"F ボリューム")},${S("概算ボリューム（壁・柱の詳細なし）")},$,${place(s.pl,0,0,0)},${extrude(pts,0.2,fh-0.2)},$,$)`);
+   pset(vol,"BimGen_Block",[["ブロック",bk.label||""],["階",s.f],["形状",bk.shape==="poly"?"多角形":"矩形"],["回転_deg",numv(bk.ry,0)]]);
+   els.push(slab,vol);
+   if(s.f===f2){const roof=add(`IFCSLAB(${guid()},${OH},${S((bk.label||"建物")+" 屋上スラブ")},$,$,${place(s.pl,0,0,fh)},${extrude(pts,0,0.2)},$,.ROOF.)`);els.push(roof);}
+  });
+  if(els.length)add(`IFCRELCONTAINEDINSPATIALSTRUCTURE(${guid()},${OH},$,$,(${els.join(",")}),${s.st})`);
+ });
+ // 敷地直下：近隣・仮囲い・クレーン・施工オブジェクト（Proxy）
+ const siteEls=[];
+ (U.nbs||[]).forEach((nb,i)=>{const pr=add(`IFCBUILDINGELEMENTPROXY(${guid()},${OH},${S("近隣建物 "+(i+1))},${S("周辺建物（参考）")},$,${place(sitePl,0,0,0)},${extrude(rectPts(numv(nb.x,0),numv(nb.z,0),posv(nb.w,10),posv(nb.d,10),nb.ry),0,posv(nb.h,12))},$,$)`);siteEls.push(pr);});
+ if(U.tw.fence){const fh2=numv(U.tw.fenceH,3);const fx=sdx+numv(U.tw.fenceDx,0),fz=sdz+numv(U.tw.fenceDz,0);
+  if(U.tw.fenceShape==="poly"&&(U.tw.fencePts||[]).length>=3){const pts=rotPts(U.tw.fencePts,U.tw.fenceRy);const n2=pts.length;
+   for(let i=0;i<n2;i++){const a2=pts[i],b2=pts[(i+1)%n2];const len=Math.hypot(b2.x-a2.x,b2.z-a2.z);if(len<0.05)continue;const ang=Math.atan2(-(b2.z-a2.z),b2.x-a2.x)*180/Math.PI;
+    const pr=add(`IFCBUILDINGELEMENTPROXY(${guid()},${OH},${S("仮囲い 辺"+(i+1))},${S("仮設・仮囲いパネル")},$,${place(sitePl,0,0,0)},${extrude(rectPts(fx+(a2.x+b2.x)/2,fz+(a2.z+b2.z)/2,len,0.1,ang),0,fh2)},$,$)`);siteEls.push(pr);}}
+  else{const fw=numv(U.tw.fenceW,0)||posv(U.site.w,25)+2,fd=numv(U.tw.fenceD,0)||posv(U.site.d,20)+2;
+   const pr=add(`IFCBUILDINGELEMENTPROXY(${guid()},${OH},${S("仮囲い（矩形）")},${S("仮設・仮囲い外形")},$,${place(sitePl,0,0,0)},${extrude(rectPts(fx,fz,fw,fd,U.tw.fenceRy),0,fh2)},$,$)`);siteEls.push(pr);}}
+ if(U.tw.crane){const cs=CRANE_SPECS[U.tw.craneModel]||{};const pr=add(`IFCBUILDINGELEMENTPROXY(${guid()},${OH},${S("タワークレーン "+(U.tw.craneModel||""))},${S((cs.label||"")+" 作業半径"+(cs.work||"-")+"m 定格"+(cs.cap||"-")+"t")},$,${place(sitePl,0,0,0)},${extrude(rectPts(numv(U.tw.craneX,0),numv(U.tw.craneZ,0),2.5,2.5,0),0,posv(U.p.height,30)+8)},$,$)`);
+  pset(pr,"BimGen_Crane",[["機種",U.tw.craneModel],["作業半径_m",cs.work],["定格荷重_t",cs.cap],["尾部旋回_m",cs.tail],["ジブ長_m",cs.jib]]);siteEls.push(pr);}
+ (U.cobj||[]).forEach((c,i)=>{const t=COBJ_TYPES[c.type]||{};const sz=cobjSize(c.type,c.size)||{};const w=posv(c.w,sz.w||2),d=posv(c.d,sz.d||5),h=posv(c.h,sz.h||2);
+  const pr=add(`IFCBUILDINGELEMENTPROXY(${guid()},${OH},${S((t.label||c.type)+" "+(sz.label||""))},${S("施工オブジェクト（仮設・重機・車両）")},$,${place(sitePl,0,0,0)},${extrude(rectPts(numv(c.x,0),numv(c.z,0),w,d,c.ry),0,h)},$,$)`);
+  pset(pr,"BimGen_ConstructionObject",[["種別",t.label||c.type],["サイズ",sz.label||c.size],["幅_m",w],["長さ_m",d],["高さ_m",h],["向き_deg",numv(c.ry,0)]]);siteEls.push(pr);});
+ (U.roads||[]).forEach((r,i)=>{const pts=rotPts(r.pts||[],r.ry);const ox=sdx+numv(r.dx,0),oz=sdz+numv(r.dz,0);const W=numv(r.w,6);
+  for(let k=0;k<pts.length-1;k++){const a2=pts[k],b2=pts[k+1];const len=Math.hypot(b2.x-a2.x,b2.z-a2.z);if(len<0.05)continue;const ang=Math.atan2(-(b2.z-a2.z),b2.x-a2.x)*180/Math.PI;
+   const pr=add(`IFCBUILDINGELEMENTPROXY(${guid()},${OH},${S("道路"+(i+1)+" 区間"+(k+1))},${S("なぞった道路（幅員"+W+"m）")},$,${place(sitePl,0,0,0)},${extrude(rectPts(ox+(a2.x+b2.x)/2,oz+(a2.z+b2.z)/2,len,W,ang),-0.1,0.1)},$,$)`);siteEls.push(pr);}});
+ if(siteEls.length)add(`IFCRELCONTAINEDINSPATIALSTRUCTURE(${guid()},${OH},$,$,(${siteEls.join(",")}),${site})`);
+ // 判定・メモをプロジェクトのPsetに
+ pset(proj,"BimGen_Checks",meta.checks.map(c=>[c.item+"（"+c.category+"）",c.value+" / "+({ok:"OK",warn:"注意",ng:"要検討",na:"-"})[c.level]+" / "+c.note]));
+ const d=new Date();
+ const head=`ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION(('ViewDefinition [CoordinationView_V2.0]','BimGen initial study model'),'2;1');
+FILE_NAME(${S((U.p.name||"BimGen")+".ifc")},'${d.toISOString().slice(0,19)}',(${S("BimGen")}),(${S("")}),${S("BimGen "+APP_VER)},${S("BimGen")},'');
+FILE_SCHEMA(('IFC2X3'));
+ENDSEC;
+DATA;
+`;
+ return head+E.join("\n")+"\nENDSEC;\nEND-ISO-10303-21;\n";
+}
+window.exportIFC=()=>{
+ try{const txt=ifcExport();_dl(`${(U.p.name||"BimGen").replace(/[\\/:*?"<>|]/g,"_")}.ifc`,txt,"application/x-step");
+  toast("IFC（IFC2X3）を出力しました。GLOOBE等で「IFC読込」してください。階・床・ボリューム・敷地・仮設が入っています","ok");}
+ catch(e){toast("IFC出力に失敗："+(e&&e.message||"不明"),"err");}
+};
 // 用途別マテリアル色（OBJ/MTL用・RGB 0-1）
 function bimUseColor(){
  const use=U.p.use;
@@ -3079,22 +3195,22 @@ const BIM_SAMPLE={
     siteArea:512.4,bldgArea:288.0,tArea:1980.0,consArea:2150.0,privArea:1560.0,units:36,note:"BIM連携検証用のフルサンプル。全項目に値を入れてある。数値は架空。"},
  site:{w:24,d:22,dx:0,dz:0,gl:0.3,h:[0,0,1.4,1.1],slopeDir:"north",slopeDiff:1.4,
     poly:[{x:-12,z:-11},{x:12,z:-11},{x:12,z:6},{x:7,z:11},{x:-12,z:11}]},
- blocks:[{id:1,label:"住棟",f1:1,f2:8,w:16,d:14,dx:-1,dz:-2,ry:0},
-         {id:2,label:"低層（エントランス・駐輪）",f1:1,f2:1,shape:"poly",poly:[{x:0,z:0},{x:7,z:0},{x:7,z:6},{x:3,z:6},{x:3,z:9},{x:0,z:9}],dx:5,dz:3,ry:0}],
+ blocks:[{id:1,label:"住棟",f1:1,f2:8,w:14,d:11,dx:-3,dz:-2.5,ry:0},
+         {id:2,label:"低層（エントランス・駐輪）",f1:1,f2:1,shape:"poly",poly:[{x:0,z:0},{x:5,z:0},{x:5,z:4},{x:2,z:4},{x:2,z:6},{x:0,z:6}],dx:5,dz:4,ry:0}],
  road:{w:6,side:"none",dx:0,dz:0,ry:0,show:false,slope:0.4,walkShow:false,walkW:1.6},
  roads:[{pts:[{x:-40,z:15},{x:-5,z:15},{x:25,z:15}],w:6,walkL:1.5,walkR:0,dx:0,dz:0,ry:0},
         {pts:[{x:16,z:15},{x:16,z:-30}],w:4,walkL:0,walkR:0,dx:0,dz:0,ry:0}],
  roadwork:{mixerSize:"8t",pumpSize:"m4t",mountUp:0.5,permitPolice:"道路使用許可（1号）要協議・誘導員2名",permitRoad:"道路占用：仮囲い乗り出し30cm・朝顔",permitOffice:"事前協議 10/上旬"},
- tw:{mode:"build",step:4,crane:true,craneModel:"JCL022",craneX:9,craneZ:-5,craneJib:28,craneRot:30,fence:true,fenceH:3,fenceGate:"front",fenceShape:"poly",
+ tw:{mode:"build",step:4,crane:true,craneModel:"JCL022",craneX:10,craneZ:1,craneJib:28,craneRot:30,fence:true,fenceH:3,fenceGate:"front",fenceShape:"poly",
      fencePts:[{x:-12.5,z:-11.5},{x:12.5,z:-11.5},{x:12.5,z:6.3},{x:7.3,z:11.5},{x:-12.5,z:11.5}],fenceGateSeg:3,scaffold:true,poles:false,person:false,
      pitDepth:5,retainMargin:1.0,pilePitch:4.5,pileDia:1.0,pileLen:18,oldPiles:true,oldPitch:3.6,oldRot:15,oldExtend:1.5,oldDx:0.8,oldDz:-0.5,steelPitch:7,ev:false},
- cobj:[{type:"mixer",size:"8t",x:-8,z:13.4,ry:90},{type:"pump",size:"m4t",x:1,z:13.4,ry:90},{type:"rough",size:"25t",x:-6,z:4,ry:0},
-       {type:"stage",size:"m",x:6,z:2,ry:0},{type:"lsev",size:"h32",x:-10,z:-9,ry:0},{type:"guard",size:"std",x:-3,z:11.5,ry:0},
-       {type:"walkzone",size:"std",x:-16,z:19.5,ry:90},{type:"temp",size:"plate",x:-6,z:7,ry:0},{type:"temp",size:"hut",x:9,z:-9,ry:0}],
+ cobj:[{type:"mixer",size:"8t",x:-8,z:13.4,ry:90},{type:"pump",size:"m4t",x:1,z:13.4,ry:90},{type:"rough",size:"25t",x:-1,z:9.5,ry:90},
+       {type:"stage",size:"s",x:7,z:-6,ry:0},{type:"lsev",size:"h32",x:-6,z:6,ry:90},{type:"guard",size:"std",x:-3,z:11.5,ry:0},
+       {type:"walkzone",size:"std",x:-16,z:19.5,ry:90},{type:"temp",size:"plate",x:-1,z:9.5,ry:90},{type:"temp",size:"hut",x:-8,z:-9.5,ry:0}],
  subsurface:[{kind:"gas",x:0,z:17,w:1.2,d:60,ry:90},{kind:"water",x:0,z:19,w:1.5,d:60,ry:90},{kind:"elec",x:-9,z:-2,w:2,d:12,ry:0}],
- annot:[{type:"text",x:9,z:-5,ry:0,color:"red",text:"TC旋回範囲 隣地上空注意",fsize:2},
-        {type:"zone",x:6,z:2,w:9,d:6,ry:0,color:"amber"},{type:"text",x:6,z:2,ry:0,color:"amber",text:"乗入れ構台・荷取り",fsize:1.6},
-        {type:"zone",x:-10,z:-9,w:4,d:6,ry:0,color:"blue"},{type:"text",x:-10,z:-9,ry:0,color:"blue",text:"LSEV 搬入動線",fsize:1.4},
+ annot:[{type:"text",x:11,z:-13.5,ry:0,color:"red",text:"TC旋回範囲 隣地上空注意",fsize:2},
+        {type:"zone",x:7,z:-6,w:7,d:11,ry:0,color:"amber"},{type:"text",x:7,z:-13.5,ry:0,color:"amber",text:"乗入れ構台・荷取り",fsize:1.6},
+        {type:"zone",x:-6,z:6,w:6,d:4,ry:0,color:"blue"},{type:"text",x:-6,z:-13.5,ry:0,color:"blue",text:"LSEV 搬入動線（西側）",fsize:1.4},
         {type:"text",x:-8,z:17,ry:0,color:"green",text:"生コン打設 敷地側に縦列",fsize:1.6}],
  nbs:[{x:-19,z:-2,w:9,d:16,h:16,ry:0},{x:20,z:-6,w:7,d:12,h:9,ry:0},{x:0,z:-22,w:20,d:10,h:12,ry:0}],
  geo:{lat:35.6615,lon:139.3390,elev:118.2,name:"東京都八王子市明神町3丁目",status:""},
@@ -3362,6 +3478,7 @@ function renderBar(){
   <button class="btn primary" onclick="exportSheet()" title="判定・諸元・画像・注記をA4横1枚にまとめて出力（印刷→PDF可）">📄 検討シート</button>
   ${mn("出力",[
     {label:"PNG画像を保存",fn:"savePNG()"},
+    {label:"🧱 IFC出力（GLOOBE等のBIMへ）",fn:"exportIFC()"},
     {label:"BIM出力（OBJ/MTL/JSON）",fn:"exportOBJ()"},
     {label:"AIプロンプト生成",fn:"aiPromptMenu()"},null,
     {label:"💬 意見・要望を送る",fn:"openFeedback()"}],"border:1.5px solid #2E7D5B;color:#2E7D5B")}`;
