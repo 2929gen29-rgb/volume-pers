@@ -3630,19 +3630,17 @@ function renderMobile(){
    <div class="ms-note">工程を変えると、山留め・杭・鉄骨・躯体・完成の状態に3Dが切り替わります。</div>`;
  }else if(_sheet==="temp"){title="仮設を触る";
   const has=(t)=>_cobjIdx(t)>=0; const cr=U.tw.crane;
-  const mv=(t)=>has(t)?`<div class="ms-pad"><button class="ms-sq" onclick="mMoveCO('${t}',0,-1)">↑</button><div class="ms-pad-mid"><button class="ms-sq" onclick="mMoveCO('${t}',-1,0)">←</button><button class="ms-sq" onclick="mRotCO('${t}',15)">↻</button><button class="ms-sq" onclick="mMoveCO('${t}',1,0)">→</button></div><button class="ms-sq" onclick="mMoveCO('${t}',0,1)">↓</button></div>`:"";
-  h=`<div class="ms-note" style="margin-top:0">ON/OFFして、矢印で1mずつ動かし、↻で15°回します。3Dの上でも直接ドラッグできます（編集モード）。</div>
-   <div class="ms-h">タワークレーン</div>
-   <div class="ms-row"><button class="ms-btn ${cr?"on":""}" onclick="S('tw.crane',${!cr});renderMobile()">${cr?"クレーン ON":"クレーン OFF"}</button>
-    ${cr?`<select class="ms-sel" onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(m=>`<option value="${m}" ${U.tw.craneModel===m?"selected":""}>${m}（作業半径${CRANE_SPECS[m].work}m）</option>`).join("")}</select>`:""}</div>
-   ${cr?`<div class="ms-pad"><button class="ms-sq" onclick="mCrane('z',-1)">↑</button><div class="ms-pad-mid"><button class="ms-sq" onclick="mCrane('x',-1)">←</button><button class="ms-sq" onclick="mCrane('r',15)">↻</button><button class="ms-sq" onclick="mCrane('x',1)">→</button></div><button class="ms-sq" onclick="mCrane('z',1)">↓</button></div>`:""}
-   <div class="ms-h">仮囲い・足場</div>
-   <div class="ms-row"><button class="ms-btn ${U.tw.fence?"on":""}" onclick="S('tw.fence',${!U.tw.fence});renderMobile()">仮囲い ${U.tw.fence?"ON":"OFF"}</button><button class="ms-btn ${U.tw.scaffold?"on":""}" onclick="S('tw.scaffold',${!U.tw.scaffold});renderMobile()">足場 ${U.tw.scaffold?"ON":"OFF"}</button></div>
-   <div class="ms-h">車両・揚重</div>
-   <div class="ms-row"><button class="ms-btn ${has("mixer")?"on":""}" onclick="mToggleCO('mixer','8t')">生コン車 ${has("mixer")?"ON":"OFF"}</button><button class="ms-btn ${has("pump")?"on":""}" onclick="mToggleCO('pump','m4t')">ポンプ車 ${has("pump")?"ON":"OFF"}</button></div>
-   ${mv("mixer")}${mv("pump")}
-   <div class="ms-row"><button class="ms-btn ${has("lsev")?"on":""}" onclick="mToggleCO('lsev','h32')">LSEV ${has("lsev")?"ON":"OFF"}</button><button class="ms-btn ${has("rough")?"on":""}" onclick="mToggleCO('rough','25t')">ラフター ${has("rough")?"ON":"OFF"}</button></div>
-   ${mv("lsev")}${mv("rough")}`;
+  const ctl=(t)=>has(t)?`<button class="ms-sq" onclick="mMoveCO('${t}',-1,0)">←</button><button class="ms-sq" onclick="mMoveCO('${t}',1,0)">→</button><button class="ms-sq" onclick="mMoveCO('${t}',0,-1)">↑</button><button class="ms-sq" onclick="mMoveCO('${t}',0,1)">↓</button><button class="ms-sq" onclick="mRotCO('${t}',15)">↻</button>`:`<span class="ms-ph"></span>`;
+  const row=(label,on,fn,ctrl)=>`<div class="ms-line"><button class="ms-tg ${on?"on":""}" onclick="${fn}">${label}</button>${ctrl}</div>`;
+  h=`<div class="ms-note" style="margin:0 0 4px">ONにして、← → ↑ ↓ で1m、↻ で15°。編集中は3Dの上でも直接ドラッグできます。</div>
+   ${row("クレーン",cr,`S('tw.crane',${!cr});renderMobile()`,cr?`<button class="ms-sq" onclick="mCrane('x',-1)">←</button><button class="ms-sq" onclick="mCrane('x',1)">→</button><button class="ms-sq" onclick="mCrane('z',-1)">↑</button><button class="ms-sq" onclick="mCrane('z',1)">↓</button><button class="ms-sq" onclick="mCrane('r',15)">↻</button>`:`<span class="ms-ph"></span>`)}
+   ${cr?`<div class="ms-line"><select class="ms-sel" onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(m=>`<option value="${m}" ${U.tw.craneModel===m?"selected":""}>${m}（作業半径${CRANE_SPECS[m].work}m・${CRANE_SPECS[m].cap}t）</option>`).join("")}</select></div>`:""}
+   ${row("仮囲い",U.tw.fence,`S('tw.fence',${!U.tw.fence});renderMobile()`,`<span class="ms-ph"></span>`)}
+   ${row("足場",U.tw.scaffold,`S('tw.scaffold',${!U.tw.scaffold});renderMobile()`,`<span class="ms-ph"></span>`)}
+   ${row("生コン車",has("mixer"),"mToggleCO('mixer','8t')",ctl("mixer"))}
+   ${row("ポンプ車",has("pump"),"mToggleCO('pump','m4t')",ctl("pump"))}
+   ${row("LSEV",has("lsev"),"mToggleCO('lsev','h32')",ctl("lsev"))}
+   ${row("ラフター",has("rough"),"mToggleCO('rough','25t')",ctl("rough"))}`;
  }else if(_sheet==="view"){title="表示";
   h=`<div class="ms-h">視点</div><div class="ms-grid">${[["bird","鳥瞰"],["front","正面"],["eye","目線"],["top","真上"]].map(([k,l])=>`<button class="ms-btn" onclick="view('${k}');closeSheet()">${l}</button>`).join("")}</div>
    <div class="ms-row"><button class="ms-btn" onclick="U.auto=!U.auto;renderBar();renderMobile()">${U.auto?"自動回転 停止":"自動回転"}</button><button class="ms-btn" onclick="closeSheet();togglePresent()">全画面</button></div>
@@ -3721,9 +3719,18 @@ function renderBar(){
     {label:"意見・要望を送る",fn:"openFeedback()"}])}`;
 }
 const _renderBarOrig=renderBar; renderBar=function(){_renderBarOrig();renderTools();};
-window.toggleMenu=(btn)=>{const m=btn.parentElement;const was=m.classList.contains("open");closeMenus();if(!was)m.classList.add("open");};
-window.closeMenus=()=>{document.querySelectorAll(".mn.open").forEach(x=>x.classList.remove("open"));};
-document.addEventListener("pointerdown",(e)=>{if(!e.target.closest(".mn"))closeMenus();});
+window.toggleMenu=(btn)=>{
+ const m=btn.parentElement;const pop=m.querySelector(".mn-pop");const was=m.classList.contains("open");
+ closeMenus(); if(was||!pop)return;
+ m.classList.add("open");
+ let portal=document.getElementById("mn-portal");if(!portal){portal=document.createElement("div");portal.id="mn-portal";document.body.appendChild(portal);}
+ portal.innerHTML="";const clone=pop.cloneNode(true);clone.classList.add("mn-pop-portal");portal.appendChild(clone);
+ const r=btn.getBoundingClientRect();const w=Math.min(300,innerWidth-16);
+ let left=Math.min(Math.max(8,r.right-w),innerWidth-w-8);
+ portal.style.left=left+"px";portal.style.top=(r.bottom+6)+"px";portal.style.width=w+"px";portal.classList.add("open");
+};
+window.closeMenus=()=>{document.querySelectorAll(".mn.open").forEach(x=>x.classList.remove("open"));const p=document.getElementById("mn-portal");if(p){p.classList.remove("open");p.innerHTML="";}};
+document.addEventListener("pointerdown",(e)=>{if(!e.target.closest(".mn")&&!e.target.closest("#mn-portal"))closeMenus();});
 $("#phead").addEventListener("click",()=>{const w=$("#pwrap");const off=w.style.display==="none";w.style.display=off?"":"none";$("#parr").textContent=off?"▲":"▼";});
 U._titleMin = (window.innerWidth < 720);  // モバイルは初期最小化
 renderBar();renderPanel();rebuild();
