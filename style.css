@@ -552,3 +552,36 @@ body.simple .start-card{max-height:calc(100dvh - 16px)}
 body.simple .start-tpl{min-height:64px}
 .start-x{margin-left:auto;width:48px;height:48px;border:1px solid var(--line);background:var(--surface-2);border-radius:12px;font-size:26px;line-height:1;color:var(--ink);font-family:inherit;flex:none}
 .start-x:active{background:#E4E8EE}
+
+/* ───────────── スマホ v3：メニューポータル／仮設シート小型化／ダブルタップ拡大防止／下ナビ Safe Area ───────────── */
+/* #1 メニューは body 直下のポータルで開く（iOS：overflow内のfixedが切れる問題を回避） */
+#mn-portal{position:fixed;z-index:40;display:none;flex-direction:column;padding:4px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-lg);max-height:60vh;max-height:60dvh;overflow-y:auto}
+#mn-portal.open{display:flex}
+#mn-portal .mn-pop-portal{position:static;display:flex;flex-direction:column;min-width:0;box-shadow:none;border:none;padding:0;background:transparent}
+.mn.open .mn-pop{display:none!important}  /* 元の場所では開かない（ポータル側に表示） */
+@media (pointer:coarse){#mn-portal .mn-item{min-height:48px;font-size:15px}}
+/* #3 ダブルタップ拡大を無効化（ピンチ拡大は可）。canvas は JS で touch-action:none */
+html,body{touch-action:manipulation}
+button,label,.btn,.tool,.mbtn,.ms-btn,.ms-sq,.ms-tg,.mn-item,.start-tpl,.start-act,.start-real{touch-action:manipulation}
+/* #2 仮設シート：1行＝トグル＋操作5ボタン。シートは画面の4割まで */
+body.simple #msheet{max-height:min(44vh,44dvh);padding:0 12px 12px}
+.ms-line{display:flex;align-items:center;gap:5px;margin:4px 0}
+.ms-tg{flex:1;min-width:0;min-height:44px;padding:4px 8px;font-size:14px;font-weight:600;font-family:inherit;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms-tg.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ms-sq{width:44px;height:44px;flex:none;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:18px;font-family:inherit;color:var(--ink);padding:0}
+.ms-ph{flex:none;width:calc(44px*5 + 5px*4)}
+.ms-sel{min-height:44px;font-size:16px}
+.ms-top{margin:0 -12px 4px;padding:2px 6px 4px 12px}
+.ms-btn{min-height:46px;font-size:14px}
+.ms-h{margin:6px 0 4px}
+/* #4 下ナビ：Safe Area 内に収める（env が 0 でも最低20px、スタンドアロン時は最低34px） */
+body.simple #mbar{height:auto;min-height:64px;padding-bottom:max(env(safe-area-inset-bottom),20px)}
+body.simple .mbtn{min-height:60px}
+body.simple #msheet{bottom:calc(64px + max(env(safe-area-inset-bottom),20px))}
+body.simple #toast{bottom:calc(84px + max(env(safe-area-inset-bottom),20px))}
+@media (display-mode:standalone){
+  body.simple #mbar{padding-bottom:max(env(safe-area-inset-bottom),34px)}
+  body.simple #msheet{bottom:calc(64px + max(env(safe-area-inset-bottom),34px))}
+  body.simple #toast{bottom:calc(84px + max(env(safe-area-inset-bottom),34px))}
+  body.simple #mtop{padding-top:max(env(safe-area-inset-top),20px);height:auto;min-height:52px}
+}
