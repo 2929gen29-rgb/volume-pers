@@ -319,7 +319,7 @@ el.addEventListener("pointerdown",(e)=>{
   else if(!U.dim.b){U.dim.b={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};}
   else {U.dim.a={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};U.dim.b=null;}
   rebuild();renderBar();return;}
- if(ctrl.ptrs.size===1 && !e.shiftKey){const o=document.body.classList.contains("simple")?null:pickDrag(e);if(o){snapshot();dragObj=o;U.sel=o.userData.dragKey;
+ if(ctrl.ptrs.size===1 && !e.shiftKey){const o=(document.body.classList.contains("simple")&&!U._mEdit)?null:pickDrag(e);if(o){snapshot();dragObj=o;U.sel=o.userData.dragKey;
    if(e.ctrlKey||e.metaKey){rotMode=true;rotStartX=e.clientX;rotStartRy=getRy(o.userData.dragKey);}
    else{rotMode=false;const gp=groundPoint(e);dragOff.set(o.position.x-gp.x,0,o.position.z-gp.z);dragStart={lx:o.position.x,lz:o.position.z,gx:gp.x,gz:gp.z};}
    U.auto=false;syncBtns();renderSelCard();}else{if(U.sel){U.sel=null;renderSelCard();rebuild();}}}
@@ -1392,7 +1392,7 @@ function rebuild(){
 
 // ───── 案件データの保存・読込 (JSON / AES暗号化対応) ─────
 function saveProjectJSON(){
- const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="_pileCount"||k==="_pileNote"||k==="_crop"||k==="_snapHit"||k==="_toolsMin"||k==="_layersOpen"||k==="_roadClear"||k==="_roadRemain"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
+ const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="_pileCount"||k==="_pileNote"||k==="_crop"||k==="_mEdit"||k==="_snapHit"||k==="_toolsMin"||k==="_layersOpen"||k==="_roadClear"||k==="_roadRemain"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
  // 互換のためのメタ情報（将来バージョンで古いデータを安全に開くための目印）
  saveState._meta={app:"BimGen",appVer:APP_VER,schema:2,savedAt:new Date().toISOString()};
  const jsonStr=JSON.stringify(saveState,null,2);
@@ -1782,7 +1782,7 @@ window.addEventListener("unhandledrejection",(e)=>{try{toast("エラー："+((e.
 
 // ───── Undo（操作の取り消し：Uのスナップショットを最大30段階保持）─────
 const _hist=[]; let _histLast=0, _histKey="";
-const _SNAP_SKIP=(k)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="_pileCount"||k==="_pileNote"||k==="_crop"||k==="_snapHit"||k==="_toolsMin"||k==="_layersOpen"||k==="_roadClear"||k==="_roadRemain"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus");
+const _SNAP_SKIP=(k)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="_pileCount"||k==="_pileNote"||k==="_crop"||k==="_mEdit"||k==="_snapHit"||k==="_toolsMin"||k==="_layersOpen"||k==="_roadClear"||k==="_roadRemain"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus");
 // key: 同じ操作（スライダー連続など）は700ms以内なら1回にまとめる
 function snapshot(key){
  const now=Date.now();
@@ -1848,6 +1848,7 @@ document.addEventListener("keydown",(e)=>{
   if(e.key==="Escape"){U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar();toast("なぞりを中止しました");e.preventDefault();return;}
   if(e.key==="Backspace"||e.key==="Delete"){if(U.polyInput.pts.length){U.polyInput.pts.pop();rebuild();renderPanel();renderBar();toast("1点戻しました（"+U.polyInput.pts.length+"点）");}e.preventDefault();return;}
  }
+ if(e.key==="Escape"&&typeof _sheet!=="undefined"&&_sheet&&!inField){closeSheet();return;}
  if(e.key==="Escape"&&U.under&&U.under._crop&&!inField){U.under._crop=null;renderPanel();toast("切り取りを中止しました");return;}
  if(e.key==="Escape"&&U.sel&&!inField){U.sel=null;renderSelCard();rebuild();return;}
  if((e.key==="Delete"||e.key==="Backspace")&&U.sel&&!inField&&!(U.polyInput&&U.polyInput.on)){e.preventDefault();deleteSel();return;}
@@ -3202,13 +3203,23 @@ window.exportSheet=exportSheet;
 // 各テンプレートは東京の典型的な敷地条件を想定した現実的な初期値
 const TEMPLATES=[
  {key:"office5", icon:"🏢", name:"事務所ビル 5階", sub:"間口20m×奥行18m／前面道路8m",
-  p:{use:"事務所",struct:"S",floors:5,height:20,tArea:950}, site:{w:20,d:18}, blocks:[{id:1,label:"建物",f1:1,f2:5,w:16,d:12,dx:0,dz:0,ry:0}], road:{w:8}},
+  p:{use:"事務所",struct:"S",floors:5,height:20,tArea:950}, site:{w:20,d:18}, blocks:[{id:1,label:"建物",f1:1,f2:5,w:16,d:12,dx:0,dz:0,ry:0}], road:{w:8},
+  tw:{mode:"build",step:3,crane:true,craneModel:"JCL015",craneX:11,craneZ:-3,fence:true,fenceH:3,fenceGate:"front",scaffold:true},
+  cobj:[{type:"mixer",size:"8t",x:-6,z:14,ry:90},{type:"pump",size:"m4t",x:4,z:14,ry:90},{type:"lsev",size:"h20",x:-8,z:7,ry:0}]},
+ {key:"hotel9", icon:"🏨", name:"ホテル 9階", sub:"間口22m×奥行20m／前面道路10m",
+  p:{use:"ホテル",struct:"RC",floors:9,height:30,tArea:2600,units:80}, site:{w:22,d:20}, blocks:[{id:1,label:"客室棟",f1:1,f2:9,w:18,d:14,dx:0,dz:-1,ry:0}], road:{w:10},
+  tw:{mode:"build",step:5,crane:true,craneModel:"JCL022",craneX:0,craneZ:-1,fence:true,fenceH:3,fenceGate:"front",scaffold:true},
+  cobj:[{type:"mixer",size:"8t",x:-7,z:15.5,ry:90},{type:"pump",size:"m4t",x:3,z:15.5,ry:90},{type:"lsev",size:"h32",x:-10,z:8,ry:0},{type:"guard",size:"std",x:8,z:11,ry:0}]},
  {key:"apt8", icon:"🏘", name:"共同住宅 8階", sub:"間口14m×奥行22m／前面道路6m（狭小地）",
-  p:{use:"共同住宅（賃貸）",struct:"RC",floors:8,height:24,tArea:1200,units:24}, site:{w:14,d:22}, blocks:[{id:1,label:"建物",f1:1,f2:8,w:10,d:15,dx:0,dz:0,ry:0}], road:{w:6}},
+  p:{use:"共同住宅（賃貸）",struct:"RC",floors:8,height:24,tArea:1200,units:24}, site:{w:14,d:22}, blocks:[{id:1,label:"建物",f1:1,f2:8,w:10,d:15,dx:0,dz:0,ry:0}], road:{w:6},
+  tw:{mode:"build",step:4,crane:true,craneModel:"JCL022",craneX:9,craneZ:-4,fence:true,fenceH:3,fenceGate:"front",scaffold:true},
+  cobj:[{type:"mixer",size:"8t",x:-5,z:16,ry:90},{type:"pump",size:"m4t",x:4,z:16,ry:90},{type:"lsev",size:"h32",x:-6,z:12.5,ry:0}]},
  {key:"shop3", icon:"🏬", name:"店舗 3階", sub:"間口18m×奥行15m／前面道路12m",
   p:{use:"店舗",struct:"S",floors:3,height:13,tArea:480}, site:{w:18,d:15}, blocks:[{id:1,label:"建物",f1:1,f2:3,w:15,d:11,dx:0,dz:0,ry:0}], road:{w:12}},
  {key:"wh2", icon:"🏭", name:"倉庫・物流 2階", sub:"間口40m×奥行30m／前面道路10m",
-  p:{use:"倉庫・物流",struct:"S",floors:2,height:12,tArea:1600}, site:{w:40,d:30}, blocks:[{id:1,label:"建物",f1:1,f2:2,w:34,d:24,dx:0,dz:0,ry:0}], road:{w:10}, tw:{craneModel:"JCL030",craneX:24}},
+  p:{use:"倉庫・物流",struct:"S",floors:2,height:12,tArea:1600}, site:{w:40,d:30}, blocks:[{id:1,label:"建物",f1:1,f2:2,w:34,d:24,dx:0,dz:0,ry:0}], road:{w:10},
+  tw:{mode:"steel",step:2,crane:false,craneModel:"JCL030",craneX:24,fence:true,fenceH:3,fenceGate:"front",scaffold:false},
+  cobj:[{type:"rough",size:"50t",x:0,z:-6,ry:0},{type:"truck",size:"10t",x:-12,z:20,ry:90},{type:"stage",size:"m",x:14,z:8,ry:0}]},
  {key:"hosp6", icon:"🏥", name:"病院・医療 6階", sub:"間口30m×奥行26m／前面道路10m",
   p:{use:"病院・医療",struct:"RC",floors:6,height:24,tArea:2500}, site:{w:30,d:26}, blocks:[{id:1,label:"建物",f1:1,f2:6,w:24,d:18,dx:0,dz:0,ry:0}], road:{w:10}, tw:{craneModel:"JCL030",craneX:22}},
 ];
@@ -3265,6 +3276,34 @@ window.openBimSample=()=>{
  closeStart(); rebuild();renderPanel();renderBar();view("bird");
  toast("BIM連携用フルサンプルを開きました。出力▾→BIM出力 で全項目入りの bim.json が出ます","ok");
 };
+// 実案件ベースデモ：都内の狭小地・共同住宅12階の実案件から「形状・階数・道路幅」だけを使用（公開版。個別情報なし）
+const REAL_DEMO={
+ p:{name:"実案件ベースデモ（都内・共同住宅12階）",use:"共同住宅（分譲）",struct:"RC",floors:12,height:37,
+    note:"実案件の敷地形状・階数・前面道路幅のみを使用したデモ。個別情報は含みません。塔状比4超の狭小地・前面道路下に地下鉄あり。",
+    bcrLimit:80,farLimit:600,bcrNote:"商業地域・防火地域内耐火建築物"},
+ site:{w:15.6,d:14,gl:0,h:[0,0,0,0],slopeDir:"flat",slopeDiff:0,poly:[{x:-8.1,z:8.4},{x:1.5,z:8.4},{x:7.5,z:8.4},{x:7.8,z:-4.4},{x:2.6,z:-5.0},{x:2.4,z:-5.0},{x:-5.4,z:-5.4},{x:-8.2,z:-5.6}]},
+ blocks:[{id:1,label:"住棟",f1:1,f2:12,w:13.2,d:10.2,dx:-0.7,dz:2.0,ry:0}],
+ road:{w:16.3,side:"none",show:false,slope:0,walkShow:false},
+ roads:[{pts:[{x:-30,z:16.6},{x:30,z:16.6}],w:16.3,walkL:0,walkR:0,dx:0,dz:0,ry:0}],
+ roadwork:{mixerSize:"8t",pumpSize:"m4t",mountUp:0},
+ tw:{mode:"build",step:6,crane:true,craneModel:"JCL022",craneX:-0.7,craneZ:2.0,craneRot:20,fence:true,fenceH:3,fenceGate:"front",fenceShape:"poly",
+     fencePts:[{x:-8.1,z:8.4},{x:1.5,z:8.4},{x:7.5,z:8.4},{x:7.8,z:-4.4},{x:2.6,z:-5.0},{x:2.4,z:-5.0},{x:-5.4,z:-5.4},{x:-8.2,z:-5.6}],fenceGateSeg:1,
+     scaffold:true,poles:false,person:false,pileLen:39,pilePitch:4,pileDia:1.0},
+ cobj:[{type:"mixer",size:"8t",x:-6,z:13.2,ry:90},{type:"pump",size:"m4t",x:4,z:13.2,ry:90},{type:"lsev",size:"h45",x:-5,z:10.2,ry:0},{type:"guard",size:"std",x:-10,z:10,ry:0},{type:"walkzone",size:"std",x:0,z:10.2,ry:90}],
+ subsurface:[{kind:"subway",x:0,z:18,w:12,d:70,ry:90}],
+ annot:[{type:"text",x:-20,z:18,ry:0,color:"red",text:"地下鉄直下：杭長の検討要",fsize:1.6},{type:"text",x:-0.7,z:-8,ry:0,color:"amber",text:"TC 建物内設置（塔状比4超）",fsize:1.4},{type:"text",x:-6,z:22,ry:0,color:"green",text:"生コン 敷地側に縦列（道路使用許可）",fsize:1.4}],
+ nbs:[{x:15.5,z:2,w:14,d:13,h:36,ry:0},{x:-16.5,z:2,w:14,d:13,h:27,ry:0}],
+ ojt:{s1:true,s3:true,s5:true,t1:true,t5:true,t6:true},
+};
+window.openRealDemo=()=>{
+ resetToDefault();
+ deepMerge(U,{p:REAL_DEMO.p,site:REAL_DEMO.site,road:REAL_DEMO.road,roadwork:REAL_DEMO.roadwork,tw:REAL_DEMO.tw});
+ ["blocks","roads","cobj","subsurface","annot","nbs"].forEach(k=>{U[k]=JSON.parse(JSON.stringify(REAL_DEMO[k]));});
+ U.site.poly=JSON.parse(JSON.stringify(REAL_DEMO.site.poly));U.site.h=[0,0,0,0];U.tw.fencePts=JSON.parse(JSON.stringify(REAL_DEMO.tw.fencePts));U.ojt=Object.assign({},REAL_DEMO.ojt);
+ U.road.walkShow=false;U.tw.person=false;U.tw.poles=false;U.tab="仮設";U.tabGroup="3";
+ closeStart();rebuild();renderPanel();renderBar();view("bird");
+ toast(document.body.classList.contains("simple")?"実案件ベースのデモです。画面を回して、下の「工程」「仮設」を触ってみてください":"実案件ベースのデモを開きました（形状・階数・道路幅のみ実案件）","ok");
+};
 function resetToDefault(){
  // U を初期状態に戻す（テクスチャ等は破棄）
  const def=JSON.parse(_U_DEFAULT);
@@ -3286,10 +3325,11 @@ window.newFromTemplate=(key)=>{
  resetToDefault();
  U.p.name="新規案件（"+tp.name+"）";
  deepMerge(U,{p:tp.p,site:tp.site,road:tp.road||{},tw:tp.tw||{}}); U.road.walkShow=false; U.tw.person=false; U.tw.poles=false;
- U.blocks=JSON.parse(JSON.stringify(tp.blocks));
- U.tab="諸元";U.tabGroup="建物";
+ U.blocks=JSON.parse(JSON.stringify(tp.blocks)); U.cobj=tp.cobj?JSON.parse(JSON.stringify(tp.cobj)):[];
+ U.tab="仮設";U.tabGroup="3";
  closeStart(); rebuild();renderPanel();renderBar();view("bird");
- toast(tp.name+" のテンプレートで開始しました。諸元タブで案件名・住所を入力してください","ok");
+ if(document.body.classList.contains("simple")){toast(tp.name+"：画面を回して、下の「工程」「仮設」を触ってみてください","ok");}
+ else toast(tp.name+" のサンプルで開始しました。諸元タブで案件名・住所を入力してください","ok");
 };
 window.openDemoCase=()=>{
  resetToDefault();
@@ -3326,7 +3366,7 @@ window.openStart=()=>{
  let s=document.getElementById("start");
  if(!s){s=document.createElement("div");s.id="start";document.body.appendChild(s);}
  s.innerHTML=`<div class="start-card">
-  <div class="start-head"><div class="start-logo">BimGen</div><div class="start-sub">図面・地図を、その場で3Dに。</div></div>
+  <div class="start-head"><div class="start-logo">BimGen</div><div class="start-sub">図面・地図を、その場で3Dに。</div><button class="start-x" onclick="closeStart()" aria-label="閉じる">×</button></div>
   <div class="start-hero">
    <div class="hero-item"><b>① 図面・地図から建物・敷地を3D化</b><span>PDF・画像・地図を下敷きにして、敷地・建物・道路を作成</span></div>
    <div class="hero-item"><b>② 施工計画を立体で検討</b><span>仮囲い・クレーン・重機・車両・杭・掘削などを配置</span></div>
@@ -3337,7 +3377,8 @@ window.openStart=()=>{
   ${(()=>{let done=false;try{done=localStorage.getItem("bimgen_tour_done")==="1";}catch(e){}return done?"":`<div class="start-first">
    <div><b>はじめての方へ</b>　デモ案件を開く → 右下の「検討判定」を見る → 段階バー④で検討シートを出す。3分で分かります。</div>
    <button class="btn primary" style="white-space:nowrap" onclick="startTour()">ガイド付きでデモを開く</button></div>`;})()}
-  <div class="start-sec">テンプレートから新規（用途と敷地の目安を選ぶだけ）</div>
+  <button class="start-real" onclick="openRealDemo()"><span class="sr-tag">実案件ベース</span><b>実案件で見る　—　都内・共同住宅12階（狭小地・地下鉄直下）</b><small>実際の案件の敷地形状・階数・道路幅で、仮囲い・TC・生コン車まで入った状態。回す→工程→仮設、で1分で分かります</small></button>
+  <div class="start-sec">用途別サンプルを見る（仮設・車両入り。押すだけで3Dが立ちます）</div>
   <div class="start-grid">${TEMPLATES.map(t=>`<button class="start-tpl" onclick="newFromTemplate('${t.key}')"><span class="start-ico">${t.icon}</span><b>${t.name}</b><small>${t.sub}</small></button>`).join("")}</div>
   ${(()=>{const d=readDraft();if(!d||!draftEnabled())return "";const t=new Date(d.savedAt).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
     return `<button class="start-act resume" onclick="restoreDraft()">前回の続きから<small>自動退避 ${t}　${_esc(d.name||"（案件名未入力）")}</small></button>`;})()}
@@ -3510,67 +3551,132 @@ window.deleteSel=()=>{const k=U.sel;if(!k)return;snapshot();
 
 // ───── スマホ簡易モード（見る→回す→工程→判定→検討シート）：表示の差し替えのみ ─────
 //  条件：タッチ端末 かつ 画面幅 ≤ 820px。localStorage bimgen_ui="full" で PC版UIに固定可
-function simplePreferred(){
- try{const pref=localStorage.getItem("bimgen_ui");if(pref==="full")return false;if(pref==="simple")return true;}catch(e){}
- return matchMedia("(pointer:coarse)").matches&&Math.min(innerWidth,innerHeight)<=820&&innerWidth<=820;
-}
-window.setSimpleUI=(on,remember)=>{
+function isTouchPhone(){return matchMedia("(pointer:coarse)").matches&&Math.min(innerWidth,innerHeight)<=820&&innerWidth<=820;}
+function simplePreferred(){ try{localStorage.removeItem("bimgen_ui");}catch(e){} return isTouchPhone(); }   // 起動時は毎回「簡易」
+window.setSimpleUI=(on)=>{
  document.body.classList.toggle("simple",!!on);
- if(remember){try{localStorage.setItem("bimgen_ui",on?"simple":"full");}catch(e){}}
- closeSheet(); renderMobile(); renderBar(); setTimeout(resize,60);
- if(!on)toast("詳細編集（PC版UI）に切り替えました。右上「表示▾」から簡易表示に戻せます");
+ if(on){U._mEdit=false;}
+ closeSheet(); renderMobile(); renderBar(); renderPill(); setTimeout(resize,60);
+ if(!on)toast("詳細編集（PC版UI）です。上の「簡易表示へ戻る」でいつでも戻れます");
+};
+// 詳細版のときスマホ画面に常時出す「簡易表示へ戻る」ピル
+function renderPill(){
+ let p=document.getElementById("mpill");
+ if(!p){p=document.createElement("button");p.id="mpill";p.className="btn";p.textContent="簡易表示へ戻る";p.onclick=()=>setSimpleUI(true);document.body.appendChild(p);}
+ p.style.display=(isTouchPhone()&&!document.body.classList.contains("simple")&&!document.body.classList.contains("present"))?"":"none";
+}
+window.renderPill=renderPill;
+// 閲覧／編集モード（簡易モードのみ有効。起動時は閲覧）
+window.toggleEditMode=(v)=>{U._mEdit=(v==null)?!U._mEdit:!!v;if(!U._mEdit){U.sel=null;renderSelCard();}renderMobile();toast(U._mEdit?"✏ 編集モード：物をドラッグで移動、Ctrl／2本指なしでも回転はシートから":"🔒 閲覧モード：ドラッグは視点回転だけ");};
+// 画面表示のリセット（視点・ズーム・シート・選択・道具バー位置。iOSの自動ズームも解除）
+window.resetDisplay=()=>{
+ closeSheet(); U.sel=null; U.polyInput={on:false,pts:[],target:null}; U.calib={on:false,a:null,b:null}; if(U.under)U.under._crop=null;
+ if(typeof toolsReset==="function")toolsReset();
+ ctrl.theta=Math.PI/4+.3; ctrl.phi=1.05; ctrl.ty=18; U.auto=false; view("bird");
+ try{const m=document.querySelector('meta[name="viewport"]');if(m){const c=m.getAttribute("content");m.setAttribute("content",c+", maximum-scale=1.0");setTimeout(()=>m.setAttribute("content",c),350);}}catch(e){}
+ rebuild(); renderPanel(); renderBar(); renderMobile(); toast("画面表示を初期状態に戻しました","ok");
 };
 let _sheet=null;
 function closeSheet(){_sheet=null;const s=document.getElementById("msheet");if(s)s.classList.remove("open");const b=document.getElementById("mback");if(b)b.classList.remove("open");renderMobile();}
 window.closeSheet=closeSheet;
-window.openSheet=(k)=>{_sheet=(_sheet===k?null:k);renderMobile();};
+window.openSheet=(k)=>{_sheet=(_sheet===k?null:k);if(_sheet==="temp"&&!U._mEdit){U._mEdit=true;}renderMobile();};
+// 仮設シート用：指定タイプの車両を1台だけON/OFF、移動・回転
+function _cobjIdx(type){let last=-1;(U.cobj||[]).forEach((c,i)=>{if(c.type===type)last=i;});return last;}
+window.mToggleCO=(type,size)=>{const i=_cobjIdx(type);if(i>=0){snapshot();U.cobj.splice(i,1);U.sel=null;rebuild();renderPanel();}else{addCO(type);const k=U.cobj.length-1;if(size&&U.cobj[k]){const sz=cobjSize(type,size);if(sz){U.cobj[k].size=size;U.cobj[k].w=sz.w;U.cobj[k].d=sz.d;U.cobj[k].h=sz.h;}}rebuild();}renderMobile();};
+window.mMoveCO=(type,dx,dz)=>{const i=_cobjIdx(type);if(i<0)return;snapshot("mco."+type);U.cobj[i].x=+(numv(U.cobj[i].x,0)+dx).toFixed(1);U.cobj[i].z=+(numv(U.cobj[i].z,0)+dz).toFixed(1);U.sel="co:"+i;rebuildThrottled();};
+window.mRotCO=(type,d)=>{const i=_cobjIdx(type);if(i<0)return;snapshot("mcor."+type);U.cobj[i].ry=((numv(U.cobj[i].ry,0)+d)%360+360)%360;U.sel="co:"+i;rebuildThrottled();};
+window.mCrane=(k,d)=>{snapshot("mcrane."+k);if(k==="x")U.tw.craneX=+(numv(U.tw.craneX,16)+d).toFixed(1);if(k==="z")U.tw.craneZ=+(numv(U.tw.craneZ,0)+d).toFixed(1);if(k==="r")U.tw.craneRot=((numv(U.tw.craneRot,0)+d)%360+360)%360;rebuildThrottled();};
+// かんたん案件作成（スマホ）
+window.quickCreate=()=>{
+ const g=(id)=>document.getElementById(id);const v=(id,fb)=>{const e=g(id);const n=parseFloat(e&&e.value);return isFinite(n)&&n>0?n:fb;};
+ const name=(g("qc-name")&&g("qc-name").value.trim())||"新規案件（かんたん作成）";
+ const use=(g("qc-use")&&g("qc-use").value)||"共同住宅（賃貸）", st=(g("qc-struct")&&g("qc-struct").value)||"RC";
+ const fl=Math.round(v("qc-floors",5)), bw=v("qc-bw",12), bd=v("qc-bd",10), sw=v("qc-sw",18), sd=v("qc-sd",16), rw=v("qc-rw",6);
+ resetToDefault();
+ U.p.name=name;U.p.use=use;U.p.struct=st;U.p.floors=fl;U.p.height=+(fl*(st==="S"?3.6:3.1)).toFixed(1);U.p.tArea=+(bw*bd*fl*0.95).toFixed(0);
+ U.site.w=sw;U.site.d=sd;U.road.w=rw;U.road.show=true;U.road.walkShow=false;U.tw.person=false;U.tw.poles=false;
+ U.blocks=[{id:1,label:"建物",f1:1,f2:fl,w:bw,d:bd,dx:0,dz:0,ry:0}];
+ U.tw.mode="build";U.tw.step=Math.max(1,Math.round(fl*0.6));U.tw.fence=true;U.tw.fenceShape="rect";U.tw.crane=true;U.tw.craneX=Math.round(bw/2+4);U.tw.craneZ=0;U.tw.scaffold=true;
+ U.cobj=[];U._mEdit=true;
+ closeStart();rebuild();renderPanel();renderBar();view("bird");_sheet="temp";renderMobile();
+ toast("3Dを作りました。仮設メニューでクレーンや車両を置いてみてください","ok");
+};
 function renderMobile(){
  const on=document.body.classList.contains("simple");
  let top=document.getElementById("mtop"),bar=document.getElementById("mbar"),sheet=document.getElementById("msheet"),back=document.getElementById("mback");
  if(!top){top=document.createElement("div");top.id="mtop";document.body.appendChild(top);}
  if(!bar){bar=document.createElement("div");bar.id="mbar";document.body.appendChild(bar);}
  if(!back){back=document.createElement("div");back.id="mback";back.onclick=closeSheet;document.body.appendChild(back);}
- if(!sheet){sheet=document.createElement("div");sheet.id="msheet";document.body.appendChild(sheet);}
+ if(!sheet){sheet=document.createElement("div");sheet.id="msheet";document.body.appendChild(sheet);
+  // 下スワイプで閉じる
+  let y0=null;sheet.addEventListener("touchstart",(e)=>{y0=e.touches[0].clientY;},{passive:true});
+  sheet.addEventListener("touchend",(e)=>{if(y0==null)return;const dy=e.changedTouches[0].clientY-y0;y0=null;if(dy>60&&sheet.scrollTop<=0)closeSheet();},{passive:true});}
+ renderPill();
  if(!on){top.style.display="none";bar.style.display="none";sheet.classList.remove("open");back.classList.remove("open");return;}
  top.style.display="";bar.style.display="";
  const cs=(typeof collectChecks==="function")?collectChecks():[];const nNg=cs.filter(c=>c.lv==="ng").length,nW=cs.filter(c=>c.lv==="warn").length;
- const badge=nNg?`<span class="mb ng">要検討 ${nNg}</span>`:(nW?`<span class="mb warn">注意 ${nW}</span>`:`<span class="mb ok">判定OK</span>`);
+ const badge=nNg?`<button class="mb ng" onclick="openSheet('check')">要検討 ${nNg}${nW?"・注意 "+nW:""}</button>`:(nW?`<button class="mb warn" onclick="openSheet('check')">注意 ${nW}</button>`:`<button class="mb ok" onclick="openSheet('check')">判定OK</button>`);
  const PH={demo:"既存解体",retain:"山留め・掘削",pile:"杭工事",steel:"鉄骨建て方",build:"躯体・仮設",plan:"完成"};
- top.innerHTML=`<button class="mt-btn" onclick="openStart()" title="案件を開く">≡</button><div class="mt-title"><b>${(U.p.name||"BimGen").slice(0,22)}</b><span>${PH[U.tw.mode]||""}</span></div>${badge}`;
- const tabs=[["phase","工程","◧"],["view","表示","◎"],["check","判定","✓"],["edit","編集","✎"]];
+ const mode=`<button class="mmode ${U._mEdit?"edit":""}" onclick="toggleEditMode()" title="タップで切替">${U._mEdit?"✏ 編集中":"🔒 閲覧中"}</button>`;
+ top.innerHTML=`<button class="mt-btn" onclick="openStart()" title="案件を開く">≡</button><div class="mt-title"><b>${(U.p.name||"BimGen").slice(0,20)}</b><span>${PH[U.tw.mode]||""}</span></div>${mode}${badge}`;
+ const tabs=[["phase","工程","◧"],["temp","仮設","▲"],["view","表示","◎"],["edit","編集","✎"]];
  bar.innerHTML=tabs.map(t=>`<button class="mbtn ${_sheet===t[0]?"on":""}" onclick="openSheet('${t[0]}')"><span>${t[2]}</span>${t[1]}</button>`).join("");
  if(!_sheet){sheet.classList.remove("open");back.classList.remove("open");return;}
- let h="";
- if(_sheet==="phase"){
+ let h="",title="";
+ if(_sheet==="phase"){title="工程フェーズ";
   const PHASES=[["demo","既存解体"],["retain","山留め・掘削"],["pile","杭工事"],["steel","鉄骨建て方"],["build","躯体・仮設"],["plan","完成"]];
-  h=`<div class="ms-h">工程フェーズ</div><div class="ms-grid">${PHASES.map(([k,l])=>`<button class="ms-btn ${U.tw.mode===k?"on":""}" onclick="setMode('${k}');renderMobile()">${l}</button>`).join("")}</div>
-   ${(U.tw.mode==="build"||U.tw.mode==="steel")?`<div class="ms-h">進捗（〜階）</div><div class="ms-row"><button class="ms-btn" onclick="S('tw.step',Math.max(1,Math.round(numv(U.tw.step,1))-1));renderMobile()">−</button><div class="ms-val">${Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1)))} 階</div><button class="ms-btn" onclick="S('tw.step',Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1))+1));renderMobile()">＋</button></div>`:""}`;
- }else if(_sheet==="view"){
+  h=`<div class="ms-grid">${PHASES.map(([k,l])=>`<button class="ms-btn ${U.tw.mode===k?"on":""}" onclick="setMode('${k}');renderMobile()">${l}</button>`).join("")}</div>
+   ${(U.tw.mode==="build"||U.tw.mode==="steel")?`<div class="ms-h">進捗（〜階）</div><div class="ms-row"><button class="ms-btn" onclick="S('tw.step',Math.max(1,Math.round(numv(U.tw.step,1))-1));renderMobile()">−</button><div class="ms-val">${Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1)))} 階</div><button class="ms-btn" onclick="S('tw.step',Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1))+1));renderMobile()">＋</button></div>`:""}
+   <div class="ms-note">工程を変えると、山留め・杭・鉄骨・躯体・完成の状態に3Dが切り替わります。</div>`;
+ }else if(_sheet==="temp"){title="仮設を触る";
+  const has=(t)=>_cobjIdx(t)>=0; const cr=U.tw.crane;
+  const mv=(t)=>has(t)?`<div class="ms-pad"><button class="ms-sq" onclick="mMoveCO('${t}',0,-1)">↑</button><div class="ms-pad-mid"><button class="ms-sq" onclick="mMoveCO('${t}',-1,0)">←</button><button class="ms-sq" onclick="mRotCO('${t}',15)">↻</button><button class="ms-sq" onclick="mMoveCO('${t}',1,0)">→</button></div><button class="ms-sq" onclick="mMoveCO('${t}',0,1)">↓</button></div>`:"";
+  h=`<div class="ms-note" style="margin-top:0">ON/OFFして、矢印で1mずつ動かし、↻で15°回します。3Dの上でも直接ドラッグできます（編集モード）。</div>
+   <div class="ms-h">タワークレーン</div>
+   <div class="ms-row"><button class="ms-btn ${cr?"on":""}" onclick="S('tw.crane',${!cr});renderMobile()">${cr?"クレーン ON":"クレーン OFF"}</button>
+    ${cr?`<select class="ms-sel" onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(m=>`<option value="${m}" ${U.tw.craneModel===m?"selected":""}>${m}（作業半径${CRANE_SPECS[m].work}m）</option>`).join("")}</select>`:""}</div>
+   ${cr?`<div class="ms-pad"><button class="ms-sq" onclick="mCrane('z',-1)">↑</button><div class="ms-pad-mid"><button class="ms-sq" onclick="mCrane('x',-1)">←</button><button class="ms-sq" onclick="mCrane('r',15)">↻</button><button class="ms-sq" onclick="mCrane('x',1)">→</button></div><button class="ms-sq" onclick="mCrane('z',1)">↓</button></div>`:""}
+   <div class="ms-h">仮囲い・足場</div>
+   <div class="ms-row"><button class="ms-btn ${U.tw.fence?"on":""}" onclick="S('tw.fence',${!U.tw.fence});renderMobile()">仮囲い ${U.tw.fence?"ON":"OFF"}</button><button class="ms-btn ${U.tw.scaffold?"on":""}" onclick="S('tw.scaffold',${!U.tw.scaffold});renderMobile()">足場 ${U.tw.scaffold?"ON":"OFF"}</button></div>
+   <div class="ms-h">車両・揚重</div>
+   <div class="ms-row"><button class="ms-btn ${has("mixer")?"on":""}" onclick="mToggleCO('mixer','8t')">生コン車 ${has("mixer")?"ON":"OFF"}</button><button class="ms-btn ${has("pump")?"on":""}" onclick="mToggleCO('pump','m4t')">ポンプ車 ${has("pump")?"ON":"OFF"}</button></div>
+   ${mv("mixer")}${mv("pump")}
+   <div class="ms-row"><button class="ms-btn ${has("lsev")?"on":""}" onclick="mToggleCO('lsev','h32')">LSEV ${has("lsev")?"ON":"OFF"}</button><button class="ms-btn ${has("rough")?"on":""}" onclick="mToggleCO('rough','25t')">ラフター ${has("rough")?"ON":"OFF"}</button></div>
+   ${mv("lsev")}${mv("rough")}`;
+ }else if(_sheet==="view"){title="表示";
   h=`<div class="ms-h">視点</div><div class="ms-grid">${[["bird","鳥瞰"],["front","正面"],["eye","目線"],["top","真上"]].map(([k,l])=>`<button class="ms-btn" onclick="view('${k}');closeSheet()">${l}</button>`).join("")}</div>
-   <div class="ms-h">表示するもの</div><div class="ms-list">${LAYER_DEF.map(d=>`<label class="ms-chk"><input type="checkbox" ${(U.layers||{})[d[0]]!==false?"checked":""} onchange="toggleLayer('${d[0]}',this.checked);renderMobile()"><span>${d[1]}</span></label>`).join("")}</div>
-   <div class="ms-row"><button class="ms-btn" onclick="U.auto=!U.auto;renderBar();renderMobile()">${U.auto?"自動回転 停止":"自動回転"}</button><button class="ms-btn" onclick="closeSheet();togglePresent()">全画面（プレゼン）</button></div>`;
- }else if(_sheet==="check"){
+   <div class="ms-row"><button class="ms-btn" onclick="U.auto=!U.auto;renderBar();renderMobile()">${U.auto?"自動回転 停止":"自動回転"}</button><button class="ms-btn" onclick="closeSheet();togglePresent()">全画面</button></div>
+   <div class="ms-row"><button class="ms-btn primary" onclick="resetDisplay()">画面表示をリセット</button></div>
+   <div class="ms-h">表示するもの</div><div class="ms-list">${LAYER_DEF.map(d=>`<label class="ms-chk"><input type="checkbox" ${(U.layers||{})[d[0]]!==false?"checked":""} onchange="toggleLayer('${d[0]}',this.checked);renderMobile()"><span>${d[1]}</span></label>`).join("")}</div>`;
+ }else if(_sheet==="check"){title="検討判定";
   const ico={ok:"●",warn:"▲",ng:"✕",na:"－"};
-  h=`<div class="ms-h">検討判定　${badge}</div><div class="ms-list">${cs.map(c=>`<div class="ms-check ${c.lv}"><div class="ms-ci">${ico[c.lv]}</div><div class="ms-ct"><b>${c.label}</b><span class="ms-cv">${c.val}</span><small>${c.note}</small></div></div>`).join("")||'<div class="ms-note">判定項目がありません</div>'}</div>
+  h=`<div class="ms-list">${cs.map(c=>`<div class="ms-check ${c.lv}"><div class="ms-ci">${ico[c.lv]}</div><div class="ms-ct"><b>${c.label}</b><span class="ms-cv">${c.val}</span><small>${c.note}</small></div></div>`).join("")||'<div class="ms-note">判定項目がありません</div>'}</div>
    <div class="ms-row"><button class="ms-btn primary" onclick="closeSheet();exportSheet()">検討シート（A4）</button><button class="ms-btn" onclick="closeSheet();savePNG()">画像を保存</button></div>
    <div class="ms-note">目安判定です。正式な可否は関係機関・法規で確認してください。</div>`;
- }else if(_sheet==="edit"){
-  h=`<div class="ms-h">案件</div><div class="ms-grid">
-   <button class="ms-btn" onclick="closeSheet();openDemoCase()">デモ案件を開く</button>
+ }else if(_sheet==="edit"){title="編集・案件";
+  const uses=["共同住宅（賃貸）","共同住宅（分譲）","事務所","店舗","ホテル","倉庫・物流","病院・医療"];
+  h=`<div class="ms-grid">
+   <button class="ms-btn" onclick="closeSheet();openStart()">サンプル・実案件を開く</button>
    <button class="ms-btn" onclick="closeSheet();document.getElementById('json-file').click()">ファイルを開く</button>
    <button class="ms-btn" onclick="closeSheet();restoreDraft()">前回の続き</button>
    <button class="ms-btn" onclick="closeSheet();saveProjectJSON()">保存</button></div>
-   <div class="ms-h">編集</div>
-   <div class="ms-note">なぞる・置く・数値の変更はPC版UIで行います。スマホでは「見る・回す・工程を切り替える・判定を見る」を優先しています。</div>
-   <div class="ms-row"><button class="ms-btn" onclick="setSimpleUI(false,true)">詳細編集（PC版UI）へ</button><button class="ms-btn" onclick="closeSheet();undo()">↶ 元に戻す</button></div>`;
+   <div class="ms-h">かんたん案件作成</div>
+   <div class="qc"><label>案件名<input id="qc-name" type="text" placeholder="例 ○○町 計画" value="${(U.p.name||"").replace(/"/g,"&quot;")}"></label>
+    <div class="qc-2"><label>用途<select id="qc-use">${uses.map(u=>`<option ${U.p.use===u?"selected":""}>${u}</option>`).join("")}</select></label><label>構造<select id="qc-struct">${["RC","S","SRC","W"].map(s=>`<option ${U.p.struct===s?"selected":""}>${s}</option>`).join("")}</select></label></div>
+    <div class="qc-3"><label>階数<input id="qc-floors" type="number" inputmode="numeric" value="${Math.round(posv(U.p.floors,5))}"></label><label>建物 幅m<input id="qc-bw" type="number" inputmode="decimal" value="${posv((U.blocks[0]||{}).w,12)}"></label><label>建物 奥行m<input id="qc-bd" type="number" inputmode="decimal" value="${posv((U.blocks[0]||{}).d,10)}"></label></div>
+    <div class="qc-3"><label>敷地 間口m<input id="qc-sw" type="number" inputmode="decimal" value="${posv(U.site.w,18)}"></label><label>敷地 奥行m<input id="qc-sd" type="number" inputmode="decimal" value="${posv(U.site.d,16)}"></label><label>道路 幅員m<input id="qc-rw" type="number" inputmode="decimal" value="${posv(U.road.w,6)}"></label></div>
+    <button class="ms-btn primary" style="width:100%" onclick="quickCreate()">この条件で3Dを作る</button></div>
+   <div class="ms-h">詳細編集</div>
+   <div class="ms-note">なぞる・寸法入力・注記などはPC版UIで行えます。スマホでも一時的に切り替えられます。</div>
+   <div class="ms-row"><button class="ms-btn" onclick="setSimpleUI(false)">詳細編集（PC版UI）へ</button><button class="ms-btn" onclick="closeSheet();undo()">↶ 元に戻す</button></div>`;
  }
- sheet.innerHTML=`<div class="ms-grip" onclick="closeSheet()"></div>${h}`;
+ sheet.innerHTML=`<div class="ms-top"><div class="ms-grip"></div><div class="ms-title">${title}</div><button class="ms-x" onclick="closeSheet()" aria-label="閉じる">×</button></div>${h}`;
  sheet.classList.add("open"); back.classList.add("open");
 }
 window.renderMobile=renderMobile;
 // 起動時に判定して適用。判定・工程が変わったら再描画
-document.addEventListener("DOMContentLoaded",()=>{if(simplePreferred())document.body.classList.add("simple");renderMobile();});
-if(document.readyState!=="loading"){if(simplePreferred())document.body.classList.add("simple");renderMobile();}
+document.addEventListener("DOMContentLoaded",()=>{if(simplePreferred())document.body.classList.add("simple");U._mEdit=false;renderMobile();});
+if(document.readyState!=="loading"){if(simplePreferred())document.body.classList.add("simple");U._mEdit=false;renderMobile();}
 window.addEventListener("resize",()=>{if(document.body.classList.contains("simple")&&!_sheet)renderMobile();});
 
 // ───── プレゼン表示（パネル・バーを隠して3Dを全面に。顧客・会議用）─────
@@ -3583,7 +3689,7 @@ window.togglePresent=()=>{
   x.style.display="";
   toast("プレゼン表示：画面をドラッグで回転、ホイールで拡大。Escで戻る");
  }else if(x){x.style.display="none";}
- setTimeout(resize,50);
+ if(typeof renderPill==="function")renderPill(); setTimeout(resize,50);
 };
 document.addEventListener("keydown",(e)=>{if(e.key==="Escape"&&document.body.classList.contains("present"))window.togglePresent();});
 function renderBar(){
@@ -3602,7 +3708,7 @@ function renderBar(){
     {label:"吸着（頂点・道路・15°回転）",fn:"U.snap=!U.snap;renderBar();renderPanel()",on:U.snap!==false},null,
     {label:"レイヤー（表示の絞り込み）",fn:"toggleLayers()",on:!!U._layersOpen},null,
     {label:"空と霧（見た目）",fn:"U.sky=(U.sky===false);rebuild();renderBar()",on:U.sky!==false},null,
-    {label:"スマホ簡易表示に切替",fn:"setSimpleUI(true,true)",on:document.body.classList.contains("simple")}])}
+    {label:"スマホ簡易表示へ戻る",fn:"setSimpleUI(true)",on:document.body.classList.contains("simple")}])}
   <button class="btn" onclick="saveProjectJSON()" title="案件を保存（暗号化可）">保存</button>
   <button class="btn" onclick="document.getElementById('json-file').click()" title="保存した案件を開く">読込</button>
   <input type="file" id="json-file" accept=".json,.bsjson" style="display:none" onchange="loadProjectJSON(this.files[0]); this.value=''">
