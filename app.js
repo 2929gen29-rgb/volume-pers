@@ -286,6 +286,11 @@ el.addEventListener("pointerdown",(e)=>{
  if(U.polyInput.on&&ctrl.ptrs.size===1){const gp=groundPoint(e);
   U.polyInput.pts.push({x:+(gp.x-numv(U.site.dx,0)).toFixed(2),z:+(gp.z-numv(U.site.dz,0)).toFixed(2)});
   rebuild();renderPanel();return;}
+ // 下敷きの切り取り：対角2点クリック
+ if(U.under&&U.under._crop&&U.under._crop.on&&ctrl.ptrs.size===1){const gp=groundPoint(e);
+  if(!U.under._crop.a){U.under._crop.a={x:gp.x,z:gp.z};renderPanel();toast("1点目を取得。対角の2点目をクリック");}
+  else{cropUnder(U.under._crop.a,{x:gp.x,z:gp.z});}
+  return;}
  // 下絵スケール補正：2点クリック
  if(U.calib.on&&ctrl.ptrs.size===1){const gp=groundPoint(e);
   if(!U.calib.a){U.calib.a={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};U.calib.b=null;}
@@ -1359,7 +1364,7 @@ function rebuild(){
 
 // ───── 案件データの保存・読込 (JSON / AES暗号化対応) ─────
 function saveProjectJSON(){
- const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="_pileCount"||k==="_pileNote"||k==="_snapHit"||k==="_toolsMin"||k==="_layersOpen"||k==="_roadClear"||k==="_roadRemain"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
+ const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="_pileCount"||k==="_pileNote"||k==="_crop"||k==="_snapHit"||k==="_toolsMin"||k==="_layersOpen"||k==="_roadClear"||k==="_roadRemain"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
  // 互換のためのメタ情報（将来バージョンで古いデータを安全に開くための目印）
  saveState._meta={app:"BimGen",appVer:APP_VER,schema:2,savedAt:new Date().toISOString()};
  const jsonStr=JSON.stringify(saveState,null,2);
@@ -1654,7 +1659,46 @@ async function parsePdfSummary(){
 window.parsePdfSummary=parsePdfSummary;
 
 // ───── PDF / 画像 読込 ─────
+// ───── 下敷きのトリミング：画面上の対角2点で範囲を指定し、その部分だけを切り出して貼り直す ─────
+let _underOrig=null;   // 切り取り前（元に戻す用）
+function underLocalFromWorld(wx,wz){
+ // ワールド → 下敷き平面のローカル(x,y)。平面は rotation.x=-π/2, rotation.z=rot、位置(dx,dz)
+ const th=numv(U.under.rot,0)*Math.PI/180, c=Math.cos(th), s=Math.sin(th);
+ const X=wx-numv(U.under.dx,0), Y=-(wz-numv(U.under.dz,0));
+ return {x:X*c+Y*s, y:-X*s+Y*c};
+}
+function underWorldFromLocal(lx,ly){
+ const th=numv(U.under.rot,0)*Math.PI/180, c=Math.cos(th), s=Math.sin(th);
+ return {x:numv(U.under.dx,0)+(lx*c-ly*s), z:numv(U.under.dz,0)-(lx*s+ly*c)};
+}
+function cropUnder(p1,p2){
+ const tex=U.under.tex; if(!tex||!tex.image){toast("下敷きがありません","err");return;}
+ const img=tex.image, IW=img.width||img.naturalWidth, IH=img.height||img.naturalHeight;
+ if(!IW||!IH){toast("画像サイズを取得できません","err");return;}
+ const w=posv(U.under.width,40), h=w*IH/IW;
+ const a=underLocalFromWorld(p1.x,p1.z), b=underLocalFromWorld(p2.x,p2.z);
+ // ローカル→画素（画像上端が local y=+h/2）
+ const px=(lx)=>Math.round((lx+w/2)/w*IW), py=(ly)=>Math.round((h/2-ly)/h*IH);
+ let x0=Math.max(0,Math.min(px(a.x),px(b.x))), x1=Math.min(IW,Math.max(px(a.x),px(b.x)));
+ let y0=Math.max(0,Math.min(py(a.y),py(b.y))), y1=Math.min(IH,Math.max(py(a.y),py(b.y)));
+ if(x1-x0<8||y1-y0<8){toast("範囲が小さすぎます。もう少し広く2点を指定してください","err");return;}
+ const cv=document.createElement("canvas"); cv.width=x1-x0; cv.height=y1-y0;
+ try{cv.getContext("2d").drawImage(img,x0,y0,x1-x0,y1-y0,0,0,cv.width,cv.height);}catch(e){toast("この画像は切り取れません（外部画像の制限）","err");return;}
+ if(!_underOrig)_underOrig={tex,width:U.under.width,dx:U.under.dx,dz:U.under.dz,raw:U.under.raw,pages:U.under.pages,page:U.under.page};
+ // 切り取り後の中心（ローカル）→ ワールドへ。幅は比例
+ const cxl=((x0+x1)/2/IW)*w-w/2, cyl=h/2-((y0+y1)/2/IH)*h;
+ const wc=underWorldFromLocal(cxl,cyl);
+ const ntex=new THREE.CanvasTexture(cv); ntex.anisotropy=4;
+ U.under.tex=ntex; U.under.width=+(w*(x1-x0)/IW).toFixed(2); U.under.dx=+wc.x.toFixed(2); U.under.dz=+wc.z.toFixed(2);
+ U.under.raw=null; U.under.pages=1; U.under.page=1;   // 切り取り後はページ切替不可（元に戻すと復活）
+ U.under._crop=null; rebuild(); renderPanel(); toast("下敷きを切り取りました（元に戻せます）","ok");
+}
+window.startUnderCrop=()=>{if(!U.under.tex){toast("先に下敷きを読み込んでください","err");return;}U.under._crop={on:true,a:null};view("top");renderPanel();toast("切り取る範囲の対角2点を、下敷きの上でクリック（Escで中止）");};
+window.cancelUnderCrop=()=>{U.under._crop=null;renderPanel();};
+window.restoreUnder=()=>{if(!_underOrig)return;if(U.under.tex&&U.under.tex!==_underOrig.tex&&U.under.tex.dispose)U.under.tex.dispose();
+ U.under.tex=_underOrig.tex;U.under.width=_underOrig.width;U.under.dx=_underOrig.dx;U.under.dz=_underOrig.dz;U.under.raw=_underOrig.raw;U.under.pages=_underOrig.pages;U.under.page=_underOrig.page;_underOrig=null;rebuild();renderPanel();toast("切り取り前に戻しました","ok");};
 async function loadUnderFile(file){
+ _underOrig=null; U.under._crop=null;
  if(!file)return;
  if(file.type==="application/pdf"){
   const buf=await file.arrayBuffer();
@@ -1710,7 +1754,7 @@ window.addEventListener("unhandledrejection",(e)=>{try{toast("エラー："+((e.
 
 // ───── Undo（操作の取り消し：Uのスナップショットを最大30段階保持）─────
 const _hist=[]; let _histLast=0, _histKey="";
-const _SNAP_SKIP=(k)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="_pileCount"||k==="_pileNote"||k==="_snapHit"||k==="_toolsMin"||k==="_layersOpen"||k==="_roadClear"||k==="_roadRemain"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus");
+const _SNAP_SKIP=(k)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="_pileCount"||k==="_pileNote"||k==="_crop"||k==="_snapHit"||k==="_toolsMin"||k==="_layersOpen"||k==="_roadClear"||k==="_roadRemain"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus");
 // key: 同じ操作（スライダー連続など）は700ms以内なら1回にまとめる
 function snapshot(key){
  const now=Date.now();
@@ -1776,6 +1820,7 @@ document.addEventListener("keydown",(e)=>{
   if(e.key==="Escape"){U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar();toast("なぞりを中止しました");e.preventDefault();return;}
   if(e.key==="Backspace"||e.key==="Delete"){if(U.polyInput.pts.length){U.polyInput.pts.pop();rebuild();renderPanel();renderBar();toast("1点戻しました（"+U.polyInput.pts.length+"点）");}e.preventDefault();return;}
  }
+ if(e.key==="Escape"&&U.under&&U.under._crop&&!inField){U.under._crop=null;renderPanel();toast("切り取りを中止しました");return;}
  if(e.key==="Escape"&&U.sel&&!inField){U.sel=null;renderSelCard();rebuild();return;}
  if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&(e.key==="z"||e.key==="Z")){
   const t=e.target; if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"||t.tagName==="SELECT"))return;
@@ -2278,6 +2323,10 @@ function renderPanel(){
   ${U.calib.on
     ? `<div style="background:#EEF3FA;border:1.5px dashed #2552A0;border-radius:8px;padding:8px 10px;font-size:11.5px;line-height:1.7"><b>スケール補正モード中</b><br>下絵上の「実寸が分かる2点」（例：通り芯間や既知の寸法線の端点）をクリックすると、実際の距離を入力する画面が出ます。<br>${U.calib.a?"1点目を取得。2点目をクリック…":"1点目をクリック…"}<br><button class="btn" style="margin-top:6px;color:#B0433A" onclick="U.calib.on=false;U.calib.a=null;U.calib.b=null;rebuild();renderPanel()">中止</button></div>`
     : `<button class="addbtn" onclick="U.calib.on=true;U.calib.a=null;U.calib.b=null;renderPanel()">📐 2点で実寸を指定して縮尺を自動補正</button>`}
+  ${U.under._crop&&U.under._crop.on
+    ? `<div style="background:#FFF3DD;border:1.5px dashed var(--amber);border-radius:8px;padding:8px 10px;font-size:11.5px;line-height:1.7;margin:6px 0"><b>✂ 切り取り中</b>：残したい範囲の<b>対角2点</b>を下敷きの上でクリック。${U.under._crop.a?"1点目取得済み → 2点目を…":"1点目を…"}<button class="btn" style="margin-left:8px;font-size:11px" onclick="cancelUnderCrop()">中止(Esc)</button></div>`
+    : `<div class="grid2" style="margin:6px 0"><button class="btn" style="font-size:11.5px;border:1.5px solid var(--navy)" onclick="startUnderCrop()">✂ 範囲を切り取る（2点）</button>${_underOrig?`<button class="btn" style="font-size:11.5px" onclick="restoreUnder()">↺ 切り取り前に戻す</button>`:`<span></span>`}</div>
+       <div class="hint" style="margin:-2px 0 6px">図面の枠・備考・表題欄など不要な部分を外して、必要な範囲だけを残せます。位置と縮尺はそのまま保たれます。</div>`}
   ${SL("図面の幅 = 実寸 m",U.under.width,"(v)=>S('under.width',v)",5,200,0.5)}
   ${SL("回転 °（建物の傾きを軸に合わせる）",U.under.rot,"(v)=>S('under.rot',v)",0,360,1)}
   ${SL("透過度",U.under.opacity,"(v)=>S('under.opacity',v)",0.1,1,0.05)}
@@ -2629,7 +2678,9 @@ function buildBIMMeta(){
  const tFloor = posv(U.p.tArea,0) || st.floorArea;
  const prA=posv(U.p.privArea,0), consA=posv(U.p.consArea,0), un=Math.round(posv(U.p.units,0));
  return {
-  generator:"BuildSight", schema:"bsbim-1", exportedAt:new Date().toISOString(),
+  generator:"BimGen", appVersion:APP_VER, schema:"bsbim-2", exportedAt:new Date().toISOString(),
+  coordinateSystem:{units:"m", up:"Y", ground:"XZ", origin:"site center (site.origin)", frontRoadSide:"+Z",
+    rotation:"degrees, three.js rotation.y (positive: +X toward -Z)", note:"vehicle local X=width, Z=length"},
   project:{name:U.p.name, use:U.p.use, structure:U.p.struct, address:U.p.addr||"", note:U.p.note||""},
   building:{floorsAbove:floorsAll, totalHeight_m:H, typicalFloorHeight_m:fh,
             totalFloorArea_m2:+tFloor.toFixed(1), buildingArea_m2:+bcArea.toFixed(1),
@@ -2650,8 +2701,14 @@ function buildBIMMeta(){
         origin:{dx:numv(U.site.dx,0), dz:numv(U.site.dz,0)}},
   legal:{buildingCoverage_pct:site>0?+(bcArea/site*100).toFixed(1):null,
          floorAreaRatio_pct:site>0?+(tFloor/site*100).toFixed(1):null},
-  road:{width_m:posv(U.road.w,8), side:U.road.side},
-  geo:{elevation_m:U.geo&&U.geo.elev!=null?U.geo.elev:null, label:U.geo?U.geo.name:""},
+  road:{width_m:posv(U.road.w,8), side:U.road.side, autoRoadShown:U.road.show!==false, sidewalkShown:!!U.road.walkShow, sidewalkWidth_m:numv(U.road.walkW,1.6),
+        offset_m:{dx:numv(U.road.dx,0),dz:numv(U.road.dz,0)}, rotation_deg:numv(U.road.ry,0)},
+  roadUse:(()=>{try{const r=roadworkCalc();return {mixer:U.roadwork.mixerSize,pump:U.roadwork.pumpSize,mountUp_m:numv(U.roadwork.mountUp,0),
+        lineLength_m:r.lineLen, frontage_m:r.front, fitsFrontage:r.fitFront, remainingLane_m:r.remain, emergency4mOK:r.emgOK, passing3mOK:r.passOK,
+        permits:{police:U.roadwork.permitPolice||"",roadAdmin:U.roadwork.permitRoad||"",office:U.roadwork.permitOffice||""}};}catch(e){return null;}})(),
+  geo:{elevation_m:U.geo&&U.geo.elev!=null?U.geo.elev:null, label:U.geo?U.geo.name:"", lat:U.geo&&U.geo.lat!=null?U.geo.lat:null, lon:U.geo&&U.geo.lon!=null?U.geo.lon:null,
+       mapTile:U.under&&U.under.gsiKind?{provider:"国土地理院 地理院タイル",kind:U.under.gsiKind,zoom:U.under.gsiZoom}:null},
+  underlay:U.under&&U.under.tex?{width_m:posv(U.under.width,40),rotation_deg:numv(U.under.rot,0),offset_m:{dx:numv(U.under.dx,0),dz:numv(U.under.dz,0)},opacity:numv(U.under.opacity,.7)}:null,
   blocks:U.blocks.map(b=>({label:b.label, fromFloor:b.f1, toFloor:b.f2,
     shape:b.shape==="poly"?"polygon":"box",
     width_m:b.shape==="poly"?null:posv(b.w,10), depth_m:b.shape==="poly"?null:posv(b.d,10),
@@ -2662,7 +2719,24 @@ function buildBIMMeta(){
     color:a.color, x_m:numv(a.x,0), z_m:numv(a.z,0),
     width_m:a.type==="zone"?posv(a.w,6):null, depth_m:a.type==="zone"?posv(a.d,6):null,
     rotation_deg:numv(a.ry,0)})),
-  roads_traced:(U.roads||[]).map(r=>({width_m:numv(r.w,6), offset_m:{dx:numv(r.dx,0),dz:numv(r.dz,0)}, centerline_m:(r.pts||[]).map(p=>({x:numv(p.x,0),z:numv(p.z,0)}))})),
+  roads_traced:(U.roads||[]).map((r,i)=>{const rc=(U._roadClear||[]).find(x=>x.ri===i);return {id:"road"+(i+1), width_m:numv(r.w,6), sidewalk_m:{left:numv(r.walkL,0),right:numv(r.walkR,0)},
+    offset_m:{dx:numv(r.dx,0),dz:numv(r.dz,0)}, rotation_deg:numv(r.ry,0), centerline_m:(r.pts||[]).map(p=>({x:numv(p.x,0),z:numv(p.z,0)})),
+    clearance:rc&&rc.n?{vehicles:rc.n,remaining_m:rc.remain,level:rc.lv}:null};}),
+  constructionObjects:(U.cobj||[]).map((c,i)=>{const t=COBJ_TYPES[c.type]||{};const sz=cobjSize(c.type,c.size)||{};return {id:"obj"+(i+1), type:c.type, label:t.label||c.type, sizeKey:c.size, sizeLabel:sz.label||null,
+    width_m:posv(c.w,sz.w||0), length_m:posv(c.d,sz.d||0), height_m:posv(c.h,sz.h||0), outrigger_m:sz.out||null, tailSwing_m:sz.tail||null, workRadius_m:sz.work||null,
+    x_m:numv(c.x,0), z_m:numv(c.z,0), rotation_deg:numv(c.ry,0), walkZoneConflict:!!c._warn, roadClearance:c._roadRemain?{road:"road"+(c._roadRemain.ri+1),remaining_m:c._roadRemain.remain,level:c._roadRemain.lv}:null};}),
+  temporaryWorks:{phase:U.tw.mode||"plan", progressFloor:Math.round(numv(U.tw.step,1)),
+    towerCrane:U.tw.crane?Object.assign({model:U.tw.craneModel, x_m:numv(U.tw.craneX,0), z_m:numv(U.tw.craneZ,0), jib_m:numv(U.tw.craneJib,0), rotation_deg:numv(U.tw.craneRot,0)},CRANE_SPECS[U.tw.craneModel]||{}):null,
+    scaffold:!!U.tw.scaffold, asagaoHeight_m:numv(U.tw.mountH,0)||null, longSpanElevator:U.tw.ev?{x_m:numv(U.tw.evX,0),z_m:numv(U.tw.evZ,0)}:null,
+    excavation:{depth_m:numv(U.tw.pitDepth,4), retainingMargin_m:numv(U.tw.retainMargin,1)},
+    piles:{pitch_m:numv(U.tw.pilePitch,5), diameter_m:numv(U.tw.pileDia,0.8), length_m:numv(U.tw.pileLen,15), count:U._pileCount?U._pileCount.n:null,
+      existing:U.tw.oldPiles?{pitch_m:numv(U.tw.oldPitch,4),rotation_deg:numv(U.tw.oldRot,0),extend_m:numv(U.tw.oldExtend,2),offset_m:{dx:numv(U.tw.oldDx,0),dz:numv(U.tw.oldDz,0)},count:U._pileCount?U._pileCount.old:null}:null},
+    steel:{columnPitch_m:numv(U.tw.steelPitch,7)}, poles:!!U.tw.poles},
+  neighbors:(U.nbs||[]).map((n,i)=>({id:"nb"+(i+1), x_m:numv(n.x,0), z_m:numv(n.z,0), width_m:posv(n.w,10), depth_m:posv(n.d,10), height_m:posv(n.h,12), rotation_deg:numv(n.ry,0)})),
+  demolition:U.tw.mode==="demo"&&U.demo?{offset_m:{dx:numv(U.demo.dx,0),dz:numv(U.demo.dz,0)},width_m:posv(U.demo.w,0)||null,depth_m:posv(U.demo.d,0)||null,height_m:posv(U.demo.h,0)||null}:null,
+  checks:(typeof collectChecks==="function"?collectChecks():[]).map(c=>({category:c.cat,item:c.label,value:c.val,level:c.lv,note:c.note})),
+  ojt:Object.entries(OJT_CHECKS).flatMap(([tab,arr])=>arr.map(i=>({key:i.k,source:"OJT "+i.src,tab,item:i.t,done:!!(U.ojt&&U.ojt[i.k])}))),
+  layers:U.layers||null,
   fence:U.tw.fence?{shape:U.tw.fenceShape==="poly"?"polygon":"rect", height_m:numv(U.tw.fenceH,3), gate:U.tw.fenceGate||"front",
     offset_m:{dx:numv(U.tw.fenceDx,0),dz:numv(U.tw.fenceDz,0)}, rotation_deg:numv(U.tw.fenceRy,0),
     points_m:U.tw.fenceShape==="poly"?(U.tw.fencePts||[]).map(p=>({x:numv(p.x,0),z:numv(p.z,0)})):null,
@@ -2999,6 +3073,46 @@ const DEMO_CASE={
         {type:"text",x:-8,z:-6,ry:0,color:"amber",text:"資材置場",fsize:1.6}],
  nbs:[{x:-13,z:0,w:8,d:14,h:15,ry:0},{x:13,z:2,w:8,d:12,h:9,ry:0}],
 };
+// BIM連携用フルサンプル：出力(bim.json/OBJ/検討シート)の全項目に値が入る案件
+const BIM_SAMPLE={
+ p:{name:"（BIM連携サンプル）八王子 明神町 共同住宅計画",use:"共同住宅（賃貸）",struct:"RC",floors:8,height:24.5,addr:"東京都八王子市明神町3丁目",
+    siteArea:512.4,bldgArea:288.0,tArea:1980.0,consArea:2150.0,privArea:1560.0,units:36,note:"BIM連携検証用のフルサンプル。全項目に値を入れてある。数値は架空。"},
+ site:{w:24,d:22,dx:0,dz:0,gl:0.3,h:[0,0,1.4,1.1],slopeDir:"north",slopeDiff:1.4,
+    poly:[{x:-12,z:-11},{x:12,z:-11},{x:12,z:6},{x:7,z:11},{x:-12,z:11}]},
+ blocks:[{id:1,label:"住棟",f1:1,f2:8,w:16,d:14,dx:-1,dz:-2,ry:0},
+         {id:2,label:"低層（エントランス・駐輪）",f1:1,f2:1,shape:"poly",poly:[{x:0,z:0},{x:7,z:0},{x:7,z:6},{x:3,z:6},{x:3,z:9},{x:0,z:9}],dx:5,dz:3,ry:0}],
+ road:{w:6,side:"none",dx:0,dz:0,ry:0,show:false,slope:0.4,walkShow:false,walkW:1.6},
+ roads:[{pts:[{x:-40,z:15},{x:-5,z:15},{x:25,z:15}],w:6,walkL:1.5,walkR:0,dx:0,dz:0,ry:0},
+        {pts:[{x:16,z:15},{x:16,z:-30}],w:4,walkL:0,walkR:0,dx:0,dz:0,ry:0}],
+ roadwork:{mixerSize:"8t",pumpSize:"m4t",mountUp:0.5,permitPolice:"道路使用許可（1号）要協議・誘導員2名",permitRoad:"道路占用：仮囲い乗り出し30cm・朝顔",permitOffice:"事前協議 10/上旬"},
+ tw:{mode:"build",step:4,crane:true,craneModel:"JCL022",craneX:9,craneZ:-5,craneJib:28,craneRot:30,fence:true,fenceH:3,fenceGate:"front",fenceShape:"poly",
+     fencePts:[{x:-12.5,z:-11.5},{x:12.5,z:-11.5},{x:12.5,z:6.3},{x:7.3,z:11.5},{x:-12.5,z:11.5}],fenceGateSeg:3,scaffold:true,poles:false,person:false,
+     pitDepth:5,retainMargin:1.0,pilePitch:4.5,pileDia:1.0,pileLen:18,oldPiles:true,oldPitch:3.6,oldRot:15,oldExtend:1.5,oldDx:0.8,oldDz:-0.5,steelPitch:7,ev:false},
+ cobj:[{type:"mixer",size:"8t",x:-8,z:13.4,ry:90},{type:"pump",size:"m4t",x:1,z:13.4,ry:90},{type:"rough",size:"25t",x:-6,z:4,ry:0},
+       {type:"stage",size:"m",x:6,z:2,ry:0},{type:"lsev",size:"h32",x:-10,z:-9,ry:0},{type:"guard",size:"std",x:-3,z:11.5,ry:0},
+       {type:"walkzone",size:"std",x:-16,z:19.5,ry:90},{type:"temp",size:"plate",x:-6,z:7,ry:0},{type:"temp",size:"hut",x:9,z:-9,ry:0}],
+ subsurface:[{kind:"gas",x:0,z:17,w:1.2,d:60,ry:90},{kind:"water",x:0,z:19,w:1.5,d:60,ry:90},{kind:"elec",x:-9,z:-2,w:2,d:12,ry:0}],
+ annot:[{type:"text",x:9,z:-5,ry:0,color:"red",text:"TC旋回範囲 隣地上空注意",fsize:2},
+        {type:"zone",x:6,z:2,w:9,d:6,ry:0,color:"amber"},{type:"text",x:6,z:2,ry:0,color:"amber",text:"乗入れ構台・荷取り",fsize:1.6},
+        {type:"zone",x:-10,z:-9,w:4,d:6,ry:0,color:"blue"},{type:"text",x:-10,z:-9,ry:0,color:"blue",text:"LSEV 搬入動線",fsize:1.4},
+        {type:"text",x:-8,z:17,ry:0,color:"green",text:"生コン打設 敷地側に縦列",fsize:1.6}],
+ nbs:[{x:-19,z:-2,w:9,d:16,h:16,ry:0},{x:20,z:-6,w:7,d:12,h:9,ry:0},{x:0,z:-22,w:20,d:10,h:12,ry:0}],
+ geo:{lat:35.6615,lon:139.3390,elev:118.2,name:"東京都八王子市明神町3丁目",status:""},
+ ojt:{s1:true,s3:true,s4:true,s5:true,t1:true,t2:true,t5:true,c2:true,c4:true},
+ layers:{site:true,building:true,nbs:true,fence:true,crane:true,cobj:true,annot:true,sub:true,roads:true,under:true},
+ roadcond:{lane:6,walk:1.5,side:"front",showWalk:false},
+ under:{show:false},
+};
+window.openBimSample=()=>{
+ resetToDefault();
+ deepMerge(U,{p:BIM_SAMPLE.p,site:BIM_SAMPLE.site,road:BIM_SAMPLE.road,roadwork:BIM_SAMPLE.roadwork,tw:BIM_SAMPLE.tw,geo:BIM_SAMPLE.geo,layers:BIM_SAMPLE.layers,roadcond:BIM_SAMPLE.roadcond});
+ ["blocks","roads","cobj","subsurface","annot","nbs"].forEach(k=>{U[k]=JSON.parse(JSON.stringify(BIM_SAMPLE[k]));});
+ U.site.poly=JSON.parse(JSON.stringify(BIM_SAMPLE.site.poly)); U.site.h=BIM_SAMPLE.site.h.slice(); U.tw.fencePts=JSON.parse(JSON.stringify(BIM_SAMPLE.tw.fencePts));
+ U.ojt=Object.assign({},BIM_SAMPLE.ojt); U.tw.person=false; U.tw.poles=false; U.road.walkShow=false;
+ U.tab="検討"; U.tabGroup="4";
+ closeStart(); rebuild();renderPanel();renderBar();view("bird");
+ toast("BIM連携用フルサンプルを開きました。出力▾→BIM出力 で全項目入りの bim.json が出ます","ok");
+};
 function resetToDefault(){
  // U を初期状態に戻す（テクスチャ等は破棄）
  const def=JSON.parse(_U_DEFAULT);
@@ -3071,6 +3185,7 @@ window.openStart=()=>{
   <div class="start-row">
    <button class="start-act" style="background:rgba(46,111,190,.08);border-color:rgba(46,111,190,.35)" onclick="newBlank()">📐 図面・地図から始める（白紙）<small>建物・道路なし。下敷きを敷いてなぞる</small></button>
    <button class="start-act demo" onclick="openDemoCase()">▶ デモ案件を開く<small>傾斜地・仮囲い・クレーン・注記が入った状態</small></button>
+   <button class="start-act" style="background:rgba(46,125,91,.08);border-color:rgba(46,125,91,.35)" onclick="openBimSample()">🧱 BIM連携用フルサンプル<small>全項目に値入り。BIM出力・検討シートの検証用</small></button>
    <button class="start-act" onclick="document.getElementById('json-file').click();closeStart()">📂 保存した案件を開く<small>.json / .bsjson</small></button>
    <button class="start-act" onclick="closeStart()">→ このまま続ける<small>現在の内容を編集</small></button>
   </div>
