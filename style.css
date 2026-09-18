@@ -439,3 +439,64 @@ input[type=range]{width:100%;accent-color:var(--amber)}
   #layers{top:44px;right:8px;width:220px}
   #drag{display:none}#toast{bottom:12px}#tour{bottom:8px;width:min(380px,60vw)}
 }
+
+/* ───────────── スタート画面：何ができるか（4項目）・位置づけ・クレジット ───────────── */
+.start-hero{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:2px 0 10px}
+.hero-item{display:flex;flex-direction:column;gap:3px;padding:11px 13px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r)}
+.hero-item b{font-size:14px;color:var(--navy);line-height:1.3}
+.hero-item span{font-size:11.5px;color:var(--ink-2);line-height:1.5}
+.start-tagline{font-size:13px;font-weight:700;color:var(--accent);margin:0 0 12px;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline}
+.start-tagline span{font-size:11px;font-weight:400;color:var(--mut)}
+.start-credit{margin-top:14px;padding-top:10px;border-top:1px solid var(--hair);font-size:11px;color:var(--ink-2);text-align:center}
+@media (max-width:560px){.start-hero{grid-template-columns:1fr}.hero-item b{font-size:13.5px}}
+
+/* ───────────── スマホ簡易モード（body.simple）：3Dが主役・下部に大きな操作 ───────────── */
+body.simple #panel,body.simple #bar,body.simple #tools,body.simple #selcard,body.simple #layers,body.simple #br-stack,body.simple #drag,body.simple #tour{display:none!important}
+#mtop{position:fixed;top:0;left:0;right:0;z-index:9;display:none;align-items:center;gap:10px;height:52px;padding:0 10px 0 6px;
+  background:var(--surface);border-bottom:1px solid var(--line);box-shadow:var(--sh-sm)}
+body.simple #mtop{display:flex}
+.mt-btn{width:44px;height:44px;border:none;background:transparent;font-size:22px;color:var(--navy);border-radius:var(--r);font-family:inherit}
+.mt-btn:active{background:var(--surface-2)}
+.mt-title{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
+.mt-title b{font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mt-title span{font-size:11px;color:var(--mut)}
+.mb{flex:none;font-family:var(--mono);font-weight:700;font-size:12px;padding:5px 10px;border-radius:99px;color:#fff}
+.mb.ok{background:var(--ok)}.mb.warn{background:#D97706}.mb.ng{background:var(--ng)}
+#mbar{position:fixed;left:0;right:0;bottom:0;z-index:11;display:none;height:calc(64px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);
+  background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -2px 8px rgba(16,24,40,.06)}
+body.simple #mbar{display:flex}
+.mbtn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:transparent;font-family:inherit;
+  font-size:12px;font-weight:600;color:var(--ink-2);min-height:64px;transition:background var(--t) var(--ease),color var(--t) var(--ease)}
+.mbtn span{font-size:20px;line-height:1;font-family:var(--mono)}
+.mbtn.on{color:var(--accent);background:var(--accent-bg)}
+.mbtn:active{background:var(--surface-2)}
+#mback{position:fixed;inset:0;z-index:10;background:rgba(22,36,61,.35);display:none}
+#mback.open{display:block}
+#msheet{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));z-index:11;max-height:62vh;overflow-y:auto;
+  background:var(--surface);border-top:1px solid var(--line);border-radius:14px 14px 0 0;box-shadow:0 -6px 24px rgba(16,24,40,.14);
+  padding:6px 14px 16px;transform:translateY(105%);transition:transform .2s var(--ease)}
+#msheet.open{transform:translateY(0)}
+.ms-grip{width:40px;height:4px;border-radius:99px;background:var(--line);margin:4px auto 10px}
+.ms-h{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;color:var(--mut);letter-spacing:.04em;margin:8px 0 8px}
+.ms-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}
+.ms-row{display:flex;gap:8px;margin:6px 0}
+.ms-btn{flex:1;min-height:52px;padding:8px 10px;font-size:15px;font-weight:600;font-family:inherit;color:var(--ink);background:var(--surface-2);
+  border:1px solid var(--line);border-radius:10px;transition:background var(--t) var(--ease)}
+.ms-btn.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.ms-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ms-btn:active{filter:brightness(.95)}
+.ms-val{min-width:80px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:18px;font-weight:700}
+.ms-list{display:flex;flex-direction:column;gap:2px}
+.ms-chk{display:flex;align-items:center;gap:12px;min-height:48px;padding:0 4px;border-bottom:1px solid var(--hair);font-size:15px}
+.ms-chk input{width:22px;height:22px;accent-color:var(--accent)}
+.ms-check{display:flex;gap:12px;padding:10px 4px;border-bottom:1px solid var(--hair)}
+.ms-ci{width:22px;font-size:14px;text-align:center;padding-top:2px}
+.ms-check.ok .ms-ci{color:var(--ok)}.ms-check.warn .ms-ci{color:var(--warn)}.ms-check.ng .ms-ci{color:var(--ng)}
+.ms-ct{display:flex;flex-direction:column;gap:2px;flex:1}
+.ms-ct b{font-size:14px}.ms-cv{font-family:var(--mono);font-weight:700;font-size:15px}
+.ms-check.ng .ms-cv{color:var(--ng)}.ms-check.warn .ms-cv{color:var(--warn)}
+.ms-ct small{font-size:12px;color:var(--mut);line-height:1.4}
+.ms-note{font-size:12px;color:var(--mut);line-height:1.6;margin:6px 0}
+body.simple #toast{bottom:calc(80px + env(safe-area-inset-bottom))}
+body.simple #start{padding:8px}body.simple .start-card{padding:16px 14px 14px}
+body.simple.present #mtop,body.simple.present #mbar{display:none!important}
