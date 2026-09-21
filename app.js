@@ -217,7 +217,7 @@ sun.position.set(80,120,60);sun.castShadow=true;sun.shadow.mapSize.set(_shadowRe
 Object.assign(sun.shadow.camera,{left:-140,right:140,top:140,bottom:-140,far:600});
 scene.add(sun);
 const ctrl={theta:Math.PI/4+.3,phi:1.05,r:150,ty:18,cx:0,cz:0,ptrs:new Map(),pinch:0,panMid:null};
-let model=null, dragMap={}, dragObj=null, dragOff=new THREE.Vector3(), dragStart=null;
+let model=null, dragMap={}, dragObj=null, dragOff=new THREE.Vector3(), dragStart=null, _tapCand=null, _lpTimer=null;
 const ray=new THREE.Raycaster();
 
 function groundPoint(e){
@@ -319,12 +319,21 @@ el.addEventListener("pointerdown",(e)=>{
   else if(!U.dim.b){U.dim.b={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};}
   else {U.dim.a={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};U.dim.b=null;}
   rebuild();renderBar();return;}
- if(ctrl.ptrs.size===1 && !e.shiftKey){const o=(document.body.classList.contains("simple")&&!U._mEdit)?null:pickDrag(e);if(o){snapshot();dragObj=o;U.sel=o.userData.dragKey;
+ if(ctrl.ptrs.size===1 && !e.shiftKey){const _simple=document.body.classList.contains("simple");
+  let o=pickDrag(e);
+  if(_simple&&o){
+   const key=o.userData.dragKey;
+   _tapCand={key,x:e.clientX,y:e.clientY,t:Date.now()};
+   clearTimeout(_lpTimer);_lpTimer=setTimeout(()=>{if(_tapCand&&_tapCand.key===key){_tapCand=null;U.sel=key;dragObj=null;ctrl.ptrs.clear();openObjMenu(key);}},550);
+   if(U.sel!==key){o=null;}
+  }
+  if(o){snapshot();dragObj=o;U.sel=o.userData.dragKey;
    if(e.ctrlKey||e.metaKey){rotMode=true;rotStartX=e.clientX;rotStartRy=getRy(o.userData.dragKey);}
    else{rotMode=false;const gp=groundPoint(e);dragOff.set(o.position.x-gp.x,0,o.position.z-gp.z);dragStart={lx:o.position.x,lz:o.position.z,gx:gp.x,gz:gp.z};}
    U.auto=false;syncBtns();renderSelCard();}else{if(U.sel){U.sel=null;renderSelCard();rebuild();}}}
 });
 el.addEventListener("pointermove",(e)=>{
+ if(_tapCand&&Math.hypot(e.clientX-_tapCand.x,e.clientY-_tapCand.y)>8){_tapCand=null;clearTimeout(_lpTimer);}
  if(!ctrl.ptrs.has(e.pointerId))return;
  const prev=ctrl.ptrs.get(e.pointerId);ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);
  if(dragObj&&rotMode&&ctrl.ptrs.size===1){setRy(dragObj.userData.dragKey,rotStartRy+(e.clientX-rotStartX)*0.7);rebuild();return;}
@@ -356,11 +365,15 @@ el.addEventListener("pointermove",(e)=>{
    // ピンチでズーム
    if(ctrl.pinch)ctrl.r=Math.min(800,Math.max(20,ctrl.r*(ctrl.pinch/d)));
    // 2本指の中心移動でパン（注視点を平行移動）→「見たい場所を画面中央に」
-   if(ctrl.panMid)panBy(mid[0]-ctrl.panMid[0], mid[1]-ctrl.panMid[1]);
+   if(ctrl.panMid)panBy(-(mid[0]-ctrl.panMid[0]), -(mid[1]-ctrl.panMid[1]));   // 指の動きに画面が付いてくる向き
    ctrl.pinch=d; ctrl.panMid=mid; U.auto=false; syncBtns();
   }
 });
 const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
+ clearTimeout(_lpTimer);
+ if(_tapCand&&Date.now()-_tapCand.t<550&&Math.hypot(e.clientX-_tapCand.x,e.clientY-_tapCand.y)<=8){const k=_tapCand.key;_tapCand=null;
+  if(U.sel!==k){U.sel=k;dragObj=null;rebuild();renderPanel();renderMobile();toast("選択しました。ドラッグで移動、長押しでメニュー");return;}}
+ _tapCand=null;
  if(dragObj&&!rotMode){const k=dragObj.userData.dragKey,x=dragObj.position.x,z=dragObj.position.z;
   if(k==="crane"){U.tw.craneX=+x.toFixed(1);U.tw.craneZ=+z.toFixed(1);}
   if(k==="ev"){U.tw.evX=+x.toFixed(1);U.tw.evZ=+z.toFixed(1);}
@@ -3576,10 +3589,10 @@ window.resetDisplay=()=>{
  try{const m=document.querySelector('meta[name="viewport"]');if(m){const c=m.getAttribute("content");m.setAttribute("content",c+", maximum-scale=1.0");setTimeout(()=>m.setAttribute("content",c),350);}}catch(e){}
  rebuild(); renderPanel(); renderBar(); renderMobile(); toast("画面表示を初期状態に戻しました","ok");
 };
-let _sheet=null;
-function closeSheet(){_sheet=null;const s=document.getElementById("msheet");if(s)s.classList.remove("open");const b=document.getElementById("mback");if(b)b.classList.remove("open");renderMobile();}
+let _sheet=null,_lastSheet=null;
+function closeSheet(){if(_sheet&&_sheet!=="obj")_lastSheet=_sheet;_sheet=null;const s=document.getElementById("msheet");if(s)s.classList.remove("open");const b=document.getElementById("mback");if(b)b.classList.remove("open");renderMobile();}
 window.closeSheet=closeSheet;
-window.openSheet=(k)=>{_sheet=(_sheet===k?null:k);if(_sheet==="temp"&&!U._mEdit){U._mEdit=true;}renderMobile();};
+window.openSheet=(k)=>{if(!k)return;if(_sheet===k){closeSheet();return;}_sheet=k;if(k!=="obj")_lastSheet=k;U._mEdit=true;renderMobile();};
 // 仮設シート用：指定タイプの車両を1台だけON/OFF、移動・回転
 function _cobjIdx(type){let last=-1;(U.cobj||[]).forEach((c,i)=>{if(c.type===type)last=i;});return last;}
 window.mToggleCO=(type,size)=>{const i=_cobjIdx(type);if(i>=0){snapshot();U.cobj.splice(i,1);U.sel=null;rebuild();renderPanel();}else{addCO(type);const k=U.cobj.length-1;if(size&&U.cobj[k]){const sz=cobjSize(type,size);if(sz){U.cobj[k].size=size;U.cobj[k].w=sz.w;U.cobj[k].d=sz.d;U.cobj[k].h=sz.h;}}rebuild();}renderMobile();};
@@ -3601,6 +3614,28 @@ window.quickCreate=()=>{
  closeStart();rebuild();renderPanel();renderBar();view("bird");_sheet="temp";renderMobile();
  toast("3Dを作りました。仮設メニューでクレーンや車両を置いてみてください","ok");
 };
+function _selInfo(){const k=U.sel;if(!k)return null;
+ if(k.startsWith("co:")){const c=U.cobj[+k.slice(3)];if(!c)return null;const t=COBJ_TYPES[c.type]||{};return {kind:"co",i:+k.slice(3),label:t.label||c.type,sizes:t.sizes||[],cur:c.size};}
+ if(k==="crane")return {kind:"crane",label:"タワークレーン"};
+ if(k==="fence"||k.startsWith("fpt:"))return {kind:"fence",label:"仮囲い"};
+ if(k.startsWith("blk:"))return {kind:"blk",i:+k.slice(4),label:(U.blocks[+k.slice(4)]||{}).label||"建物"};
+ if(k.startsWith("an:"))return {kind:"an",i:+k.slice(3),label:"注記"};
+ if(k.startsWith("nb:"))return {kind:"nb",i:+k.slice(3),label:"近隣建物"};
+ if(k.startsWith("rd:"))return {kind:"rd",i:+k.slice(3),label:"道路"};
+ return {kind:"other",label:"選択中"};}
+window.mSelMove=(dx,dz)=>{const s=_selInfo();if(!s)return;snapshot("msel");
+ if(s.kind==="co"){const c=U.cobj[s.i];c.x=+(numv(c.x,0)+dx).toFixed(1);c.z=+(numv(c.z,0)+dz).toFixed(1);}
+ else if(s.kind==="crane"){U.tw.craneX=+(numv(U.tw.craneX,16)+dx).toFixed(1);U.tw.craneZ=+(numv(U.tw.craneZ,0)+dz).toFixed(1);}
+ else if(s.kind==="fence"){U.tw.fenceDx=+(numv(U.tw.fenceDx,0)+dx).toFixed(1);U.tw.fenceDz=+(numv(U.tw.fenceDz,0)+dz).toFixed(1);}
+ else if(s.kind==="blk"){const b=U.blocks[s.i];b.dx=+(numv(b.dx,0)+dx).toFixed(1);b.dz=+(numv(b.dz,0)+dz).toFixed(1);}
+ else if(s.kind==="an"){const a=U.annot[s.i];a.x=+(numv(a.x,0)+dx).toFixed(1);a.z=+(numv(a.z,0)+dz).toFixed(1);}
+ else if(s.kind==="nb"){const n=U.nbs[s.i];n.x=+(numv(n.x,0)+dx).toFixed(1);n.z=+(numv(n.z,0)+dz).toFixed(1);}
+ else if(s.kind==="rd"){const r=U.roads[s.i];r.dx=+(numv(r.dx,0)+dx).toFixed(1);r.dz=+(numv(r.dz,0)+dz).toFixed(1);}
+ rebuildThrottled();};
+window.mSelRot=(d)=>{const k=U.sel;if(!k)return;if(!objRyKey(k)){toast("この物は回転できません");return;}snapshot("mselr");setRy(k,((getRy(k)+d)%360+360)%360);rebuildThrottled();};
+window.mSelSize=(key)=>{const s=_selInfo();if(!s||s.kind!=="co")return;setCOSize(s.i,key);renderMobile();};
+window.mSelType=(type)=>{const s=_selInfo();if(!s||s.kind!=="co")return;snapshot();const c=U.cobj[s.i];const t=COBJ_TYPES[type];if(!t)return;const sz=t.sizes[0];c.type=type;c.size=sz.key;c.w=sz.w;c.d=sz.d;c.h=sz.h;rebuild();renderPanel();renderMobile();};
+window.openObjMenu=(key)=>{U.sel=key;_sheet="obj";rebuild();renderPanel();renderMobile();};
 function renderMobile(){
  const on=document.body.classList.contains("simple");
  let top=document.getElementById("mtop"),bar=document.getElementById("mbar"),sheet=document.getElementById("msheet"),back=document.getElementById("mback");
@@ -3617,10 +3652,19 @@ function renderMobile(){
  const cs=(typeof collectChecks==="function")?collectChecks():[];const nNg=cs.filter(c=>c.lv==="ng").length,nW=cs.filter(c=>c.lv==="warn").length;
  const badge=nNg?`<button class="mb ng" onclick="openSheet('check')">要検討 ${nNg}${nW?"・注意 "+nW:""}</button>`:(nW?`<button class="mb warn" onclick="openSheet('check')">注意 ${nW}</button>`:`<button class="mb ok" onclick="openSheet('check')">判定OK</button>`);
  const PH={demo:"既存解体",retain:"山留め・掘削",pile:"杭工事",steel:"鉄骨建て方",build:"躯体・仮設",plan:"完成"};
- const mode=`<button class="mmode ${U._mEdit?"edit":""}" onclick="toggleEditMode()" title="タップで切替">${U._mEdit?"✏ 編集中":"🔒 閲覧中"}</button>`;
+ const si=_selInfo();
+ const mode=`<span class="mmode" title="物はタップで選択。選択中だけドラッグで動きます">${si?"✏ "+si.label:"👆 タップで選択"}</span>`;
  top.innerHTML=`<button class="mt-btn" onclick="openStart()" title="案件を開く">≡</button><div class="mt-title"><b>${(U.p.name||"BimGen").slice(0,20)}</b><span>${PH[U.tw.mode]||""}</span></div>${mode}${badge}`;
  const tabs=[["phase","工程","◧"],["temp","仮設","▲"],["view","表示","◎"],["edit","編集","✎"]];
  bar.innerHTML=tabs.map(t=>`<button class="mbtn ${_sheet===t[0]?"on":""}" onclick="openSheet('${t[0]}')"><span>${t[2]}</span>${t[1]}</button>`).join("");
+ let ab=document.getElementById("mact");if(!ab){ab=document.createElement("div");ab.id="mact";document.body.appendChild(ab);}
+ if(si&&!_sheet){ab.style.display="";ab.innerHTML=`<span class="ma-l">${si.label}</span><button class="ms-sq" onclick="mSelMove(-1,0)">←</button><button class="ms-sq" onclick="mSelMove(1,0)">→</button><button class="ms-sq" onclick="mSelMove(0,-1)">↑</button><button class="ms-sq" onclick="mSelMove(0,1)">↓</button><button class="ms-sq" onclick="mSelRot(15)">↻</button><button class="ms-sq" onclick="openObjMenu(U.sel)" title="その他">⋯</button><button class="ms-sq" onclick="U.sel=null;rebuild();renderMobile()">✕</button>`;}
+ else ab.style.display="none";
+ let pk=document.getElementById("mpeek");if(!pk){pk=document.createElement("button");pk.id="mpeek";document.body.appendChild(pk);
+  let py=null;pk.addEventListener("touchstart",(e)=>{py=e.touches[0].clientY;},{passive:true});pk.addEventListener("touchend",(e)=>{if(py!=null&&py-e.changedTouches[0].clientY>20){openSheet(_lastSheet);}py=null;},{passive:true});
+  pk.onclick=()=>openSheet(_lastSheet);}
+ const NAMES={phase:"工程",temp:"仮設",view:"表示",edit:"編集",check:"判定",obj:"選択中の物"};
+ if(!_sheet&&_lastSheet&&!si){pk.style.display="";pk.textContent="▲ "+(NAMES[_lastSheet]||"")+" を再表示";}else pk.style.display="none";
  if(!_sheet){sheet.classList.remove("open");back.classList.remove("open");return;}
  let h="",title="";
  if(_sheet==="phase"){title="工程フェーズ";
@@ -3630,13 +3674,13 @@ function renderMobile(){
    <div class="ms-note">工程を変えると、山留め・杭・鉄骨・躯体・完成の状態に3Dが切り替わります。</div>`;
  }else if(_sheet==="temp"){title="仮設を触る";
   const has=(t)=>_cobjIdx(t)>=0; const cr=U.tw.crane;
-  const ctl=(t)=>has(t)?`<button class="ms-sq" onclick="mMoveCO('${t}',-1,0)">←</button><button class="ms-sq" onclick="mMoveCO('${t}',1,0)">→</button><button class="ms-sq" onclick="mMoveCO('${t}',0,-1)">↑</button><button class="ms-sq" onclick="mMoveCO('${t}',0,1)">↓</button><button class="ms-sq" onclick="mRotCO('${t}',15)">↻</button>`:`<span class="ms-ph"></span>`;
+  const ctl=(t)=>has(t)?`<button class="ms-sq ms-w" onclick="U.sel='co:'+_cobjIdx('${t}');closeSheet();rebuild()">選択</button>`:``;
   const row=(label,on,fn,ctrl)=>`<div class="ms-line"><button class="ms-tg ${on?"on":""}" onclick="${fn}">${label}</button>${ctrl}</div>`;
-  h=`<div class="ms-note" style="margin:0 0 4px">ONにして、← → ↑ ↓ で1m、↻ で15°。編集中は3Dの上でも直接ドラッグできます。</div>
-   ${row("クレーン",cr,`S('tw.crane',${!cr});renderMobile()`,cr?`<button class="ms-sq" onclick="mCrane('x',-1)">←</button><button class="ms-sq" onclick="mCrane('x',1)">→</button><button class="ms-sq" onclick="mCrane('z',-1)">↑</button><button class="ms-sq" onclick="mCrane('z',1)">↓</button><button class="ms-sq" onclick="mCrane('r',15)">↻</button>`:`<span class="ms-ph"></span>`)}
+  h=`<div class="ms-note" style="margin:0 0 4px">ONで置く → 「選択」か3D上でタップ → ドラッグで移動。下の操作バーで回転、長押しで種類・削除。</div>
+   ${row("クレーン",cr,`S('tw.crane',${!cr});renderMobile()`,cr?`<button class="ms-sq ms-w" onclick="U.sel='crane';closeSheet();rebuild()">選択</button>`:``)}
    ${cr?`<div class="ms-line"><select class="ms-sel" onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(m=>`<option value="${m}" ${U.tw.craneModel===m?"selected":""}>${m}（作業半径${CRANE_SPECS[m].work}m・${CRANE_SPECS[m].cap}t）</option>`).join("")}</select></div>`:""}
-   ${row("仮囲い",U.tw.fence,`S('tw.fence',${!U.tw.fence});renderMobile()`,`<span class="ms-ph"></span>`)}
-   ${row("足場",U.tw.scaffold,`S('tw.scaffold',${!U.tw.scaffold});renderMobile()`,`<span class="ms-ph"></span>`)}
+   ${row("仮囲い",U.tw.fence,`S('tw.fence',${!U.tw.fence});renderMobile()`,``)}
+   ${row("足場",U.tw.scaffold,`S('tw.scaffold',${!U.tw.scaffold});renderMobile()`,``)}
    ${row("生コン車",has("mixer"),"mToggleCO('mixer','8t')",ctl("mixer"))}
    ${row("ポンプ車",has("pump"),"mToggleCO('pump','m4t')",ctl("pump"))}
    ${row("LSEV",has("lsev"),"mToggleCO('lsev','h32')",ctl("lsev"))}
@@ -3651,6 +3695,17 @@ function renderMobile(){
   h=`<div class="ms-list">${cs.map(c=>`<div class="ms-check ${c.lv}"><div class="ms-ci">${ico[c.lv]}</div><div class="ms-ct"><b>${c.label}</b><span class="ms-cv">${c.val}</span><small>${c.note}</small></div></div>`).join("")||'<div class="ms-note">判定項目がありません</div>'}</div>
    <div class="ms-row"><button class="ms-btn primary" onclick="closeSheet();exportSheet()">検討シート（A4）</button><button class="ms-btn" onclick="closeSheet();savePNG()">画像を保存</button></div>
    <div class="ms-note">目安判定です。正式な可否は関係機関・法規で確認してください。</div>`;
+ }else if(_sheet==="obj"){const s=_selInfo();title=s?s.label:"選択";
+  if(!s){h='<div class="ms-note">物を選択してから開いてください。</div>';}
+  else{
+   h=`<div class="ms-h">動かす・回す</div><div class="ms-line"><button class="ms-sq" onclick="mSelMove(-1,0)">←</button><button class="ms-sq" onclick="mSelMove(1,0)">→</button><button class="ms-sq" onclick="mSelMove(0,-1)">↑</button><button class="ms-sq" onclick="mSelMove(0,1)">↓</button><button class="ms-sq" onclick="mSelRot(15)">↻</button><button class="ms-sq" onclick="mSelRot(-15)">↺</button></div>`;
+   if(s.kind==="co"){
+    h+=`<div class="ms-h">サイズ</div><div class="ms-wrap">${s.sizes.map(z=>`<button class="ms-chip ${s.cur===z.key?"on":""}" onclick="mSelSize('${z.key}')">${z.label}</button>`).join("")}</div>
+     <div class="ms-h">種類を変える</div><div class="ms-wrap">${Object.keys(COBJ_TYPES).filter(t=>!["walkzone","guard","obstacle"].includes(t)).map(t=>`<button class="ms-chip ${U.cobj[s.i].type===t?"on":""}" onclick="mSelType('${t}')">${COBJ_TYPES[t].label}</button>`).join("")}</div>`;
+   }
+   if(s.kind==="crane"){h+=`<div class="ms-h">機種</div><div class="ms-wrap">${Object.keys(CRANE_SPECS).map(m=>`<button class="ms-chip ${U.tw.craneModel===m?"on":""}" onclick="S('tw.craneModel','${m}');renderMobile()">${m}<small>半径${CRANE_SPECS[m].work}m</small></button>`).join("")}</div>`;}
+   h+=`<div class="ms-row"><button class="ms-btn" onclick="duplicateSel();renderMobile()">複製</button><button class="ms-btn danger" onclick="deleteSel();closeSheet()">削除</button><button class="ms-btn" onclick="U.sel=null;closeSheet();rebuild()">選択解除</button></div>`;
+  }
  }else if(_sheet==="edit"){title="編集・案件";
   const uses=["共同住宅（賃貸）","共同住宅（分譲）","事務所","店舗","ホテル","倉庫・物流","病院・医療"];
   h=`<div class="ms-grid">
