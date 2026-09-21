@@ -585,3 +585,30 @@ body.simple #toast{bottom:calc(84px + max(env(safe-area-inset-bottom),20px))}
   body.simple #toast{bottom:calc(84px + max(env(safe-area-inset-bottom),34px))}
   body.simple #mtop{padding-top:max(env(safe-area-inset-top),20px);height:auto;min-height:52px}
 }
+
+/* ───────────── スマホ v4：常に見える下ナビ／取っ手／選択中の操作バー／長押しメニュー ───────────── */
+body.simple #mbar{z-index:60}           /* 何が開いても下ナビは最前面 */
+body.simple #msheet{z-index:55}
+body.simple #mback{z-index:50}
+#mpill{z-index:61}
+/* 取っ手（閉じたシートの再表示） */
+#mpeek{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(64px + max(env(safe-area-inset-bottom),20px) + 8px);z-index:56;display:none;
+  min-height:40px;padding:0 18px;border:1px solid var(--line);border-radius:99px;background:var(--surface);color:var(--ink);font-family:inherit;font-size:13px;font-weight:600;box-shadow:var(--sh-md);touch-action:none}
+@media (display-mode:standalone){#mpeek{bottom:calc(64px + max(env(safe-area-inset-bottom),34px) + 8px)}}
+/* 選択中の操作バー（下ナビのすぐ上） */
+#mact{position:fixed;left:8px;right:8px;bottom:calc(64px + max(env(safe-area-inset-bottom),20px) + 8px);z-index:56;display:none;align-items:center;gap:6px;
+  padding:6px 8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh-lg);overflow-x:auto;scrollbar-width:none}
+#mact::-webkit-scrollbar{display:none}
+@media (display-mode:standalone){#mact{bottom:calc(64px + max(env(safe-area-inset-bottom),34px) + 8px)}}
+.ma-l{flex:1;min-width:64px;font-size:12px;font-weight:700;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#mact .ms-sq{width:44px;height:44px;font-size:18px}
+/* 上バーの選択表示 */
+.mmode{cursor:default}
+/* 長押しメニューのチップ */
+.ms-wrap{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+.ms-chip{min-height:40px;padding:6px 12px;border:1px solid var(--line);border-radius:99px;background:var(--surface-2);font-family:inherit;font-size:13px;color:var(--ink);display:flex;flex-direction:column;align-items:center;line-height:1.2}
+.ms-chip small{font-size:10px;color:var(--mut)}
+.ms-chip.on{background:var(--accent);border-color:var(--accent);color:#fff}.ms-chip.on small{color:#DCE7FB}
+.ms-btn.danger{color:var(--ng);border-color:#EFC7C7}
+.ms-sq.ms-w{width:auto;padding:0 14px;font-size:14px;font-weight:600}
+.ms-ph{display:none}
