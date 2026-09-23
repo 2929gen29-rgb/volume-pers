@@ -612,3 +612,29 @@ body.simple #mback{z-index:50}
 .ms-btn.danger{color:var(--ng);border-color:#EFC7C7}
 .ms-sq.ms-w{width:auto;padding:0 14px;font-size:14px;font-weight:600}
 .ms-ph{display:none}
+
+/* 長押しでの文字選択・コピー吹き出しを無効化（入力欄は除く） */
+#view,#view canvas{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+body.simple,body.simple *:not(input):not(textarea):not(select){-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+@media (pointer:coarse){#bar,#tools,#panel,#selcard,#layers,#br-stack,#msheet,#mbar,#mtop,#mact,#mpeek{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}}
+
+/* 長押し・タップ時の青いハイライトを消す（iOS） */
+*{-webkit-tap-highlight-color:transparent}
+/* PC・詳細版では簡易モード用の要素を完全に出さない（画面外の白い帯の原因） */
+body:not(.simple) #mtop,body:not(.simple) #mbar,body:not(.simple) #msheet,body:not(.simple) #mback,body:not(.simple) #mact,body:not(.simple) #mpeek{display:none!important}
+/* 初回オンボーディング（1画面）とコーチ表示 */
+#onb{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(22,36,61,.72)}
+.onb-card{width:min(520px,94vw);background:var(--surface);border-radius:14px;padding:22px 20px 16px;box-shadow:var(--sh-lg)}
+.onb-card h1{margin:0 0 4px;font-size:20px;color:var(--navy)}
+.onb-card p{margin:0 0 14px;font-size:13.5px;color:var(--ink-2);line-height:1.6}
+.onb-main{display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;text-align:left;padding:16px;margin-bottom:8px;background:var(--navy);color:#fff;border:none;border-radius:12px;font-family:inherit;cursor:pointer}
+.onb-main b{font-size:17px}.onb-main small{font-size:12px;color:#C9D3E3}
+.onb-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.onb-sub{min-height:52px;padding:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer}
+.onb-skip{display:block;width:100%;text-align:center;background:none;border:none;color:var(--mut);font-size:12.5px;padding:8px;font-family:inherit;cursor:pointer}
+#coach{position:fixed;left:50%;transform:translateX(-50%);z-index:65;display:none;max-width:92vw;padding:12px 18px;border-radius:12px;background:var(--navy);color:#fff;font-size:15px;font-weight:600;box-shadow:var(--sh-lg);text-align:center;line-height:1.5}
+#coach.top{top:calc(64px + env(safe-area-inset-top))}
+#coach.bottom{bottom:calc(64px + max(env(safe-area-inset-bottom),20px) + 14px)}
+#coach small{display:block;font-size:12px;font-weight:400;color:#C9D3E3;margin-top:2px}
+#coach.show{display:block;animation:coachIn .25s var(--ease)}
+@keyframes coachIn{from{opacity:0;transform:translateX(-50%) translateY(6px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
