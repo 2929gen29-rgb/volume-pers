@@ -255,7 +255,8 @@ function pickDrag(e){
   let o=h.object;while(o&&!o.userData.dragKey)o=o.parent;if(o)return o;}
  return null;
 }
-const el=renderer.domElement; el.style.touchAction="none";
+const el=renderer.domElement; el.style.touchAction="none"; el.style.webkitUserSelect="none"; el.style.userSelect="none"; el.style.webkitTouchCallout="none";
+el.addEventListener("contextmenu",(e)=>e.preventDefault());   // 長押しの選択・コピー吹き出しを出さない
 let rotMode=false, rotStartX=0, rotStartRy=0;
 function objRyKey(k){
  if(k==="crane")return ["tw","craneRot"]; if(k==="ev")return ["tw","evRy"];
@@ -3375,7 +3376,28 @@ function renderTour(){
   <div class="tour-b"><b>${s.t}</b><p>${s.b}</p>
   <div class="tour-f"><button class="btn" ${_tourI===0?"disabled":""} onclick="tourNext(-1)">← 前へ</button><span class="tour-dots">${TOUR_STEPS.map((_,i)=>`<i class="${i===_tourI?"on":""}"></i>`).join("")}</span><button class="btn primary" onclick="tourNext(1)">${_tourI===TOUR_STEPS.length-1?"おわり":"次へ →"}</button></div></div>`;
 }
+// ───── 初回オンボーディング（1画面）とコーチ表示 ─────
+function _onbDone(){try{return localStorage.getItem("bimgen_onb")==="1";}catch(e){return true;}}
+function _onbMark(){try{localStorage.setItem("bimgen_onb","1");}catch(e){}}
+window.closeOnb=()=>{const o=document.getElementById("onb");if(o)o.remove();_onbMark();};
+window.openOnb=()=>{
+ let o=document.getElementById("onb");if(!o){o=document.createElement("div");o.id="onb";document.body.appendChild(o);}
+ o.innerHTML=`<div class="onb-card"><h1>図面・地図を、その場で3Dに。</h1><p>まずはサンプルを開いて、指で回してみてください。工程を切り替えたり、クレーンや車両を動かせます。</p>
+  <button class="onb-main" onclick="closeOnb();openRealDemo();coach(1)"><b>実案件で見る</b><small>都内・共同住宅12階（狭小地・地下鉄直下）— 仮囲い・クレーン・生コン車まで入った状態</small></button>
+  <div class="onb-row"><button class="onb-sub" onclick="closeOnb();newFromTemplate('apt8');coach(1)">共同住宅 8階</button><button class="onb-sub" onclick="closeOnb();newFromTemplate('office5');coach(1)">事務所ビル 5階</button></div>
+  <button class="onb-skip" onclick="closeOnb();openStart()">他のサンプル・自分で作る ▸</button></div>`;
+};
+let _coachT=null;
+window.coach=(step)=>{
+ let c=document.getElementById("coach");if(!c){c=document.createElement("div");c.id="coach";document.body.appendChild(c);c.onclick=()=>{c.className="";};}
+ clearTimeout(_coachT);
+ const simple=document.body.classList.contains("simple");
+ if(step===1){c.className="show top";c.innerHTML=`指1本で回す・2本で寄せる<small>${simple?"次に、下の「工程」を押してみてください":"次に、左の「③ 仮設を計画」で工程を切り替えてみてください"}</small>`;_coachT=setTimeout(()=>coach(2),6000);}
+ else if(step===2){c.className="show bottom";c.innerHTML=`${simple?"下の「工程」で施工の状態が変わります":"工程フェーズを切り替えると施工の状態が変わります"}<small>${simple?"「仮設」でクレーン・車両をON、タップして動かせます":"仮設タブでクレーン・車両を配置し、3D上でドラッグできます"}</small>`;_coachT=setTimeout(()=>{c.className="";},9000);}
+ else c.className="";
+};
 window.openStart=()=>{
+ if(!_onbDone()&&!document.getElementById("onb")&&!(U.blocks&&U.blocks.length&&U.p.name&&U.p.name!=="サンプル計画（架空）")){openOnb();return;}
  let s=document.getElementById("start");
  if(!s){s=document.createElement("div");s.id="start";document.body.appendChild(s);}
  s.innerHTML=`<div class="start-card">
