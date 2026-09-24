@@ -3915,7 +3915,7 @@ window.closeOnb=()=>{const o=document.getElementById("onb");if(o)o.remove();_onb
 window.openOnb=()=>{
  let o=document.getElementById("onb");if(!o){o=document.createElement("div");o.id="onb";document.body.appendChild(o);}
  o.innerHTML=`<div class="onb-card"><h1>図面・地図を、その場で3Dに。</h1><p>まずはサンプルを開いて、指で回してみてください。工程を切り替えたり、クレーンや車両を動かせます。</p>
-  <button class="onb-main" onclick="closeOnb();openRealDemo();coach(1)"><b>実案件で見る</b><small>都内・共同住宅12階（狭小地・地下鉄直下）— 仮囲い・クレーン・生コン車まで入った状態</small></button>
+  <button class="onb-main" onclick="closeOnb();openRealDemo()"><b>実案件で見る</b><small>都内・共同住宅12階（狭小地・地下鉄直下）— 仮囲い・クレーン・生コン車まで入った状態</small></button>
   <div class="onb-row"><button class="onb-sub" onclick="closeOnb();newFromTemplate('apt8');coach(1)">共同住宅 8階</button><button class="onb-sub" onclick="closeOnb();newFromTemplate('office5');coach(1)">事務所ビル 5階</button></div>
   <button class="onb-skip" onclick="closeOnb();openStart()">他のサンプル・自分で作る ▸</button></div>`;
 };
