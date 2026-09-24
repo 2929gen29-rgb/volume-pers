@@ -2498,11 +2498,11 @@ function renderPanel(){
    ["4","検討","08","判定・出力",false]
  ];
  const _desc=TAB_DESC[U.tab]||["この画面で設定","必要な項目だけ入力します。"],_quick=TAB_QUICK[U.tab]||[];
- const _flowOpen=!!U._flowOpen;
+ const _flowOpen=!!window.__bimgenFlowOpen;
  const commandBar=`<div id="project-command">
    <div class="pc-now"><small>NOW / ${TAB_SYS[U.tab]||"PROJECT"}</small><b>${_desc[0]}</b><span>${_desc[1]}</span></div>
    <div class="pc-quick">${_quick.slice(0,3).map((q,i)=>`<span><i>${i+1}</i>${q}</span>`).join("")}</div>
-   <button class="pc-flow-toggle" onclick="U._flowOpen=!U._flowOpen;renderPanel()"><span>PROJECT FLOW / 全体の流れ</span><b>${_flowOpen?"−":"＋"}</b></button>
+   <button class="pc-flow-toggle" onclick="window.__bimgenFlowOpen=!window.__bimgenFlowOpen;renderPanel()"><span>PROJECT FLOW / 全体の流れ</span><b>${_flowOpen?"−":"＋"}</b></button>
    ${_flowOpen?`<div class="pc-flow">${FLOW_NAV.map(([g,t,n,l,done])=>`<button class="${U.tab===t?"on":""} ${done?"done":""}" onclick="jumpTab('${g}','${t}')"><i>${done?"✓":n}</i><b>${l}</b></button>`).join("")}</div>`:""}
   </div>`;
  $("#tabs").innerHTML=`<div id="tabgroups">${groupBar}</div>${subBar}${commandBar}`;
@@ -2875,13 +2875,13 @@ function renderPanel(){
     {key:"temp",code:"03",name:"仮設設備",sub:"EV・朝顔・構台",keys:["safepath","stage","lsev","komalift","temp"]},
     {key:"safety",code:"04",name:"安全・支障物",sub:"警備・歩行帯・現地物",keys:["guard","walkzone","obstacle"]}
   ];
-  if(!U._cobjCat||!COBJ_CATS.some(c=>c.key===U._cobjCat))U._cobjCat="heavy";
-  const cat=COBJ_CATS.find(c=>c.key===U._cobjCat)||COBJ_CATS[0];
+  if(!window.__bimgenCobjCat||!COBJ_CATS.some(c=>c.key===window.__bimgenCobjCat))window.__bimgenCobjCat="heavy";
+  const cat=COBJ_CATS.find(c=>c.key===window.__bimgenCobjCat)||COBJ_CATS[0];
   h=`<div class="obj-command"><div><small>OBJECT LIBRARY / ${cat.code}</small><b>配置する物を選ぶ</b><span>工程に応じて必要な物だけ置く。配置後は3Dで直接動かします。</span></div><button onclick="toggleLayers()">LAYER</button></div>
-    <div class="obj-cats">${COBJ_CATS.map(c=>`<button class="${c.key===cat.key?"on":""}" onclick="U._cobjCat='${c.key}';renderPanel()"><i>${c.code}</i><b>${c.name}</b><small>${c.sub}</small></button>`).join("")}</div>
+    <div class="obj-cats">${COBJ_CATS.map(c=>`<button class="${c.key===cat.key?"on":""}" onclick="window.__bimgenCobjCat='${c.key}';renderPanel()"><i>${c.code}</i><b>${c.name}</b><small>${c.sub}</small></button>`).join("")}</div>
     <div class="obj-add-grid">${cat.keys.filter(k=>COBJ_TYPES[k]).map(k=>`<button onclick="addCO('${k}')"><span>＋</span><b>${COBJ_TYPES[k].label}</b><small>${COBJ_TYPES[k].sizes[0].label||""}</small></button>`).join("")}</div>`;
   {const _phaseItems=U.cobj.map((c,i)=>({c,i})).filter(o=>cobjVisibleInPhase(o.c,U.tw.mode)),_hidden=U.cobj.length-_phaseItems.length;
-   h+=`<details class="obj-placed" ${U._placedOpen?"open":""} ontoggle="U._placedOpen=this.open"><summary><span>PLACED / この工程の配置済み</span><b>${_phaseItems.length}</b>${_hidden?`<small>他工程 ${_hidden}</small>`:""}</summary><div>${_phaseItems.length?_phaseItems.map(({c,i})=>{const t=COBJ_TYPES[c.type]||{},s=cobjSize(c.type,c.size)||{};return `<button class="obj-row ${U.sel==="co:"+i?"on":""}" onclick="selCO(${i});focusSelectionCamera('co:${i}',{duration:220})"><span><b>${t.label||c.type}</b><small>${s.label||c.size||""}　X ${numv(c.x,0).toFixed(1)} / Z ${numv(c.z,0).toFixed(1)}</small></span><i>→</i></button>`;}).join(""):`<div class="obj-empty">この工程にはまだ配置物がありません。</div>`}</div></details>`;
+   h+=`<details class="obj-placed" ${window.__bimgenPlacedOpen?"open":""} ontoggle="window.__bimgenPlacedOpen=this.open"><summary><span>PLACED / この工程の配置済み</span><b>${_phaseItems.length}</b>${_hidden?`<small>他工程 ${_hidden}</small>`:""}</summary><div>${_phaseItems.length?_phaseItems.map(({c,i})=>{const t=COBJ_TYPES[c.type]||{},s=cobjSize(c.type,c.size)||{};return `<button class="obj-row ${U.sel==="co:"+i?"on":""}" onclick="selCO(${i});focusSelectionCamera('co:${i}',{duration:220})"><span><b>${t.label||c.type}</b><small>${s.label||c.size||""}　X ${numv(c.x,0).toFixed(1)} / Z ${numv(c.z,0).toFixed(1)}</small></span><i>→</i></button>`;}).join(""):`<div class="obj-empty">この工程にはまだ配置物がありません。</div>`}</div></details>`;
   }
   h+=`<div style="margin-top:6px">${CK("スナップ（道路・敷鉄板に吸着／15°刻み回転）",U.snap,"(v)=>S('snap',v,false)")}</div>`;
   // 補助ツール（寸法線・グリッド・道路条件・DXF）を折りたたみに集約
