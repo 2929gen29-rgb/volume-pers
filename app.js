@@ -461,7 +461,7 @@ el.addEventListener("pointermove",(e)=>{
     panBy(e.clientX-prev[0], e.clientY-prev[1]);
     U.auto=false;
    }else{ // 通常ドラッグ＝回転
-    {const rs=_coarsePointer?.00435:.006,ps=_coarsePointer?.00315:.004;ctrl.theta-=(e.clientX-prev[0])*rs;ctrl.phi=Math.min(1.52,Math.max(.12,ctrl.phi-(e.clientY-prev[1])*ps));}U.auto=false;syncBtns();
+    {const rs=_coarsePointer?.00435:.006,ps=_coarsePointer?.00315:.004,dy=(e.clientY-prev[1]);ctrl.theta-=(e.clientX-prev[0])*rs;ctrl.phi=Math.min(1.52,Math.max(.12,ctrl.phi+(_coarsePointer?dy:-dy)*ps));}U.auto=false;syncBtns();
    }
  }
  else if(ctrl.ptrs.size===2){if(_selCamBase){_selCamBase=null;_selCamKey=null;}const p=[...ctrl.ptrs.values()];
@@ -2124,33 +2124,50 @@ function fenceRemoveVertex(){const p=U.tw.fencePts||[];if(p.length>3)p.pop();els
 window.fenceFromSite=fenceFromSite;window.fenceAddVertex=fenceAddVertex;window.fenceRemoveVertex=fenceRemoveVertex;window.fenceSegLen=fenceSegLen;window.fencePerimeter=fencePerimeter;
 // 各タブ冒頭の「このタブでやること」
 const TAB_DESC={
- "諸元":["案件の基本情報","用途・階数・面積を入れると法規値（建蔽率・容積率）が自動で出ます。案件名と住所は必ず入力。"],
- "形状":["建物のかたち","建物ブロックの幅・奥行・階範囲・位置・回転。複数ブロックで L字・段差も表現できます。"],
- "敷地・地形":["敷地・道路・傾斜","敷地寸法、傾斜（高い方向と高低差）、前面道路。住所検索で標高と地図が使えます。道路使用検討もここ。"],
- "近隣":["周辺環境","隣接建物を置いて離隔・日影・圧迫感を確認。既存建物の解体も想定できます。"],
- "下敷き":["図面・地図を敷く","配置図PDFや地理院地図を敷地の下に敷き、その上に建物を合わせます。"],
- "仮設":["工程と仮設計画","工程フェーズ（山留め→杭→躯体→鉄骨）を切り替え、クレーン・仮囲い・足場を検討。"],
- "施工/CAD":["重機・車両・注記","重機や車両を置いて干渉を確認。注記で『なぜこの配置か』を残せます（OJT・申し送り用）。"],
- "検討":["判定・OJT・出力","判定の内訳と対処、OJT検討項目の進捗、検討シート・画像・BIMの出力をここから。"],
+ "諸元":["案件の基本情報","まず案件名・用途・構造・階数。面積は分かる範囲だけでOKです。"],
+ "形状":["建物の形を作る","建物を追加して、幅・奥行・階数を入れ、3Dを見ながら位置を合わせます。"],
+ "敷地・地形":["敷地と道路を合わせる","敷地形状 → 前面道路 → 必要なら高低差、の順で進めます。"],
+ "近隣":["周辺建物を置く","隣接建物は必要な時だけ。高さと離隔を入れて3Dで確認します。"],
+ "下敷き":["元図を敷く","PDF・画像・地図を置き、縮尺を合わせてから真上表示で位置を確認します。"],
+ "仮設":["施工の流れと仮設","工程を選び、まずクレーンと仮囲い。必要に応じて足場・EV・車両を追加します。"],
+ "施工/CAD":["重機・車両・注記","必要なものだけ追加して3D上で配置。細かい補助機能は最後でOKです。"],
+ "検討":["結果を確認して出力","要検討・注意を確認し、最後に検討シート・画像・BIMへ出力します。"],
 };
 const TAB_QUICK={
- "下敷き":["図面・地図を読込","縮尺を合わせる","真上で位置確認"],
- "敷地・地形":["敷地を定義","道路・高低差を合わせる","道路使用を確認"],
- "形状":["建物を追加","階数・寸法を入力","位置・回転を調整"],
- "諸元":["案件名・用途","面積・階数","自動指標を確認"],
- "近隣":["周辺建物を配置","高さ・離隔を調整","3Dで圧迫感確認"],
- "仮設":["工程を選択","クレーン・仮囲い","3Dで配置調整"],
- "施工/CAD":["重機・車両を配置","道路・歩行帯干渉","注記を残す"],
- "検討":["注意・要検討を確認","OJT項目を確認","シート・BIM出力"],
+ "下敷き":["元図を置く","縮尺を合わせる","真上で確認"],
+ "敷地・地形":["敷地を決める","道路を合わせる","高低差は必要時"],
+ "形状":["建物を追加","寸法・階数","3Dで位置調整"],
+ "諸元":["案件名・用途","構造・階数","面積は分かる範囲"],
+ "近隣":["近隣を追加","高さ・離隔","必要な時だけ"],
+ "仮設":["工程を選ぶ","TC・仮囲い","3Dで配置"],
+ "施工/CAD":["必要物を追加","3Dで動かす","注記・補助は最後"],
+ "検討":["要検討を見る","必要なら修正","出力・共有"],
 };
 const TAB_SYS={"下敷き":"BASE","敷地・地形":"TRACE","形状":"TRACE","諸元":"DATA","近隣":"CONTEXT","仮設":"PLAN","施工/CAD":"PLAN","検討":"REVIEW"};
+const SEC_GUIDE={
+ "基本情報":["MAIN","まずここ","案件名・用途・構造・階数を入力"],
+ "面積（実測値を優先・空欄は自動）":["OPTION","分かれば","実測値がある項目だけ入力。空欄でも自動算出"],
+ "その他・備考":["OPTION","必要なら","案件固有の条件・申し送りを残す"],
+ "計画地・公共データ照会":["MAIN","住所から","住所検索・標高・地図取得"],
+ "敷地 寸法・形状":["MAIN","まずここ","敷地の幅・奥行、または多角形を設定"],
+ "敷地 位置・地盤・高低差":["OPTION","必要なら","GL・敷地位置・高低差を調整"],
+ "道路・歩道・電柱":["MAIN","次に","前面道路の幅・位置・歩道を設定"],
+ "前面道路での施工計画の検討":["CHECK","確認","生コン車・ポンプ車の収まりと残車道幅"],
+ "斜線制限ガイド":["CHECK","確認","法規の目安を3Dで確認"],
+ "日当たり・日影検討":["OPTION","必要なら","太陽位置を変えて日影を確認"],
+ "仮囲い（任意）":["OPTION","必要なら","既存解体時の仮囲いを設定"],
+ "揚重・クレーン":["MAIN","まずここ","工程・タワークレーン・ラフターを設定"],
+ "仮囲い・足場":["MAIN","次に","仮囲いと外部足場を設定"],
+ "車両・その他":["OPTION","必要なら","EV・生コン車などを追加"],
+ "補助ツール（寸法・グリッド・道路条件・DXF）":["ADV","詳細","寸法・グリッド・DXFなどの補助機能"],
+};
 function tabDesc(tab){
  const d=TAB_DESC[tab];if(!d)return "";
  const q=TAB_QUICK[tab]||[];
- return `<div class="tab-desc v4-brief">
-   <div class="td-head"><small>${TAB_SYS[tab]||"WORK"} / CURRENT TASK</small><b>${d[0]}</b></div>
+ return `<div class="tab-desc v4-brief v4-brief2">
+   <div class="td-head"><small>${TAB_SYS[tab]||"WORK"} / THIS TAB</small><b>${d[0]}</b></div>
    <span class="td-copy">${d[1]}</span>
-   <div class="td-flow">${q.map((x,i)=>`<span><i>${String(i+1).padStart(2,"0")}</i>${x}</span>`).join("")}</div>
+   <div class="td-flow td-flow2">${q.map((x,i)=>`<span class="${i===0?"main":""}"><i>${i===0?"START":String(i+1).padStart(2,"0")}</i><b>${x}</b></span>`).join("")}</div>
   </div>`;
 }
 function ojtSection(tab){
@@ -2170,10 +2187,12 @@ function SEC(title, inner, opt){
  // 初回だけ既定値を設定（以後はユーザー操作を尊重）
  if(U._acc[key]===undefined)U._acc[key]=!!opt.open;
  const open=U._acc[key];
- const icon=opt.icon?`<span style="margin-right:6px">${opt.icon}</span>`:"";
- return `<div class="sec ${open?"open":""}">
+ const icon=opt.icon?`<span class="sec-icon">${opt.icon}</span>`:"";
+ const gd=SEC_GUIDE[title]||null;
+ const g=gd?`<span class="sec-guide"><i class="${gd[0].toLowerCase()}">${gd[1]}</i><small>${gd[2]}</small></span>`:"";
+ return `<div class="sec ${open?"open":""} ${gd?"guided":""}">
    <div class="sec-h" onclick="toggleSec('${key.replace(/'/g,"")}')">
-     <span>${icon}${title}</span>
+     <span class="sec-title">${icon}<b>${title}</b>${g}</span>
      <span class="sec-arrow">${open?"▾":"▸"}</span>
    </div>
    <div class="sec-b" style="${open?"":"display:none"}">${inner}</div>
@@ -3520,7 +3539,7 @@ const REAL_DEMO={
  road:{w:16.3,side:"none",show:false,slope:0,walkShow:false},
  roads:[{pts:[{x:-30,z:16.6},{x:30,z:16.6}],w:16.3,walkL:0,walkR:0,dx:0,dz:0,ry:0}],
  roadwork:{mixerSize:"8t",pumpSize:"m4t",mountUp:0},
- tw:{mode:"build",step:6,crane:true,craneModel:"JCL010",craneX:-5.8,craneZ:7.1,craneRot:270,craneJib:28,ev:true,evX:3.1,evZ:8.1,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceShape:"poly",
+ tw:{mode:"build",step:6,crane:true,craneModel:"JCL015",craneX:-5.8,craneZ:7.1,craneRot:270,craneJib:15,ev:true,evX:3.1,evZ:8.1,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceShape:"poly",
      fencePts:[{x:-8.1,z:8.4},{x:1.5,z:8.4},{x:7.5,z:8.4},{x:7.8,z:-4.4},{x:2.6,z:-5.0},{x:2.4,z:-5.0},{x:-5.4,z:-5.4},{x:-8.2,z:-5.6}],fenceGateSeg:1,
      scaffold:true,poles:false,person:false,pileLen:39,pilePitch:4,pileDia:1.0},
  cobj:[{type:"mixer",size:"8t",x:-6,z:13.2,ry:90},{type:"pump",size:"m4t",x:4,z:13.2,ry:90},{type:"guard",size:"std",x:-10,z:10,ry:0},{type:"walkzone",size:"std",x:0,z:10.2,ry:90}],
