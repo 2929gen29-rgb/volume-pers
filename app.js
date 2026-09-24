@@ -321,6 +321,7 @@ function setRy(k,deg){const r=objRyKey(k);if(!r)return;deg=((deg%360)+360)%360;
  else if(r[0]==="an"){if(U.annot[r[1]])U.annot[r[1]].ry=+deg.toFixed(0);}
  else if(r[0]==="rd"){if(U.roads[r[1]])U.roads[r[1]].ry=+deg.toFixed(0);}}
 el.addEventListener("pointerdown",(e)=>{
+ _camTween=null; // 手で触れた瞬間は演出よりユーザー操作を優先
  ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);el.setPointerCapture(e.pointerId);
  // 多角形入力モード：地面クリックで頂点追加
  if(U.polyInput.on&&ctrl.ptrs.size===1){const gp=groundPoint(e);
@@ -455,7 +456,7 @@ const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
    dragObj=null;rotMode=false;renderPanel();}
 };
 el.addEventListener("pointerup",endPtr);el.addEventListener("pointercancel",endPtr);
-el.addEventListener("wheel",(e)=>{e.preventDefault(); if((e.ctrlKey||e.metaKey)&&dragObj){setRy(dragObj.userData.dragKey,getRy(dragObj.userData.dragKey)+(e.deltaY>0?5:-5));rebuild();return;}
+el.addEventListener("wheel",(e)=>{e.preventDefault(); _camTween=null; if((e.ctrlKey||e.metaKey)&&dragObj){setRy(dragObj.userData.dragKey,getRy(dragObj.userData.dragKey)+(e.deltaY>0?5:-5));rebuild();return;}
  ctrl.r=Math.min(800,Math.max(20,ctrl.r*(1+e.deltaY*.001)));},{passive:false});
 function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
 el.addEventListener("dblclick",(e)=>{
