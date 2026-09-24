@@ -2485,7 +2485,7 @@ function renderPanel(){
  const GROUP_EN={"1":"BASE","2":"TRACE","3":"PLAN","4":"REVIEW"};
  const groupBar=TAB_GROUPS.map(g=>`<div class="tg step ${U.tabGroup===g.key?"on":""}" onclick="U.tabGroup='${g.key}';U.tab='${g.tabs[0]}';v4PanelStage('${g.key}','${g.label}');renderPanel()"><span class="step-n">${g.key}</span><span class="step-l">${g.label}</span><small class="step-e">${GROUP_EN[g.key]||""}</small></div>`).join("");
  const subBar=curG.tabs.length>1
-   ? `<div id="subtabs">${curG.tabs.map(t=>`<div class="${U.tab===t?"on":""}" onclick="U.tab='${t}';renderPanel()">${TAB_LABEL[t]||t}</div>`).join("")}</div>`
+   ? `<div id="subtabs">${curG.tabs.map(t=>`<div data-tab="${t}" class="${U.tab===t?"on":""}" onclick="U.tab='${t}';renderPanel()">${TAB_LABEL[t]||t}</div>`).join("")}</div>`
    : "";
  const FLOW_NAV=[
    ["2","諸元","01","案件",!!(U.p.name&& !String(U.p.name).startsWith("新規案件") && posv(U.p.floors,0))],
@@ -2845,7 +2845,7 @@ function renderPanel(){
    +SL("建て方の進捗（〜階）",U.tw.step,"(v)=>S('tw.step',v)",1,Math.max(1,Math.round(posv(U.p.floors,14))),1)
    +SL("柱スパン（目安）m",U.tw.steelPitch,"(v)=>S('tw.steelPitch',v)",3,12,0.5)
    +`<div style="border-top:1px solid var(--hair);margin:8px 0"></div>`
-   +CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")
+   +`<div id="tutorial-tc-control">${CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")}</div>`
    +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${k}　作業半径${CRANE_SPECS[k].work}m／${CRANE_SPECS[k].cap}t</option>`).join("")}</select></label>${craneSpec(U.tw.craneModel).mast==="tube"?SL("設置高さ m",primaryCraneHeight(craneSpec(U.tw.craneModel),posv(U.p.height,42)/Math.max(1,posv(U.p.floors,1))*Math.max(1,numv(U.tw.step,1))),"(v)=>S('tw.craneHeight',v)",craneSpec(U.tw.craneModel).selfH,craneSpec(U.tw.craneModel).maxInstallH||51,0.5):""}${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}</div>`:"")
    +`<button class="addbtn tc-add" onclick="addTowerCrane('JCL015')">＋ タワークレーンをもう1台追加</button>`
    +fenceSectionHtml()
@@ -3713,17 +3713,27 @@ const REAL_DEMO={
  layers:{site:true,building:true,nbs:true,fence:true,scaffold:true,crane:true,vehicles:true,tempobj:true,safety:true,obstacles:true,annot:true,sub:true,roads:true,under:true,cobj:true},
  roadcond:{lane:6,walk:2.5,side:"front"}
 };
+function loadRealDemoState(tutorial){
+ resetToDefault();
+ deepMerge(U,{p:REAL_DEMO.p,site:REAL_DEMO.site,road:REAL_DEMO.road,roadwork:REAL_DEMO.roadwork,tw:REAL_DEMO.tw,layers:REAL_DEMO.layers,roadcond:REAL_DEMO.roadcond});
+ ["blocks","roads","cobj","subsurface","annot","nbs"].forEach(k=>{U[k]=JSON.parse(JSON.stringify(REAL_DEMO[k]));});
+ U.site.poly=JSON.parse(JSON.stringify(REAL_DEMO.site.poly));U.site.h=[0,0,0,0];U.tw.fencePts=JSON.parse(JSON.stringify(REAL_DEMO.tw.fencePts));U.ojt=Object.assign({},REAL_DEMO.ojt);
+ U.road.walkShow=false;U.tw.person=false;U.tw.poles=false;U.snap=false;
+ if(tutorial){
+  // 教材として一つずつ作る。完成形の正は REAL_DEMO のまま保持。
+  U.blocks=[];U.cobj=[];U.subsurface=[];U.annot=[];U.nbs=[];
+  U.tw.crane=false;U.tw.fence=false;U.tw.scaffold=false;U.tw.ev=false;U.tw.rough=false;U.tw.mixer=false;
+  U.layers.under=false;U.layers.site=true;U.layers.building=true;U.layers.nbs=false;U.layers.annot=false;U.layers.sub=false;
+  U.tab="形状";U.tabGroup="2";
+ }else{U.tab="仮設";U.tabGroup="3";}
+ closeStart();rebuild();renderPanel();renderBar();view(tutorial?"bird":"bird",{instant:true});
+}
 window.openRealDemo=()=>{
  const loadDemo=()=>{
-  resetToDefault();
-  deepMerge(U,{p:REAL_DEMO.p,site:REAL_DEMO.site,road:REAL_DEMO.road,roadwork:REAL_DEMO.roadwork,tw:REAL_DEMO.tw,layers:REAL_DEMO.layers,roadcond:REAL_DEMO.roadcond});
-  ["blocks","roads","cobj","subsurface","annot","nbs"].forEach(k=>{U[k]=JSON.parse(JSON.stringify(REAL_DEMO[k]));});
-  U.site.poly=JSON.parse(JSON.stringify(REAL_DEMO.site.poly));U.site.h=[0,0,0,0];U.tw.fencePts=JSON.parse(JSON.stringify(REAL_DEMO.tw.fencePts));U.ojt=Object.assign({},REAL_DEMO.ojt);
-  U.road.walkShow=false;U.tw.person=false;U.tw.poles=false;U.snap=false;U.tab="仮設";U.tabGroup="3";
-  closeStart();rebuild();renderPanel();renderBar();view("bird",{instant:true});
-  toast(document.body.classList.contains("simple")?"実案件ベースのデモです。画面を回して、下の「工程」「仮設」を触ってみてください":"実案件ベースのデモを開きました（形状・階数・道路幅のみ実案件）","ok");
+  loadRealDemoState(true);
+  setTimeout(()=>startRealTutorial(),1180);
  };
- if(typeof window.v4DemoEnter==="function")window.v4DemoEnter(loadDemo);else loadDemo();
+ if(typeof window.v4DemoEnter==="function")window.v4DemoEnter(loadDemo);else{loadDemo();startRealTutorial();}
 };
 function resetToDefault(){
  // U を初期状態に戻す（テクスチャ等は破棄）
@@ -3763,6 +3773,121 @@ window.openDemoCase=()=>{
 };
 function closeStart(){const s=document.getElementById("start");if(s){s.classList.add("hide");setTimeout(()=>{s.style.display="none";},260);}}
 window.closeStart=closeStart;
+// ───── 実案件 GUIDE MODE：ボタンを覚えさせず、1アクションずつ体験 ─────
+const REAL_TUTORIAL={active:false,step:0,traceI:0,complete:false,allow:null,target:null};
+function tutorialPlanTexture(){
+ const cv=document.createElement("canvas");cv.width=1200;cv.height=900;const c=cv.getContext("2d");
+ c.fillStyle="#F7F8F6";c.fillRect(0,0,cv.width,cv.height);
+ c.strokeStyle="#D3D7D5";c.lineWidth=1;for(let x=40;x<cv.width;x+=40){c.beginPath();c.moveTo(x,0);c.lineTo(x,cv.height);c.stroke();}for(let y=20;y<cv.height;y+=40){c.beginPath();c.moveTo(0,y);c.lineTo(cv.width,y);c.stroke();}
+ const xmin=-26,xmax=26,zmin=-19.5,zmax=19.5,X=x=>(x-xmin)/(xmax-xmin)*cv.width,Y=z=>(zmax-z)/(zmax-zmin)*cv.height;
+ c.strokeStyle="#24384F";c.lineWidth=6;c.beginPath();(REAL_DEMO.site.poly||[]).forEach((p,i)=>{const x=X(p.x),y=Y(p.z);if(i)c.lineTo(x,y);else c.moveTo(x,y);});c.closePath();c.stroke();
+ const b=REAL_DEMO.blocks[0],hw=b.w/2,hd=b.d/2;c.strokeStyle="#2F6CD8";c.lineWidth=5;c.setLineDash([16,10]);c.strokeRect(X(b.dx-hw),Y(b.dz+hd),X(b.dx+hw)-X(b.dx-hw),Y(b.dz-hd)-Y(b.dz+hd));c.setLineDash([]);
+ c.strokeStyle="#66798C";c.lineWidth=16;c.beginPath();c.moveTo(X(-26),Y(16));c.lineTo(X(26),Y(16));c.stroke();c.lineWidth=2;c.strokeStyle="#A1AAB4";for(const zz of [9,23]){c.beginPath();c.moveTo(X(-26),Y(zz));c.lineTo(X(26),Y(zz));c.stroke();}
+ c.fillStyle="#17283F";c.font="700 30px sans-serif";c.fillText("SAMPLE PROJECT PLAN / RC 12F",45,55);c.font="18px sans-serif";c.fillStyle="#66798C";c.fillText("配置計画図（チュートリアル用） / SCALE REFERENCE",45,87);
+ c.fillStyle="#2F6CD8";c.font="700 20px sans-serif";c.fillText("BUILDING OUTLINE",X(b.dx-hw),Y(b.dz+hd)-14);
+ c.fillStyle="#475A6F";c.font="700 18px sans-serif";c.fillText("SITE",X(-7.7),Y(-4.8));c.fillText("FRONT ROAD",X(-22),Y(14.4));
+ c.strokeStyle="#17283F";c.lineWidth=2;c.strokeRect(25,25,cv.width-50,cv.height-50);
+ c.fillStyle="#17283F";c.fillRect(cv.width-350,cv.height-120,325,95);c.fillStyle="#FFF";c.font="700 16px sans-serif";c.fillText("BimGen / TUTORIAL DRAWING",cv.width-330,cv.height-84);c.font="13px sans-serif";c.fillStyle="#C6D3E2";c.fillText("PROJECT PLAN / SAMPLE PDF",cv.width-330,cv.height-57);
+ const tex=new THREE.CanvasTexture(cv);tex.minFilter=THREE.LinearFilter;tex.needsUpdate=true;return tex;
+}
+function tutorialLoadPlan(){
+ if(U.under.tex&&U.under.tex.dispose)U.under.tex.dispose();
+ U.under.tex=tutorialPlanTexture();U.under.show=true;U.under.width=52;U.under.opacity=.94;U.under.rot=0;U.under.dx=0;U.under.dz=0;U.layers.under=true;U.layers.site=false;
+ rebuild();view("top",{instant:true});v4Nudge("SAMPLE PLAN / LOADED");setTimeout(()=>tutorialSetStep(3),360);
+}
+function tutorialTraceWorld(){
+ const b=REAL_DEMO.blocks[0],hw=b.w/2,hd=b.d/2;
+ return [{x:b.dx-hw,z:b.dz-hd},{x:b.dx+hw,z:b.dz-hd},{x:b.dx+hw,z:b.dz+hd},{x:b.dx-hw,z:b.dz+hd}];
+}
+function tutorialScreenPoint(p){
+ const v=new THREE.Vector3(p.x,.55,p.z).project(camera),r=renderer.domElement.getBoundingClientRect();
+ return {x:r.left+(v.x+1)*.5*r.width,y:r.top+(1-v.y)*.5*r.height};
+}
+function clearTutorialTrace(){const e=document.getElementById("rt-trace-layer");if(e)e.remove();}
+function renderTutorialTrace(){
+ clearTutorialTrace();if(!REAL_TUTORIAL.active||REAL_TUTORIAL.step!==3)return;
+ const pts=tutorialTraceWorld().map(tutorialScreenPoint),root=document.createElement("div");root.id="rt-trace-layer";
+ const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("viewBox",`0 0 ${innerWidth} ${innerHeight}`);
+ for(let i=1;i<=Math.min(REAL_TUTORIAL.traceI,pts.length-1);i++){const l=document.createElementNS("http://www.w3.org/2000/svg","line");l.setAttribute("x1",pts[i-1].x);l.setAttribute("y1",pts[i-1].y);l.setAttribute("x2",pts[i].x);l.setAttribute("y2",pts[i].y);l.setAttribute("class","rt-trace-line");svg.appendChild(l);}
+ root.appendChild(svg);
+ pts.forEach((p,i)=>{const d=document.createElement("button");d.className="rt-trace-dot "+(i<REAL_TUTORIAL.traceI?"done":i===REAL_TUTORIAL.traceI?"current":"next");d.style.left=p.x+"px";d.style.top=p.y+"px";d.innerHTML=`<i>${i+1}</i>`;d.disabled=i!==REAL_TUTORIAL.traceI;d.onclick=()=>tutorialTraceHit(i);root.appendChild(d);});
+ document.body.appendChild(root);
+}
+window.tutorialTraceHit=(i)=>{
+ if(!REAL_TUTORIAL.active||REAL_TUTORIAL.step!==3||i!==REAL_TUTORIAL.traceI)return;
+ REAL_TUTORIAL.traceI++;renderTutorialTrace();v4Nudge("POINT "+REAL_TUTORIAL.traceI+" / 4");
+ if(REAL_TUTORIAL.traceI>=4){setTimeout(()=>{U.blocks=JSON.parse(JSON.stringify(REAL_DEMO.blocks));U.layers.site=true;U.layers.building=true;rebuild();clearTutorialTrace();v4Nudge("BUILDING OUTLINE / COMPLETE");setTimeout(()=>tutorialSetStep(4),520);},220);}
+};
+function tutorialPrepareStep(n){
+ REAL_TUTORIAL.allow=null;REAL_TUTORIAL.target=null;clearTutorialTrace();
+ if(n===0){U.tabGroup="2";U.tab="形状";U.layers.under=false;renderPanel();rebuild();view("bird",{instant:true});REAL_TUTORIAL.target='[data-tab="諸元"]';REAL_TUTORIAL.allow='[data-tab="諸元"]';}
+ if(n===1){U.tabGroup="2";U.tab="諸元";renderPanel();view("bird",{instant:true});}
+ if(n===2){U.tabGroup="1";U.tab="下敷き";renderPanel();U.layers.site=false;rebuild();view("top",{instant:true});}
+ if(n===3){U.tabGroup="2";U.tab="形状";renderPanel();U.layers.under=true;U.layers.site=false;rebuild();view("top",{instant:true});REAL_TUTORIAL.traceI=0;setTimeout(renderTutorialTrace,80);}
+ if(n===4){
+  U.blocks=JSON.parse(JSON.stringify(REAL_DEMO.blocks));U.layers.under=false;U.layers.site=true;U.layers.building=true;U.tw.mode="build";U.tw.step=10;U.tw.crane=false;U.tabGroup="3";U.tab="仮設";
+  renderPanel();rebuild();view("bird",{instant:true});REAL_TUTORIAL.target="#tutorial-tc-control";REAL_TUTORIAL.allow="#tutorial-tc-control input";
+ }
+}
+const REAL_TUTORIAL_STEPS=[
+ {code:"01 / PROJECT DATA",title:"まず、案件情報を開きます。",body:"案件名・用途・構造・階数など、設計概要を最初に確認します。青く光っている「案件情報」を押してください。"},
+ {code:"02 / DESIGN SUMMARY",title:"設計概要を入れます。",body:"今回はサンプルなので入力済みです。RC造・12階・高さ37mなど、ここが3Dの基本条件になります。",action:"入力済みの設計概要を確認 →"},
+ {code:"03 / SAMPLE PLAN",title:"案件プランPDFを入れます。",body:"チュートリアル用の配置計画図を用意してあります。押すと図面が下敷きとして表示されます。",action:"サンプル案件プランPDFを読み込む"},
+ {code:"04 / TRACE BUILDING",title:"建物の形をなぞります。",body:"図面上に出る青い点を 1 → 4 の順に押してください。指示された点以外は操作できません。"},
+ {code:"05 / TEMPORARY WORKS",title:"仮設を置きます。",body:"今回はタワークレーンだけ。青く光っている「タワークレーン」をONにして設置します。"}
+];
+function tutorialRender(){
+ let el=document.getElementById("real-tutorial");if(!el){el=document.createElement("div");el.id="real-tutorial";document.body.appendChild(el);}
+ if(!REAL_TUTORIAL.active){el.remove();return;}
+ const s=REAL_TUTORIAL_STEPS[REAL_TUTORIAL.step],simple=document.body.classList.contains("simple");
+ if(REAL_TUTORIAL.complete){
+  el.innerHTML=`<button class="rt-skip" onclick="exitRealTutorial(true)">SKIP / 終了</button><div class="rt-card complete"><small>GUIDED PROJECT / COMPLETE</small><h2>施工計画の入口まで、<br><em>自分で操作できました。</em></h2><p>案件情報 → 図面 → トレース → 仮設配置。ここからは全機能を自由に触れます。</p><button class="rt-primary" onclick="exitRealTutorial(false)">自由操作を始める <b>→</b></button></div>`;
+  return;
+ }
+ let action="";
+ if(REAL_TUTORIAL.step===1)action=`<button class="rt-primary" onclick="tutorialSetStep(2)">${s.action}<b>→</b></button>`;
+ if(REAL_TUTORIAL.step===2)action=`<button class="rt-primary" onclick="tutorialLoadPlan()">${s.action}<b>→</b></button>`;
+ if(simple&&REAL_TUTORIAL.step===0)action=`<button class="rt-primary" onclick="U.tabGroup='2';U.tab='諸元';renderPanel();tutorialSetStep(1)">案件情報を開く <b>→</b></button>`;
+ if(simple&&REAL_TUTORIAL.step===4)action=`<button class="rt-primary" onclick="tutorialPlaceCrane()">JCL015_H を設置 <b>→</b></button>`;
+ el.innerHTML=`<button class="rt-skip" onclick="exitRealTutorial(true)">SKIP TUTORIAL</button><div class="rt-progress">${REAL_TUTORIAL_STEPS.map((_,i)=>`<i class="${i<REAL_TUTORIAL.step?"done":i===REAL_TUTORIAL.step?"on":""}"></i>`).join("")}</div><div class="rt-card"><small>GUIDED PROJECT / ${s.code}</small><h2>${s.title}</h2><p>${s.body}</p>${action||'<div class="rt-wait"><i></i><span>青く光っている場所だけ操作できます</span></div>'}</div>`;
+ setTimeout(tutorialHighlight,30);
+}
+function tutorialHighlight(){
+ document.querySelectorAll(".tutorial-target").forEach(x=>x.classList.remove("tutorial-target"));
+ if(!REAL_TUTORIAL.active||!REAL_TUTORIAL.target)return;
+ const t=document.querySelector(REAL_TUTORIAL.target);if(t){t.classList.add("tutorial-target");try{t.scrollIntoView({block:"center",behavior:"smooth"});}catch(e){}}
+}
+window.tutorialSetStep=(n)=>{if(!REAL_TUTORIAL.active)return;REAL_TUTORIAL.step=n;REAL_TUTORIAL.complete=false;tutorialPrepareStep(n);tutorialRender();};
+window.tutorialPlaceCrane=()=>{if(!REAL_TUTORIAL.active)return;U.tw.crane=true;rebuild();renderPanel();renderMobile();tutorialComplete();};
+function tutorialComplete(){
+ if(!REAL_TUTORIAL.active)return;REAL_TUTORIAL.complete=true;REAL_TUTORIAL.allow=null;REAL_TUTORIAL.target=null;U.tw.crane=true;U.tw.craneModel="JCL015_H";U.sel="crane";rebuild();renderPanel();renderBar();focusSelectionCamera("crane",{duration:620});v4Nudge("TOWER CRANE / SET");tutorialRender();
+}
+window.startRealTutorial=()=>{
+ REAL_TUTORIAL.active=true;REAL_TUTORIAL.step=0;REAL_TUTORIAL.traceI=0;REAL_TUTORIAL.complete=false;document.body.classList.add("tutorial-mode");tutorialPrepareStep(0);tutorialRender();
+};
+window.exitRealTutorial=(skipped)=>{
+ REAL_TUTORIAL.active=false;REAL_TUTORIAL.complete=false;REAL_TUTORIAL.allow=null;REAL_TUTORIAL.target=null;document.body.classList.remove("tutorial-mode");clearTutorialTrace();
+ const e=document.getElementById("real-tutorial");if(e)e.remove();document.querySelectorAll(".tutorial-target").forEach(x=>x.classList.remove("tutorial-target"));
+ loadRealDemoState(false);view("bird",{intro:true,duration:720});toast(skipped?"チュートリアルをスキップしました。自由に操作できます。":"チュートリアル完了。全機能を操作できます。","ok");
+};
+document.addEventListener("pointerdown",(e)=>{
+ if(!REAL_TUTORIAL.active)return;
+ if(e.target.closest("#real-tutorial")||e.target.closest(".rt-trace-dot.current"))return;
+ const allow=REAL_TUTORIAL.allow&&e.target.closest(REAL_TUTORIAL.allow);
+ if(allow)return;
+ e.preventDefault();e.stopImmediatePropagation();
+ const card=document.querySelector("#real-tutorial .rt-card");if(card){card.classList.remove("blocked");void card.offsetWidth;card.classList.add("blocked");}
+},true);
+document.addEventListener("click",(e)=>{
+ if(!REAL_TUTORIAL.active||REAL_TUTORIAL.complete)return;
+ if(REAL_TUTORIAL.allow&&e.target.closest(REAL_TUTORIAL.allow)){
+  if(REAL_TUTORIAL.step===0)setTimeout(()=>tutorialSetStep(1),100);
+  else if(REAL_TUTORIAL.step===4)setTimeout(()=>tutorialComplete(),140);
+ }
+},true);
+document.addEventListener("wheel",(e)=>{if(REAL_TUTORIAL.active){e.preventDefault();e.stopImmediatePropagation();}},{capture:true,passive:false});
+window.addEventListener("resize",()=>{if(REAL_TUTORIAL.active&&REAL_TUTORIAL.step===3)setTimeout(renderTutorialTrace,30);});
+
 // ───── 初めての方向けガイド（ツアー）：デモ案件を開いて5ステップを順に案内 ─────
 const TOUR_STEPS=[
  {t:"① 3Dの動かし方",b:"何もない所をドラッグで回転、ホイール／2本指で拡大、物の上をドラッグで移動、Ctrl＋ドラッグで回転。",do:()=>{view("bird");}},
@@ -3995,6 +4120,12 @@ window.openSettings=()=>{
  let el=document.getElementById("settings");if(!el){el=document.createElement("div");el.id="settings";document.body.appendChild(el);el.addEventListener("pointerdown",e=>{if(e.target===el)closeSettings();});}
  el.classList.add("open");renderSettings();
 };
+function ensureSettingsLauncher(){
+ let b=document.getElementById("settings-fixed");
+ if(!b){b=document.createElement("button");b.id="settings-fixed";b.type="button";b.setAttribute("aria-label","設定");b.title="文字サイズ・レイヤー・編集ロック";b.innerHTML="<span>⚙</span><small>SETTINGS</small>";b.onclick=()=>openSettings();document.body.appendChild(b);}
+}
+ensureSettingsLauncher();
+
 
 
 // ───── キャンバス上の描く道具（どのタブにいても使える） ─────
@@ -4266,7 +4397,7 @@ function renderMobile(){
  const PH={demo:"既存解体",retain:"山留め・掘削",pile:"杭工事",steel:"鉄骨建て方",build:"躯体・仮設",plan:"完成"};
  const si=_selInfo();
  const mode=`<span class="mmode ${si?"edit":""}" title="物はタップで選択。選択中だけ操作できます"><small>${si?"EDIT MODE":"VIEW MODE"}</small>${si?si.label:"LOCKED"}</span>`;
- top.innerHTML=`<button class="mt-btn" onclick="openStart()" title="案件を開く">≡</button><div class="mt-title"><b>${(U.p.name||"BimGen").slice(0,20)}</b><span>${PH[U.tw.mode]||""}</span></div>${mode}${badge}<button class="mt-gear" onclick="openSettings()" aria-label="設定">⚙</button>`;
+ top.innerHTML=`<button class="mt-btn" onclick="openStart()" title="案件を開く">≡</button><div class="mt-title"><b>${(U.p.name||"BimGen").slice(0,20)}</b><span>${PH[U.tw.mode]||""}</span></div>${mode}${badge}`;
  const tabs=[["phase","工程","01"],["temp","仮設","02"],["view","表示","03"],["edit","編集","04"]];
  bar.innerHTML=tabs.map(t=>`<button class="mbtn ${((_dock===t[0])||(_sheet===t[0]))?"on":""}" onclick="${t[0]==="edit"?"openSheet('edit')":"openMobileDock('"+t[0]+"')"}"><span>${t[2]}</span>${t[1]}</button>`).join("");
  let ab=document.getElementById("mact");if(!ab){ab=document.createElement("div");ab.id="mact";document.body.appendChild(ab);}
@@ -4450,7 +4581,6 @@ function renderBar(){
   <button class="btn btn-secondary" onclick="openStart()" title="テンプレート／デモ／ファイルから案件を開く">＋ 新規</button>
   <button class="btn" id="undo-btn" onclick="undo()" title="1つ前の状態に戻す（Ctrl+Z）" ${_hist.length?"":"disabled"}>↶ 戻す</button>
   <button class="btn" onclick="togglePresent()" title="パネルを隠して3Dを全画面に（顧客・会議用）">プレゼン</button>
-  <button class="btn btn-gear" onclick="openSettings()" title="文字サイズ・操作ロックなどの設定">⚙</button>
   ${mn("視点",[
     {label:"鳥瞰",fn:"view('bird')"},{label:"正面",fn:"view('front')"},{label:"アイレベル",fn:"view('eye')"},{label:"真上（配置）",fn:"view('top')"},null,
     {label:"自動回転",fn:"U.auto=!U.auto;renderBar()",on:U.auto}])}
@@ -4475,6 +4605,15 @@ function renderBar(){
     {label:"意見・要望を送る",fn:"openFeedback()"}])}`;
 }
 const _renderBarOrig=renderBar; renderBar=function(){_renderBarOrig();renderTools();};
+(function installCommandMotion(){
+ if(window.__bimgenMotionInstalled)return;window.__bimgenMotionInstalled=true;
+ document.addEventListener("pointerdown",(e)=>{
+  if(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+  const t=e.target.closest("button,#subtabs div,#tabgroups .tg,.obj-row,.pc-flow button,.ly-row");
+  if(!t||t.disabled)return;t.classList.remove("ui-action-fire");void t.offsetWidth;t.classList.add("ui-action-fire");setTimeout(()=>t.classList.remove("ui-action-fire"),210);
+ },{passive:true});
+})();
+
 window.toggleMenu=(btn)=>{
  const m=btn.parentElement;const pop=m.querySelector(".mn-pop");const was=m.classList.contains("open");
  closeMenus(); if(was||!pop)return;
