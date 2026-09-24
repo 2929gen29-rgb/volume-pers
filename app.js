@@ -188,6 +188,11 @@ const CRANE_SPECS={
  NSA406A:{label:"日工 スリングエース NSA406A（ブーム6m/0.4t・全高10.6m）",jib:6,work:6,cap:0.4,tail:0.75,mast:"mini",selfH:10.6,base:0.9},
 };
 function craneSpec(k){return CRANE_SPECS[k]||CRANE_SPECS.JCL022;}
+function primaryCraneHeight(spec,builtHeight){
+ const s=spec||craneSpec(U.tw.craneModel),lo=s.selfH||8,hi=s.maxInstallH||63,manual=numv(U.tw.craneHeight,0);
+ const want=manual>0?manual:Math.max(lo,numv(builtHeight,0)+8);
+ return Math.max(lo,Math.min(hi,want));
+}
 // 敷地面積（多角形敷地があればシューレース、無ければ間口×奥行）
 function siteArea(){
  if(Array.isArray(U.site.poly)&&U.site.poly.length>=3){
@@ -1227,8 +1232,7 @@ function rebuild(){
   const cm=mat(spec.mast==="mini"?0x4B82FF:0xF2A33C);
   const a=(geo,x,y,z)=>{const m=new THREE.Mesh(geo,cm);m.position.set(x,y,z);m.castShadow=!L;cg.add(m);if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:0x16243d}));e.position.set(x,y,z);cg.add(e);}};
   if(spec.mast==="tube"){ // 円筒マスト・高自立：小さなベース＋丸マスト＋短い尾部（カタログ形状）
-   const reqH=numv(U.tw.craneHeight,0)>0?numv(U.tw.craneHeight,0):Math.max(spec.selfH||26.5,builtH+8);
-   const mhT=Math.min(spec.maxInstallH||63,Math.max(spec.selfH||26.5,reqH));
+   const mhT=primaryCraneHeight(spec,builtH);
    const b2=spec.base||2.5;
    a(new THREE.BoxGeometry(b2,.4,b2),0,.2,0);
    a(new THREE.CylinderGeometry(.31,.31,mhT,20),0,mhT/2,0);
@@ -2812,14 +2816,15 @@ function renderPanel(){
    +SL("柱スパン（目安）m",U.tw.steelPitch,"(v)=>S('tw.steelPitch',v)",3,12,0.5)
    +`<div style="border-top:1px solid var(--hair);margin:8px 0"></div>`
    +CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")
-   +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${k}　作業半径${CRANE_SPECS[k].work}m／${CRANE_SPECS[k].cap}t</option>`).join("")}</select></label></div>`:"")
+   +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${k}　作業半径${CRANE_SPECS[k].work}m／${CRANE_SPECS[k].cap}t</option>`).join("")}</select></label>${craneSpec(U.tw.craneModel).mast==="tube"?SL("設置高さ m",primaryCraneHeight(craneSpec(U.tw.craneModel),posv(U.p.height,42)/Math.max(1,posv(U.p.floors,1))*Math.max(1,numv(U.tw.step,1))),"(v)=>S('tw.craneHeight',v)",craneSpec(U.tw.craneModel).selfH,craneSpec(U.tw.craneModel).maxInstallH||51,0.5):""}${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}</div>`:"")
+   +`<button class="addbtn tc-add" onclick="addTowerCrane('JCL015')">＋ タワークレーンをもう1台追加</button>`
    +fenceSectionHtml()
    +`<div class="hint">検討の観点：揚重機の作業半径と定格荷重、建て方順序、強風時対策。<b>OJT 15-13・19章</b> を参照。</div>`;
   }
   else if(U.tw.mode==="build"){
    const secCrane = SL("躯体の進捗（〜階）",U.tw.step,"(v)=>S('tw.step',v)",1,Math.max(1,Math.round(posv(U.p.floors,14))),1)
     +CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")
-    +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${CRANE_SPECS[k].label}</option>`).join("")}</select></label><div style="font-size:10px;color:#2552A0;margin:-2px 0 4px">作業半径 ${craneSpec(U.tw.craneModel).work}m ／ 定格 ${craneSpec(U.tw.craneModel).cap}t ／ 尾部 ${craneSpec(U.tw.craneModel).tail}m</div>${craneSpec(U.tw.craneModel).mast==="tube"?SL("設置高さ m",numv(U.tw.craneHeight,0)||craneSpec(U.tw.craneModel).selfH,"(v)=>S('tw.craneHeight',v)",craneSpec(U.tw.craneModel).selfH,craneSpec(U.tw.craneModel).maxInstallH||51,0.5):""}${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}${CK("作業半径・尾部旋回の円",U.tw.radius,"(v)=>S('tw.radius',v)")}</div>`:"")
+    +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${CRANE_SPECS[k].label}</option>`).join("")}</select></label><div style="font-size:10px;color:#2552A0;margin:-2px 0 4px">作業半径 ${craneSpec(U.tw.craneModel).work}m ／ 定格 ${craneSpec(U.tw.craneModel).cap}t ／ 尾部 ${craneSpec(U.tw.craneModel).tail}m</div>${craneSpec(U.tw.craneModel).mast==="tube"?SL("設置高さ m",primaryCraneHeight(craneSpec(U.tw.craneModel),posv(U.p.height,42)/Math.max(1,posv(U.p.floors,1))*Math.max(1,numv(U.tw.step,1))),"(v)=>S('tw.craneHeight',v)",craneSpec(U.tw.craneModel).selfH,craneSpec(U.tw.craneModel).maxInstallH||51,0.5):""}${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}${CK("作業半径・尾部旋回の円",U.tw.radius,"(v)=>S('tw.radius',v)")}</div>`:"")
     +`<button class="addbtn tc-add" onclick="addTowerCrane('JCL015')">＋ タワークレーンをもう1台追加</button><div class="hint">追加TCは施工オブジェクトとして複数配置できます。選択後に機種・設置高さ・位置・旋回を変更できます。</div>`
     +CK("ラフタークレーン（ドラッグ可）",U.tw.rough,"(v)=>S('tw.rough',v)");
    const secFence = fenceSectionHtml()
