@@ -2388,7 +2388,7 @@ function v4PhaseSceneTransition(next){
 }
 window.v4PhaseSceneTransition=v4PhaseSceneTransition;
 window.setMode=(m)=>v4PhaseSceneTransition(m);
-window.addCO=(type)=>{snapshot();const t=COBJ_TYPES[type]||COBJ_TYPES.truck;const sz=t.sizes[0];const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);const nx0=numv(U.site.dx,0),nz0=sdz2+sd2/2+6;const hd=(U.snap!==false)?nearestRoadHeading(nx0,nz0):null;
+window.addCO=(type)=>{if(U.tw.mode==="plan"&&type!=="obstacle"){toast("完成フェーズでは仮設物を配置しません。工程を施工中へ戻してください","err");return;}snapshot();const t=COBJ_TYPES[type]||COBJ_TYPES.truck;const sz=t.sizes[0];const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);const nx0=numv(U.site.dx,0),nz0=sdz2+sd2/2+6;const hd=(U.snap!==false)?nearestRoadHeading(nx0,nz0):null;
  U.cobj.push({type,size:sz.key,x:nx0,z:nz0,w:sz.w,d:sz.d,h:sz.h,ry:hd!=null?hd:0,phase:U.tw.mode});U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();};
 window.addTowerCrane=(model="JCL015")=>{snapshot();const t=COBJ_TYPES.towercrane,sz=t.sizes.find(s=>s.key===model)||t.sizes[0],spec=craneSpec(sz.key);
  const i=(U.cobj||[]).filter(c=>c.type==="towercrane").length;
@@ -2459,12 +2459,12 @@ function renderPanel(){
    ? `<div id="subtabs">${curG.tabs.map(t=>`<div class="${U.tab===t?"on":""}" onclick="U.tab='${t}';renderPanel()">${TAB_LABEL[t]||t}</div>`).join("")}</div>`
    : "";
  const FLOW_NAV=[
-   ["2","諸元","📋","案件",!!(U.p.name&&posv(U.p.floors,0))],
+   ["2","諸元","📋","案件",!!(U.p.name&& !String(U.p.name).startsWith("新規案件") && posv(U.p.floors,0))],
    ["1","下敷き","🗺","元図",!!(U.under&&U.under.tex)],
    ["2","敷地・地形","📐","敷地・道路",!!(siteArea()>0&&((U.roads||[]).length||U.road.show!==false))],
    ["2","形状","🏢","建物",!!(U.blocks&&U.blocks.length)],
-   ["2","近隣","🏙","近隣",!!(U.nbs&&U.nbs.length)],
-   ["3","仮設","🏗","工程・仮設",!!(U.tw&&U.tw.mode)],
+   ["2","近隣","🏙","近隣（任意）",!!(U.nbs&&U.nbs.length)],
+   ["3","仮設","🏗","工程・仮設",!!(U.tw&&(U.tw.mode!=="plan"||U.tw.crane||U.tw.fence||U.tw.scaffold||U.tw.ev||(U.cobj&&U.cobj.length)))],
    ["3","施工/CAD","🚚","重機・通路",!!(U.cobj&&U.cobj.length)],
    ["4","検討","✓","判定・出力",false]
  ];
@@ -3972,7 +3972,9 @@ function renderSelCard(force){
  if(k.startsWith("co:")){const i=+k.slice(3),c=U.cobj[i];if(!c){el.style.display="none";return;}const t=COBJ_TYPES[c.type]||{label:c.type,sizes:[]};
   title=t.label;
   body=`<label class="f"><span>サイズ</span><select onchange="setCOSize(${i},this.value)">${(t.sizes||[]).map(s=>`<option value="${s.key}" ${c.size===s.key?"selected":""}>${s.label}</option>`).join("")}</select></label>
+   ${c.type==="towercrane"?rowSL("設置高さ m",numv(c.h,craneSpec(c.size).selfH),`(v)=>setCOHeight(${i},v)`,craneSpec(c.size).selfH,craneSpec(c.size).maxInstallH||51,.5):""}
    ${rowSL("向き °",numv(c.ry,0),`(v)=>{snapshot('co.ry.${i}');U.cobj[${i}].ry=v;rebuildThrottled();}`,0,359,1)}
+   <div class="sc-refdist">📏 ${refDistanceText(numv(c.x,0),numv(c.z,0))}</div>
    ${c._warn?`<div style="font-size:11px;color:#B0433A;font-weight:700">⚠ 歩行帯と干渉しています</div>`:""}
    ${c._roadRemain?`<div style="font-size:11px;font-weight:700;color:${c._roadRemain.lv==="ok"?"#2E7D5B":c._roadRemain.lv==="warn"?"#C77F1A":"#B0433A"}">道路${c._roadRemain.ri+1}：残り幅 ${c._roadRemain.remain}m</div>`:""}`;
   del=`delCO(${i})`;}
