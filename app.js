@@ -207,19 +207,19 @@ renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 // UI v4 Stage 3：模型・デジタルツイン寄りの落ち着いた色管理
 if(THREE.sRGBEncoding!==undefined)renderer.outputEncoding=THREE.sRGBEncoding;
 if(THREE.ACESFilmicToneMapping!==undefined)renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.06;
+renderer.toneMappingExposure=.94;
 mount.appendChild(renderer.domElement);
 const scene=new THREE.Scene();
 // 空のグラデーション（上：淡い青 → 地平：白っぽい）。テクスチャなのでPNG・検討シートにも写る
 let _skyTex=null;
 function skyTexture(){ if(_skyTex)return _skyTex;
  const cv=document.createElement("canvas");cv.width=4;cv.height=256;const c=cv.getContext("2d");
- const gr=c.createLinearGradient(0,0,0,256);gr.addColorStop(0,"#a9b8c9");gr.addColorStop(0.52,"#dfe5eb");gr.addColorStop(1,"#f6f7f9");
+ const gr=c.createLinearGradient(0,0,0,256);gr.addColorStop(0,"#8293a7");gr.addColorStop(0.50,"#c7d0d9");gr.addColorStop(1,"#e9edf1");
  c.fillStyle=gr;c.fillRect(0,0,4,256);_skyTex=new THREE.CanvasTexture(cv);_skyTex.minFilter=THREE.LinearFilter;return _skyTex;}
 const camera=new THREE.PerspectiveCamera(40,1,0.5,5000);
-scene.add(new THREE.HemisphereLight(0xf8fbff,0x7f8996,.88));
-const sun=new THREE.DirectionalLight(0xfff1dd,.96);
-const fill=new THREE.DirectionalLight(0x9ebcff,.20);fill.position.set(-90,72,-80);scene.add(fill);
+scene.add(new THREE.HemisphereLight(0xf4f7fb,0x687583,.76));
+const sun=new THREE.DirectionalLight(0xffecd5,.98);
+const fill=new THREE.DirectionalLight(0x86a8d8,.12);fill.position.set(-90,72,-80);scene.add(fill);
 // 影の解像度：モバイルや低解像度端末では軽く、PCでは高精細に
 const _isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)||Math.min(screen.width,screen.height)<768;
 const _shadowRes=_isMobile?1024:2048;
@@ -228,6 +228,23 @@ sun.shadow.bias=-0.00012;sun.shadow.normalBias=0.025;
 Object.assign(sun.shadow.camera,{left:-140,right:140,top:140,bottom:-140,far:600});
 scene.add(sun);
 const ctrl={theta:Math.PI/4+.3,phi:1.05,r:150,ty:18,cx:0,cz:0,ptrs:new Map(),pinch:0,panMid:null};
+let _camTween=null;
+function _camEase(t){return 1-Math.pow(1-t,3);}
+function _thetaDelta(a,b){let d=b-a;while(d>Math.PI)d-=Math.PI*2;while(d<-Math.PI)d+=Math.PI*2;return d;}
+function cameraTween(to,dur=460){
+ const reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+ if(reduce||dur<=0){Object.assign(ctrl,to);_camTween=null;return;}
+ const from={theta:ctrl.theta,phi:ctrl.phi,r:ctrl.r,ty:ctrl.ty,cx:ctrl.cx,cz:ctrl.cz};
+ _camTween={from,to:Object.assign({},from,to),thetaD:_thetaDelta(from.theta,to.theta==null?from.theta:to.theta),start:performance.now(),dur};
+}
+function updateCameraTween(now){
+ if(!_camTween)return;
+ const t=Math.min(1,(now-_camTween.start)/_camTween.dur),e=_camEase(t),a=_camTween.from,b=_camTween.to;
+ ctrl.theta=a.theta+_camTween.thetaD*e;
+ for(const k of ["phi","r","ty","cx","cz"])ctrl[k]=a[k]+(b[k]-a[k])*e;
+ if(t>=1)_camTween=null;
+}
+window.cameraTween=cameraTween;
 let model=null, dragMap={}, dragObj=null, dragOff=new THREE.Vector3(), dragStart=null, _tapCand=null, _lpTimer=null;
 const ray=new THREE.Raycaster();
 
@@ -473,9 +490,9 @@ el.addEventListener("dblclick",(e)=>{
  }
 });
 addEventListener("resize",resize);resize();
-(function loop(){requestAnimationFrame(loop);if(U.auto)ctrl.theta+=.0035;
+(function loop(now){requestAnimationFrame(loop);updateCameraTween(now||performance.now());if(U.auto&&!_camTween)ctrl.theta+=.0035;
  camera.position.set(ctrl.cx+ctrl.r*Math.sin(ctrl.phi)*Math.cos(ctrl.theta),ctrl.ty+ctrl.r*Math.cos(ctrl.phi),ctrl.cz+ctrl.r*Math.sin(ctrl.phi)*Math.sin(ctrl.theta));
- camera.lookAt(ctrl.cx,ctrl.ty,ctrl.cz);renderer.render(scene,camera);})();
+ camera.lookAt(ctrl.cx,ctrl.ty,ctrl.cz);renderer.render(scene,camera);})(performance.now());
 
 // ───── 地形 ─────
 function terrainH(x,z,sw,sd,h){ // h:[前左,前右,奥左,奥右] 前=+z
@@ -676,8 +693,8 @@ function rebuild(){
  dragMap={};
  const g=new THREE.Group(); const L=U.line; const DET=true;  // 詳細表現に一本化（概算モードは廃止）
  if(L){scene.background=new THREE.Color(0xffffff);scene.fog=null;}
- else if(U.sky!==false){scene.background=skyTexture();scene.fog=new THREE.Fog(0xe7ebf0,270,900);}
- else{scene.background=new THREE.Color(0xe3e7ec);scene.fog=new THREE.Fog(0xe3e7ec,330,980);}
+ else if(U.sky!==false){scene.background=skyTexture();scene.fog=new THREE.Fog(0xcfd6de,300,940);}
+ else{scene.background=new THREE.Color(0xcbd3dc);scene.fog=new THREE.Fog(0xcbd3dc,360,1020);}
   sun.castShadow=!L;
  {const az=numv(U.sun.az,135)*Math.PI/180, alt=Math.max(8,numv(U.sun.alt,55))*Math.PI/180, R=180;
   sun.position.set(R*Math.cos(alt)*Math.sin(az),R*Math.sin(alt),R*Math.cos(alt)*Math.cos(az));}
@@ -697,7 +714,7 @@ function rebuild(){
  const sdx=numv(U.site.dx,0), sdz=numv(U.site.dz,0);
 
  // 地面・道路
- const gnd=new THREE.Mesh(new THREE.PlaneGeometry(1200,1200),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0xd6dce3}));
+ const gnd=new THREE.Mesh(new THREE.PlaneGeometry(1200,1200),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0xaeb7c2}));
  gnd.rotation.x=-Math.PI/2;gnd.position.y=-0.07;gnd.receiveShadow=!L;g.add(gnd);
  // ワールド座標(x,z)における地盤の高さ。敷地の外は0（元の地面）
  // 傾斜地に置いたオブジェクト（仮囲い・重機・車両・注記）を地面に接地させるために使う
@@ -717,7 +734,7 @@ function rebuild(){
   const w=Math.min(20,Math.max(3,numv(r.w,6))); const rg=new THREE.Group(); rg.userData.dragKey="rd:"+ri;
   const ox=sdx+numv(r.dx,0), oz=sdz+numv(r.dz,0); rg.position.set(ox,0,oz); rg.rotation.y=numv(r.ry,0)*Math.PI/180;
   const hasUnder=!!(U.under&&U.under.tex&&U.under.show!==false);
-  const rmat=L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.sel==="rd:"+ri||(U.sel||"").startsWith("rpt:"+ri+":"))?0x5f83b8:0x505864,transparent:hasUnder,opacity:hasUnder?0.66:1});
+  const rmat=L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.sel==="rd:"+ri||(U.sel||"").startsWith("rpt:"+ri+":"))?0x4B82FF:0x3f4752,transparent:hasUnder,opacity:hasUnder?0.66:1});
   const wmat=L?rmat:new THREE.MeshLambertMaterial({color:0xd9dee5,transparent:hasUnder,opacity:hasUnder?0.72:1});
   const wl=Math.max(0,numv(r.walkL,0)), wr=Math.max(0,numv(r.walkR,0));
   for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1];const len=Math.hypot(b.x-a.x,b.z-a.z);if(len<0.05)continue;
@@ -746,7 +763,7 @@ function rebuild(){
   const roadLen=sw+60;
   roadG.rotation.z=Math.atan2(roadSlope,roadLen);  // 長手方向に傾ける
  }
- {const rm=new THREE.Mesh(new THREE.BoxGeometry(sw+60,0.1,rw),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0x505864}));rm.position.y=0.05;rm.receiveShadow=!L;roadG.add(rm);}
+ {const rm=new THREE.Mesh(new THREE.BoxGeometry(sw+60,0.1,rw),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0x3f4752}));rm.position.y=0.05;rm.receiveShadow=!L;roadG.add(rm);}
  if(!L && rw>=6){const cl=new THREE.Mesh(new THREE.BoxGeometry(sw+60,0.02,0.25),new THREE.MeshLambertMaterial({color:0xf2f4f6}));cl.position.y=0.07;roadG.add(cl);}
  g.add(roadG); dragMap.road=roadG;
  // ── 前面歩道グループ（dragKey=roadwalk：独立して前後移動可）※既定は非表示 ──
@@ -764,7 +781,7 @@ function rebuild(){
   const sgn=(U.road.side==="left"?-1:1);
   const sideG=new THREE.Group(); sideG.userData.dragKey="roadside";
   sideG.position.set(sdx+numv(U.road.sideDx,0),0,sdz+numv(U.road.sideDz,0)); sideG.rotation.y=roadRy;
-  const sm=new THREE.Mesh(new THREE.BoxGeometry(rw,0.1,sd+rw+24),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0x505864}));
+  const sm=new THREE.Mesh(new THREE.BoxGeometry(rw,0.1,sd+rw+24),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0x3f4752}));
   sm.position.set(sgn*(sw/2+1.6+rw/2),0.05,rw/2);sm.receiveShadow=!L;sideG.add(sm);
   if(!L&&U.road.walkShow){const sw2=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.12,sd),new THREE.MeshLambertMaterial({color:0xd9dee5}));sw2.position.set(sgn*(sw/2+0.8),0.07,0);sideG.add(sw2);}
   g.add(sideG); dragMap.roadside=sideG;
@@ -798,7 +815,7 @@ function rebuild(){
   geo.rotateX(-Math.PI/2);            // XY平面 → 地面(XZ)へ
   geo.translate(0,0.12,0);
   if(!U._exporting&&!L&&(U.sel==="site"||(U.sel||"").startsWith("spt:")))addVertexTools(siteG,sp,"spt:",()=>0.9,0x2E6FBE,0,true);
-  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0xc2c7ce:0xd5dbe2,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND,side:THREE.DoubleSide}));
+  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0xb3bbc5:0xc5cdd6,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND,side:THREE.DoubleSide}));
   sm.receiveShadow=!L;siteG.add(sm);
   // 外周ライン
   const lp=[]; sp.forEach(p=>lp.push(p.x,0.14,-p.z)); lp.push(sp[0].x,0.14,-sp[0].z);
@@ -810,7 +827,7 @@ function rebuild(){
   for(let j=0;j<=seg;j++)for(let i=0;i<=seg;i++){const x=-sw/2+sw*i/seg,z=-sd/2+sd*j/seg;vts.push(x,terrainH(x,z,sw,sd,hh)+0.12,z);}
   for(let j=0;j<seg;j++)for(let i=0;i<seg;i++){const a=j*(seg+1)+i;idx.push(a,a+seg+1,a+1,a+1,a+seg+1,a+seg+2);}
   const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.BufferAttribute(new Float32Array(vts),3));geo.setIndex(idx);geo.computeVertexNormals();
-  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0xc2c7ce:0xd5dbe2,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND}));
+  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0xb3bbc5:0xc5cdd6,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND}));
   sm.receiveShadow=!L;siteG.add(sm);
   if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo,5),new THREE.LineBasicMaterial({color:0x8a94a8}));siteG.add(e);}
  }
@@ -827,7 +844,7 @@ function rebuild(){
 
  // 近隣建物
  U.nbs.forEach((n,i)=>{
-  const m=box(g,posv(n.w,10),posv(n.h,12),posv(n.d,10),0xd3d8df,numv(n.x,20),posv(n.h,12)/2,numv(n.z,20));
+  const m=box(g,posv(n.w,10),posv(n.h,12),posv(n.d,10),0xc0c7d0,numv(n.x,20),posv(n.h,12)/2,numv(n.z,20));
   m.rotation.y=numv(n.ry,0)*Math.PI/180;
   m.userData.dragKey="nb:"+i;dragMap["nb:"+i]=m;
  });
@@ -858,15 +875,16 @@ function rebuild(){
    // ── 用途別マテリアル（矩形ブロックと外観を統一）──
    let polyMat;
    if(L){polyMat=new THREE.MeshBasicMaterial({color:0xffffff});}
-   else if(isApt){polyMat=new THREE.MeshLambertMaterial({color:0xe1e5ea});}                                  // 共同住宅：コンクリート調
+   else if(isApt){polyMat=new THREE.MeshLambertMaterial({color:0xd5dae0});}                                  // 共同住宅：コンクリート調
    else if(isOff){polyMat=new THREE.MeshLambertMaterial({color:0x3a587a,transparent:true,opacity:0.62});}    // 事務所/店舗：ガラス調
    else if(U.p.use==="ホテル"){polyMat=new THREE.MeshLambertMaterial({color:0xd8d2c4});}                      // ホテル：温かいベージュ
    else if(U.p.use==="倉庫・物流"){polyMat=new THREE.MeshLambertMaterial({color:0xc2c7cd});}                  // 倉庫：金属サイディング調
    else if(U.p.use==="病院・医療"){polyMat=new THREE.MeshLambertMaterial({color:0xe6e9ec});}                  // 病院：清潔感の白
-   else{polyMat=new THREE.MeshLambertMaterial({color:0xe1e5ea});}
+   else{polyMat=new THREE.MeshLambertMaterial({color:0xd5dae0});}
    const pm=new THREE.Mesh(eg, polyMat);
    pm.position.set(ox,y0+0.12,oz); pm.castShadow=!L; pm.receiveShadow=!L;
    pm.userData.dragKey="blk:"+bi; g.add(pm); dragMap["blk:"+bi]=pm;
+   if(!L){const pe=new THREE.LineSegments(new THREE.EdgesGeometry(eg,18),new THREE.LineBasicMaterial({color:0x6f7a88,transparent:true,opacity:.52}));pe.position.copy(pm.position);pe.renderOrder=2;g.add(pe);}
    if(!U._exporting&&!L&&(U.sel==="blk:"+bi||(U.sel||"").startsWith("bpt:"+bi+":"))){
     const hg=new THREE.Group(); hg.position.set(ox,0,oz); hg.rotation.y=numv(b.ry,0)*Math.PI/180; g.add(hg);
     addVertexTools(hg,b.poly,"bpt:"+bi+":",()=>y0+bh+0.9,0xF2A33C,b.ry,true);
@@ -920,9 +938,10 @@ function rebuild(){
   const lbox=(w,h,d,c,lx,ly,lz,o={})=>{const geo=new THREE.BoxGeometry(w,h,d);const m=new THREE.Mesh(geo,o.mat||mat(c,o));m.position.set(lx,ly,lz);m.castShadow=!L&&o.shadow!==false;m.receiveShadow=!L;bg.add(m);if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo,12),new THREE.LineBasicMaterial({color:0x16243d}));e.position.set(lx,ly,lz);bg.add(e);}return m;};
   lbox(W,1.2,D,0xb4b8be,0,gl-0.55,0); // 基礎スカート
   // 躯体色：用途連動（多角形と統一）
-  const bodyCol = isOff?0x3a587a : (U.p.use==="ホテル")?0xd8d2c4 : (U.p.use==="倉庫・物流")?0xc2c7cd : (U.p.use==="病院・医療")?0xe6e9ec : 0xe1e5ea;
+  const bodyCol = isOff?0x334f6f : (U.p.use==="ホテル")?0xcbbfa9 : (U.p.use==="倉庫・物流")?0xb5bdc6 : (U.p.use==="病院・医療")?0xd7dce1 : 0xd5dae0;
   const bodyOpt = isOff?{mat:new THREE.MeshLambertMaterial({color:0x3a587a,transparent:true,opacity:0.62})}:{};
-  lbox(W,bh,D,bodyCol,0,y0+bh/2+0.12,0,bodyOpt);
+  const bodyMesh=lbox(W,bh,D,bodyCol,0,y0+bh/2+0.12,0,bodyOpt);
+  if(!L){const be=new THREE.LineSegments(new THREE.EdgesGeometry(bodyMesh.geometry,18),new THREE.LineBasicMaterial({color:0x657180,transparent:true,opacity:.48}));be.position.copy(bodyMesh.position);bg.add(be);}
   if(bTo===f2&&U.tw.mode==="plan"){lbox(W+0.5,0.9,D+0.5,bodyCol===0x3a587a?0x33425a:bodyCol,0,y0+bh+0.55,0);
    if(f2===floorsAll)lbox(W*0.28,3,D*0.3,bodyCol===0x3a587a?0x33425a:bodyCol,W*0.22,y0+bh+2.4,-D*0.15);}
   if(f1===1&&!entDone){lbox(Math.min(8,W*0.5),fh*0.9,0.4,0x3a587a,0,gl+fh*0.45+0.12,D/2+0.18);entDone=true;}
@@ -2787,14 +2806,20 @@ function renderTitle(){
   <div style="margin-top:5px;font-size:9px;color:var(--mut)">※検討用イメージであり実際の建物・施工計画とは異なります</div></div>`;
 }
 function syncBtns(){renderBar();}
-function view(k){const H=posv(U.p.height,42);
- if(k==="bird"){ctrl.phi=.9;ctrl.r=Math.max(H*2.2,130);}
- if(k==="eye"){ctrl.phi=1.45;ctrl.r=Math.max(H*1.7,95);}
- if(k==="front"){ctrl.theta=Math.PI/2;ctrl.phi=1.35;ctrl.r=Math.max(H*2,115);}
- if(k==="top"){ctrl.phi=.14;ctrl.r=Math.max(H*2,130);}
- // 注視点を敷地中心へリセット（パンで動かした視点を戻す）
- ctrl.cx=numv(U.site.dx,0); ctrl.cz=numv(U.site.dz,0);
- U.auto=false;renderBar();}
+function view(k,opt){const H=posv(U.p.height,42),o=opt||{};
+ const t={theta:ctrl.theta,phi:ctrl.phi,r:ctrl.r,ty:ctrl.ty,cx:numv(U.site.dx,0),cz:numv(U.site.dz,0)};
+ if(k==="bird"){t.theta=Math.PI/4+.28;t.phi=.9;t.r=Math.max(H*2.2,130);}
+ if(k==="eye"){t.phi=1.45;t.r=Math.max(H*1.7,95);}
+ if(k==="front"){t.theta=Math.PI/2;t.phi=1.35;t.r=Math.max(H*2,115);}
+ if(k==="top"){t.theta=Math.PI/4;t.phi=.14;t.r=Math.max(H*2,130);}
+ U.auto=false;
+ if(o.instant){Object.assign(ctrl,t);_camTween=null;}
+ else if(o.intro){
+  Object.assign(ctrl,{theta:t.theta-.28,phi:Math.max(.5,t.phi-.16),r:t.r*1.28,cx:t.cx,cz:t.cz,ty:t.ty+Math.max(2,H*.06)});
+  cameraTween(t,o.duration||900);
+ }else cameraTween(t,o.duration||460);
+ renderBar();
+}
 // ───── BIM連携：OBJ / メタデータ出力（GLOOBE等へのブリッジ）─────
 function _dl(filename, text, mime){
  const blob=new Blob([text],{type:mime||"text/plain"});
@@ -3398,7 +3423,7 @@ window.openRealDemo=()=>{
   ["blocks","roads","cobj","subsurface","annot","nbs"].forEach(k=>{U[k]=JSON.parse(JSON.stringify(REAL_DEMO[k]));});
   U.site.poly=JSON.parse(JSON.stringify(REAL_DEMO.site.poly));U.site.h=[0,0,0,0];U.tw.fencePts=JSON.parse(JSON.stringify(REAL_DEMO.tw.fencePts));U.ojt=Object.assign({},REAL_DEMO.ojt);
   U.road.walkShow=false;U.tw.person=false;U.tw.poles=false;U.tab="仮設";U.tabGroup="3";
-  closeStart();rebuild();renderPanel();renderBar();view("bird");
+  closeStart();rebuild();renderPanel();renderBar();view("bird",{instant:true});
   toast(document.body.classList.contains("simple")?"実案件ベースのデモです。画面を回して、下の「工程」「仮設」を触ってみてください":"実案件ベースのデモを開きました（形状・階数・道路幅のみ実案件）","ok");
  };
  if(typeof window.v4DemoEnter==="function")window.v4DemoEnter(loadDemo);else loadDemo();
@@ -3507,8 +3532,9 @@ window.v4DemoEnter=(run)=>{
   </div>`;
  requestAnimationFrame(()=>el.classList.add("show"));
  setTimeout(()=>{try{run&&run();}catch(e){console.error(e);}},260);
- setTimeout(()=>el.classList.add("out"),1050);
- setTimeout(()=>{el.className="";el.innerHTML="";},1380);
+ setTimeout(()=>{if(typeof view==="function")view("bird",{intro:true,duration:980});},860);
+ setTimeout(()=>el.classList.add("out"),1010);
+ setTimeout(()=>{el.className="";el.innerHTML="";},1370);
 };
 window.v4PanelStage=(key,label)=>{
  if(document.body.classList.contains("simple"))return;
@@ -3527,9 +3553,16 @@ window.v4Nudge=(txt)=>{
  _v4NudgeTimer=setTimeout(()=>el.className="",620);
 };
 window.v4NewProject=()=>{
- closeStart();
- if(document.body.classList.contains("simple")){openSheet("edit");}
- else newBlank();
+ const go=()=>{
+  closeStart();
+  if(document.body.classList.contains("simple")){openSheet("edit");}
+  else{newBlank();U.tabGroup="2";U.tab="諸元";renderPanel();view("bird",{intro:true,duration:720});}
+ };
+ let el=document.getElementById("v4-new-enter");
+ if(!el){el=document.createElement("div");el.id="v4-new-enter";document.body.appendChild(el);}
+ el.innerHTML=`<div><small>NEW PROJECT / 02</small><b>PROJECT<br><span>SETUP</span></b><i></i></div>`;
+ el.className="show";
+ setTimeout(go,260);setTimeout(()=>el.classList.add("out"),480);setTimeout(()=>{el.className="";el.innerHTML="";},760);
 };
 window.openStart=()=>{
  let s=document.getElementById("start");
@@ -3841,7 +3874,7 @@ window.quickCreate=()=>{
  U.blocks=[{id:1,label:"建物",f1:1,f2:fl,w:bw,d:bd,dx:0,dz:0,ry:0}];
  U.tw.mode="build";U.tw.step=Math.max(1,Math.round(fl*0.6));U.tw.fence=true;U.tw.fenceShape="rect";U.tw.crane=true;U.tw.craneX=Math.round(bw/2+4);U.tw.craneZ=0;U.tw.scaffold=true;
  U.cobj=[];U._mEdit=true;
- closeStart();rebuild();renderPanel();renderBar();view("bird");openMobileDock("temp",true);
+ closeStart();rebuild();renderPanel();renderBar();view("bird",{intro:true,duration:820});openMobileDock("temp",true);
  toast("3Dを作りました。下の仮設ドックからクレーンや車両を置いてみてください","ok");
 };
 function _selInfo(){const k=U.sel;if(!k)return null;
@@ -4018,12 +4051,12 @@ function renderMobile(){
    <button class="ms-btn" onclick="closeSheet();document.getElementById('json-file').click()">ファイルを開く</button>
    <button class="ms-btn" onclick="closeSheet();restoreDraft()">前回の続き</button>
    <button class="ms-btn" onclick="closeSheet();saveProjectJSON()">保存</button></div>
-   <div class="ms-h">かんたん案件作成</div>
-   <div class="qc"><label>案件名<input id="qc-name" type="text" placeholder="例 ○○町 計画" value="${(U.p.name||"").replace(/"/g,"&quot;")}"></label>
-    <div class="qc-2"><label>用途<select id="qc-use">${uses.map(u=>`<option ${U.p.use===u?"selected":""}>${u}</option>`).join("")}</select></label><label>構造<select id="qc-struct">${["RC","S","SRC","W"].map(s=>`<option ${U.p.struct===s?"selected":""}>${s}</option>`).join("")}</select></label></div>
-    <div class="qc-3"><label>階数<input id="qc-floors" type="number" inputmode="numeric" value="${Math.round(posv(U.p.floors,5))}"></label><label>建物 幅m<input id="qc-bw" type="number" inputmode="decimal" value="${posv((U.blocks[0]||{}).w,12)}"></label><label>建物 奥行m<input id="qc-bd" type="number" inputmode="decimal" value="${posv((U.blocks[0]||{}).d,10)}"></label></div>
-    <div class="qc-3"><label>敷地 間口m<input id="qc-sw" type="number" inputmode="decimal" value="${posv(U.site.w,18)}"></label><label>敷地 奥行m<input id="qc-sd" type="number" inputmode="decimal" value="${posv(U.site.d,16)}"></label><label>道路 幅員m<input id="qc-rw" type="number" inputmode="decimal" value="${posv(U.road.w,6)}"></label></div>
-    <button class="ms-btn primary" style="width:100%" onclick="quickCreate()">この条件で3Dを作る</button></div>
+   <div class="qc v4-qc"><div class="v4-qc-head"><small>NEW PROJECT / INITIAL PARAMETERS</small><b>3Dの初期条件を設定</b><span>必要最低限だけ入力。作成後に3Dを見ながら詳細を詰められます。</span></div>
+    <div class="v4-qc-section"><em>PROJECT</em><label>案件名<input id="qc-name" type="text" placeholder="例 ○○町 計画" value="${(U.p.name||"").replace(/"/g,"&quot;")}"></label>
+    <div class="qc-2"><label>用途<select id="qc-use">${uses.map(u=>`<option ${U.p.use===u?"selected":""}>${u}</option>`).join("")}</select></label><label>構造<select id="qc-struct">${["RC","S","SRC","W"].map(s=>`<option ${U.p.struct===s?"selected":""}>${s}</option>`).join("")}</select></label></div></div>
+    <div class="v4-qc-section"><em>BUILDING</em><div class="qc-3"><label>階数<input id="qc-floors" type="number" inputmode="numeric" value="${Math.round(posv(U.p.floors,5))}"></label><label>幅 <small>m</small><input id="qc-bw" type="number" inputmode="decimal" value="${posv((U.blocks[0]||{}).w,12)}"></label><label>奥行 <small>m</small><input id="qc-bd" type="number" inputmode="decimal" value="${posv((U.blocks[0]||{}).d,10)}"></label></div></div>
+    <div class="v4-qc-section"><em>SITE / ROAD</em><div class="qc-3"><label>敷地間口 <small>m</small><input id="qc-sw" type="number" inputmode="decimal" value="${posv(U.site.w,18)}"></label><label>敷地奥行 <small>m</small><input id="qc-sd" type="number" inputmode="decimal" value="${posv(U.site.d,16)}"></label><label>道路幅員 <small>m</small><input id="qc-rw" type="number" inputmode="decimal" value="${posv(U.road.w,6)}"></label></div></div>
+    <button class="v4-qc-create" onclick="quickCreate()"><span>CREATE 3D MODEL</span><b>この条件で3Dを作る</b><i>→</i></button></div>
    <div class="ms-h">詳細編集</div>
    <div class="ms-note">なぞる・寸法入力・注記などはPC版UIで行えます。スマホでも一時的に切り替えられます。</div>
    <div class="ms-row"><button class="ms-btn" onclick="setSimpleUI(false)">詳細編集（PC版UI）へ</button><button class="ms-btn" onclick="closeSheet();undo()">↶ 元に戻す</button></div>`;
