@@ -1583,3 +1583,5 @@ body.tutorial-mode #settings-fixed{opacity:.32;filter:saturate(.35)}
   .ui-action-fire,.tutorial-target,.rt-trace-dot.current,.rt-card{animation:none!important}
   button,.btn,.tool,.mbtn,.md-cmd,.md-main,.obj-add-grid button,.obj-cats button,.pc-flow button,#settings-fixed{transition:none!important}
 }
+
+.rt-skip small{margin-left:5px;font-family:var(--mono);font-size:6px;color:#71839B}
