@@ -153,6 +153,11 @@ const CRANE_SPECS={
  JCL022:{label:"昭和 JCL022Ⅱ（ジブ22m/1.0t）",jib:22,work:22,cap:1.0,tail:2.58},
  JCL030:{label:"昭和 JCL030Ⅱ（ジブ30m/1.0t）",jib:30,work:30,cap:1.0,tail:2.865},
  JCL040:{label:"昭和 JCL040Ⅱ（ジブ40m/1.0t）",jib:40,work:40,cap:1.0,tail:5.8},
+ // 円筒マスト・高自立タイプ（北川鉄工所カタログ）：φ457〜610の丸マスト、ベース小、尾部短い
+ JCL012C_H:{label:"北川 JCL012C高自立（ジブ12m/1.0t・自立19.5m・丸マスト）",jib:12,work:12,cap:1.0,tail:2.0,mast:"tube",selfH:19.5,base:3.5},
+ JCL015_H:{label:"北川 JCL015高自立（ジブ15m/1.0t・自立26.5m・丸マスト）",jib:15,work:15,cap:1.0,tail:3.0,mast:"tube",selfH:26.5,base:2.2},
+ // 枠組足場上に自立する小型ジブクレーン（日工カタログ）
+ NSA406A:{label:"日工 スリングエース NSA406A（ブーム6m/0.4t・全高10.6m）",jib:6,work:6,cap:0.4,tail:0.75,mast:"mini",selfH:10.6,base:0.9},
 };
 function craneSpec(k){return CRANE_SPECS[k]||CRANE_SPECS.JCL022;}
 // 敷地面積（多角形敷地があればシューレース、無ければ間口×奥行）
@@ -1054,14 +1059,38 @@ function rebuild(){
   const spec=craneSpec(U.tw.craneModel);
   const mh=builtH+16, jib=spec.jib, work=spec.work;
   const cg=new THREE.Group();cg.userData.dragKey="crane";
-  const cm=mat(0xe8731a);
+  const cm=mat(spec.mast==="mini"?0x2f6fbe:0xe8731a);
   const a=(geo,x,y,z)=>{const m=new THREE.Mesh(geo,cm);m.position.set(x,y,z);m.castShadow=!L;cg.add(m);if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:0x16243d}));e.position.set(x,y,z);cg.add(e);}};
-  a(new THREE.BoxGeometry(4.5,.9,4.5),0,.45,0);a(new THREE.BoxGeometry(1.5,mh,1.5),0,mh/2,0);
-  a(new THREE.BoxGeometry(2.1,2,2.1),0,mh+1,0);a(new THREE.BoxGeometry(jib,.8,1),jib/2-1.2,mh+2.2,0);
-  a(new THREE.BoxGeometry(7,.7,1),-4.2,mh+2.2,0);a(new THREE.BoxGeometry(1.4,2,2.2),-7,mh+1.4,0);
-  a(new THREE.BoxGeometry(.5,4.5,.5),0,mh+4.4,0);
-  const drop=Math.max(4,mh-builtH-4);
-  a(new THREE.BoxGeometry(.07,drop,.07),jib*.72,mh+2-drop/2,0);a(new THREE.BoxGeometry(.9,.9,.9),jib*.72,mh+2-drop,0);
+  if(spec.mast==="tube"){ // 円筒マスト・高自立：小さなベース＋丸マスト＋短い尾部（カタログ形状）
+   const mhT=Math.min(mh,(spec.selfH||26.5)+4);
+   const b2=spec.base||2.5;
+   a(new THREE.BoxGeometry(b2,.4,b2),0,.2,0);
+   a(new THREE.CylinderGeometry(.31,.31,mhT,20),0,mhT/2,0);
+   a(new THREE.BoxGeometry(1.4,1.4,1.4),0,mhT+.7,0);
+   a(new THREE.BoxGeometry(jib,.45,.6),jib/2-.6,mhT+1.5,0);
+   a(new THREE.BoxGeometry(spec.tail+1,.4,.8),-(spec.tail+1)/2+.2,mhT+1.5,0);
+   a(new THREE.BoxGeometry(.25,3,.25),0,mhT+3,0);
+   const drop=Math.max(3,mhT-builtH-3);
+   a(new THREE.BoxGeometry(.06,drop,.06),jib*.75,mhT+1.3-drop/2,0);a(new THREE.BoxGeometry(.7,.7,.7),jib*.75,mhT+1.3-drop,0);
+  }else if(spec.mast==="mini"){ // 小型ジブクレーン（枠組足場上・全高10.6m）：格子柱＋起伏ブーム＋控え柱
+   const H=spec.selfH||10.6, bw=spec.base||0.9;
+   a(new THREE.BoxGeometry(bw,.15,bw),0,.075,0);
+   [-1,1].forEach(sx=>[-1,1].forEach(sz=>a(new THREE.BoxGeometry(.08,H*0.55,.08),sx*bw/2,H*0.275,sz*bw/2)));
+   for(let y=1;y<H*0.55;y+=1.2){a(new THREE.BoxGeometry(bw,.06,.06),0,y,bw/2);a(new THREE.BoxGeometry(bw,.06,.06),0,y,-bw/2);}
+   a(new THREE.BoxGeometry(.5,1.2,.7),0,H*0.55+.6,0);
+   const boomLen=spec.jib, ang=35*Math.PI/180;
+   const boom=new THREE.Mesh(new THREE.BoxGeometry(boomLen,.18,.18),cm);boom.position.set(Math.cos(ang)*boomLen/2,H*0.55+1.2+Math.sin(ang)*boomLen/2,0);boom.rotation.z=ang;boom.castShadow=!L;cg.add(boom);
+   a(new THREE.BoxGeometry(.12,H*0.45,.12),0,H*0.55+H*0.225,0);
+   const tipX=Math.cos(ang)*boomLen, tipY=H*0.55+1.2+Math.sin(ang)*boomLen; const drop=Math.max(2,tipY-builtH-2);
+   a(new THREE.BoxGeometry(.04,drop,.04),tipX,tipY-drop/2,0);a(new THREE.BoxGeometry(.4,.4,.4),tipX,tipY-drop,0);
+  }else{ // 格子マスト（従来）
+   a(new THREE.BoxGeometry(4.5,.9,4.5),0,.45,0);a(new THREE.BoxGeometry(1.5,mh,1.5),0,mh/2,0);
+   a(new THREE.BoxGeometry(2.1,2,2.1),0,mh+1,0);a(new THREE.BoxGeometry(jib,.8,1),jib/2-1.2,mh+2.2,0);
+   a(new THREE.BoxGeometry(7,.7,1),-4.2,mh+2.2,0);a(new THREE.BoxGeometry(1.4,2,2.2),-7,mh+1.4,0);
+   a(new THREE.BoxGeometry(.5,4.5,.5),0,mh+4.4,0);
+   const drop=Math.max(4,mh-builtH-4);
+   a(new THREE.BoxGeometry(.07,drop,.07),jib*.72,mh+2-drop/2,0);a(new THREE.BoxGeometry(.9,.9,.9),jib*.72,mh+2-drop,0);
+  }
   // 作業半径ガイド（カタログ作業半径・選択時/設定時のみ・画像出力時は非表示）
   if(U.tw.radius&&!L&&!U._exporting){
    const ring=new THREE.Mesh(new THREE.RingGeometry(work-0.5,work,72),new THREE.MeshBasicMaterial({color:0xe8731a,transparent:true,opacity:.30,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.1;cg.add(ring);
@@ -3300,10 +3329,10 @@ const REAL_DEMO={
  road:{w:16.3,side:"none",show:false,slope:0,walkShow:false},
  roads:[{pts:[{x:-30,z:16.6},{x:30,z:16.6}],w:16.3,walkL:0,walkR:0,dx:0,dz:0,ry:0}],
  roadwork:{mixerSize:"8t",pumpSize:"m4t",mountUp:0},
- tw:{mode:"build",step:6,crane:true,craneModel:"JCL022",craneX:-0.7,craneZ:2.0,craneRot:20,fence:true,fenceH:3,fenceGate:"front",fenceShape:"poly",
+ tw:{mode:"build",step:6,crane:true,craneModel:"JCL010",craneX:-5.8,craneZ:7.1,craneRot:270,craneJib:28,ev:true,evX:3.1,evZ:8.1,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceShape:"poly",
      fencePts:[{x:-8.1,z:8.4},{x:1.5,z:8.4},{x:7.5,z:8.4},{x:7.8,z:-4.4},{x:2.6,z:-5.0},{x:2.4,z:-5.0},{x:-5.4,z:-5.4},{x:-8.2,z:-5.6}],fenceGateSeg:1,
      scaffold:true,poles:false,person:false,pileLen:39,pilePitch:4,pileDia:1.0},
- cobj:[{type:"mixer",size:"8t",x:-6,z:13.2,ry:90},{type:"pump",size:"m4t",x:4,z:13.2,ry:90},{type:"lsev",size:"h45",x:-5,z:10.2,ry:0},{type:"guard",size:"std",x:-10,z:10,ry:0},{type:"walkzone",size:"std",x:0,z:10.2,ry:90}],
+ cobj:[{type:"mixer",size:"8t",x:-6,z:13.2,ry:90},{type:"pump",size:"m4t",x:4,z:13.2,ry:90},{type:"guard",size:"std",x:-10,z:10,ry:0},{type:"walkzone",size:"std",x:0,z:10.2,ry:90}],
  subsurface:[{kind:"subway",x:0,z:18,w:12,d:70,ry:90}],
  annot:[{type:"text",x:-20,z:18,ry:0,color:"red",text:"地下鉄直下：杭長の検討要",fsize:1.6},{type:"text",x:-0.7,z:-8,ry:0,color:"amber",text:"TC 建物内設置（塔状比4超）",fsize:1.4},{type:"text",x:-6,z:22,ry:0,color:"green",text:"生コン 敷地側に縦列（道路使用許可）",fsize:1.4}],
  nbs:[{x:15.5,z:2,w:14,d:13,h:36,ry:0},{x:-16.5,z:2,w:14,d:13,h:27,ry:0}],
@@ -3575,7 +3604,9 @@ window.duplicateSel=()=>{const k=U.sel;if(!k)return;snapshot();const cp=(o)=>JSO
  else{toast("この物は複製できません");return;}
  rebuild();renderPanel();toast("複製しました（2〜3mずらして配置）","ok");};
 window.deleteSel=()=>{const k=U.sel;if(!k)return;snapshot();
- if(k.startsWith("co:"))U.cobj.splice(+k.slice(3),1);
+ if(k==="ev"){U.tw.ev=false;}
+ else if(k==="crane"){U.tw.crane=false;}
+ else if(k.startsWith("co:"))U.cobj.splice(+k.slice(3),1);
  else if(k.startsWith("an:"))U.annot.splice(+k.slice(3),1);
  else if(k.startsWith("sub:"))U.subsurface.splice(+k.slice(4),1);
  else if(k.startsWith("nb:"))U.nbs.splice(+k.slice(3),1);
@@ -3639,6 +3670,7 @@ window.quickCreate=()=>{
 function _selInfo(){const k=U.sel;if(!k)return null;
  if(k.startsWith("co:")){const c=U.cobj[+k.slice(3)];if(!c)return null;const t=COBJ_TYPES[c.type]||{};return {kind:"co",i:+k.slice(3),label:t.label||c.type,sizes:t.sizes||[],cur:c.size};}
  if(k==="crane")return {kind:"crane",label:"タワークレーン"};
+ if(k==="ev")return {kind:"ev",label:"ロングスパンEV"};
  if(k==="fence"||k.startsWith("fpt:"))return {kind:"fence",label:"仮囲い"};
  if(k.startsWith("blk:"))return {kind:"blk",i:+k.slice(4),label:(U.blocks[+k.slice(4)]||{}).label||"建物"};
  if(k.startsWith("an:"))return {kind:"an",i:+k.slice(3),label:"注記"};
@@ -3648,6 +3680,7 @@ function _selInfo(){const k=U.sel;if(!k)return null;
 window.mSelMove=(dx,dz)=>{const s=_selInfo();if(!s)return;snapshot("msel");
  if(s.kind==="co"){const c=U.cobj[s.i];c.x=+(numv(c.x,0)+dx).toFixed(1);c.z=+(numv(c.z,0)+dz).toFixed(1);}
  else if(s.kind==="crane"){U.tw.craneX=+(numv(U.tw.craneX,16)+dx).toFixed(1);U.tw.craneZ=+(numv(U.tw.craneZ,0)+dz).toFixed(1);}
+ else if(s.kind==="ev"){U.tw.evX=+(numv(U.tw.evX,-6)+dx).toFixed(1);U.tw.evZ=+(numv(U.tw.evZ,0)+dz).toFixed(1);}
  else if(s.kind==="fence"){U.tw.fenceDx=+(numv(U.tw.fenceDx,0)+dx).toFixed(1);U.tw.fenceDz=+(numv(U.tw.fenceDz,0)+dz).toFixed(1);}
  else if(s.kind==="blk"){const b=U.blocks[s.i];b.dx=+(numv(b.dx,0)+dx).toFixed(1);b.dz=+(numv(b.dz,0)+dz).toFixed(1);}
  else if(s.kind==="an"){const a=U.annot[s.i];a.x=+(numv(a.x,0)+dx).toFixed(1);a.z=+(numv(a.z,0)+dz).toFixed(1);}
@@ -3705,7 +3738,7 @@ function renderMobile(){
    ${row("足場",U.tw.scaffold,`S('tw.scaffold',${!U.tw.scaffold});renderMobile()`,``)}
    ${row("生コン車",has("mixer"),"mToggleCO('mixer','8t')",ctl("mixer"))}
    ${row("ポンプ車",has("pump"),"mToggleCO('pump','m4t')",ctl("pump"))}
-   ${row("LSEV",has("lsev"),"mToggleCO('lsev','h32')",ctl("lsev"))}
+   ${row("LSEV",has("lsev")||!!U.tw.ev,(U.tw.ev?`S('tw.ev',false);renderMobile()`:(has("lsev")?"mToggleCO('lsev','h32')":`S('tw.ev',true);renderMobile()`)),U.tw.ev?`<button class="ms-sq ms-w" onclick="U.sel='ev';closeSheet();rebuild()">選択</button>`:ctl("lsev"))}
    ${row("ラフター",has("rough"),"mToggleCO('rough','25t')",ctl("rough"))}`;
  }else if(_sheet==="view"){title="表示";
   h=`<div class="ms-h">視点</div><div class="ms-grid">${[["bird","鳥瞰"],["front","正面"],["eye","目線"],["top","真上"]].map(([k,l])=>`<button class="ms-btn" onclick="view('${k}');closeSheet()">${l}</button>`).join("")}</div>
@@ -3726,7 +3759,7 @@ function renderMobile(){
      <div class="ms-h">種類を変える</div><div class="ms-wrap">${Object.keys(COBJ_TYPES).filter(t=>!["walkzone","guard","obstacle"].includes(t)).map(t=>`<button class="ms-chip ${U.cobj[s.i].type===t?"on":""}" onclick="mSelType('${t}')">${COBJ_TYPES[t].label}</button>`).join("")}</div>`;
    }
    if(s.kind==="crane"){h+=`<div class="ms-h">機種</div><div class="ms-wrap">${Object.keys(CRANE_SPECS).map(m=>`<button class="ms-chip ${U.tw.craneModel===m?"on":""}" onclick="S('tw.craneModel','${m}');renderMobile()">${m}<small>半径${CRANE_SPECS[m].work}m</small></button>`).join("")}</div>`;}
-   h+=`<div class="ms-row"><button class="ms-btn" onclick="duplicateSel();renderMobile()">複製</button><button class="ms-btn danger" onclick="deleteSel();closeSheet()">削除</button><button class="ms-btn" onclick="U.sel=null;closeSheet();rebuild()">選択解除</button></div>`;
+   h+=`<div class="ms-row">${(s.kind==="ev"||s.kind==="crane")?"":`<button class="ms-btn" onclick="duplicateSel();renderMobile()">複製</button>`}<button class="ms-btn danger" onclick="deleteSel();closeSheet()">${(s.kind==="ev"||s.kind==="crane")?"非表示（OFF）":"削除"}</button><button class="ms-btn" onclick="U.sel=null;closeSheet();rebuild()">選択解除</button></div>`;
   }
  }else if(_sheet==="edit"){title="編集・案件";
   const uses=["共同住宅（賃貸）","共同住宅（分譲）","事務所","店舗","ホテル","倉庫・物流","病院・医療"];
