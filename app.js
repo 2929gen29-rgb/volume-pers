@@ -3733,7 +3733,7 @@ window.openRealDemo=()=>{
   loadRealDemoState(true);
   setTimeout(()=>startRealTutorial(),1180);
  };
- if(typeof window.v4DemoEnter==="function")window.v4DemoEnter(loadDemo);else{loadDemo();startRealTutorial();}
+ if(typeof window.v4DemoEnter==="function")window.v4DemoEnter(loadDemo);else loadDemo();
 };
 function resetToDefault(){
  // U を初期状態に戻す（テクスチャ等は破棄）
@@ -3826,7 +3826,7 @@ function tutorialPrepareStep(n){
  if(n===3){U.tabGroup="2";U.tab="形状";renderPanel();U.layers.under=true;U.layers.site=false;rebuild();view("top",{instant:true});REAL_TUTORIAL.traceI=0;setTimeout(renderTutorialTrace,80);}
  if(n===4){
   U.blocks=JSON.parse(JSON.stringify(REAL_DEMO.blocks));U.layers.under=false;U.layers.site=true;U.layers.building=true;U.tw.mode="build";U.tw.step=10;U.tw.crane=false;U.tabGroup="3";U.tab="仮設";
-  renderPanel();rebuild();view("bird",{instant:true});REAL_TUTORIAL.target="#tutorial-tc-control";REAL_TUTORIAL.allow="#tutorial-tc-control input";
+  renderPanel();rebuild();view("bird",{instant:true});REAL_TUTORIAL.target="#tutorial-tc-control";REAL_TUTORIAL.allow="#tutorial-tc-control";
  }
 }
 const REAL_TUTORIAL_STEPS=[
