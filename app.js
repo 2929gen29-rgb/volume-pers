@@ -3425,39 +3425,88 @@ window.coach=(step)=>{
  else if(step===2){c.className="show bottom";c.innerHTML=`${simple?"下の「工程」で施工の状態が変わります":"工程フェーズを切り替えると施工の状態が変わります"}<small>${simple?"「仮設」でクレーン・車両をON、タップして動かせます":"仮設タブでクレーン・車両を配置し、3D上でドラッグできます"}</small>`;_coachT=setTimeout(()=>{c.className="";},9000);}
  else c.className="";
 };
+// ───── BimGen UI v4 / Stage 1：スタート体験・モーション基盤 ─────
+const V4_PHASE_NO={demo:"01",retain:"02",pile:"03",steel:"04",build:"05",plan:"06"};
+let _v4FxTimer=null,_v4NudgeTimer=null;
+window.v4PhaseFlash=(key,label)=>{
+ let el=document.getElementById("v4-phase-flash");
+ if(!el){el=document.createElement("div");el.id="v4-phase-flash";document.body.appendChild(el);}
+ clearTimeout(_v4FxTimer);
+ el.className="";
+ el.innerHTML=`<span>PHASE ${V4_PHASE_NO[key]||"--"}</span><b>${label||""}</b><small>CONSTRUCTION SEQUENCE</small>`;
+ requestAnimationFrame(()=>el.classList.add("show"));
+ _v4FxTimer=setTimeout(()=>el.classList.remove("show"),720);
+};
+window.v4Nudge=(txt)=>{
+ let el=document.getElementById("v4-nudge");
+ if(!el){el=document.createElement("div");el.id="v4-nudge";document.body.appendChild(el);}
+ clearTimeout(_v4NudgeTimer);el.textContent=txt;el.className="show";
+ _v4NudgeTimer=setTimeout(()=>el.className="",620);
+};
+window.v4NewProject=()=>{
+ closeStart();
+ if(document.body.classList.contains("simple")){openSheet("edit");}
+ else newBlank();
+};
 window.openStart=()=>{
- if(!_onbDone()&&!document.getElementById("onb")&&!(U.blocks&&U.blocks.length&&U.p.name&&U.p.name!=="サンプル計画（架空）")){openOnb();return;}
  let s=document.getElementById("start");
  if(!s){s=document.createElement("div");s.id="start";document.body.appendChild(s);}
- s.innerHTML=`<div class="start-card">
-  <div class="start-head"><div class="start-logo">BimGen</div><div class="start-sub">図面・地図を、その場で3Dに。</div><button class="start-x" onclick="closeStart()" aria-label="閉じる">×</button></div>
-  <div class="start-hero">
-   <div class="hero-item"><b>① 図面・地図から建物・敷地を3D化</b><span>PDF・画像・地図を下敷きにして、敷地・建物・道路を作成</span></div>
-   <div class="hero-item"><b>② 施工計画を立体で検討</b><span>仮囲い・クレーン・重機・車両・杭・掘削などを配置</span></div>
-   <div class="hero-item"><b>③ 施工条件をその場で判定</b><span>残車道幅・縦列配置・勾配・歩行帯干渉・建蔽率等を目安判定</span></div>
-   <div class="hero-item"><b>④ 検討結果をそのまま共有</b><span>A4検討シート・PNG・IFC・JSONで出力し、BIMや次工程へ</span></div>
+ s.className="v4-start";
+ const d=(draftEnabled&&draftEnabled())?readDraft():null;
+ const resume=d?`<button class="v4-resume" onclick="restoreDraft()"><span>RESUME</span><b>前回の続きから</b><small>${_esc(d.name||"（案件名未入力）")}</small></button>`:"";
+ s.innerHTML=`<div class="v4-start-card">
+  <div class="v4-start-top">
+   <div class="v4-brand"><span class="v4-brand-mark">BG</span><div><b>BimGen</b><small>CONSTRUCTION COMMAND INTERFACE</small></div></div>
+   <button class="v4-x" onclick="closeStart()" aria-label="閉じる">×</button>
   </div>
-  <div class="start-tagline">図面が立体になる。施工を検討できる。判定が返る。判断が残る。<span>OJT・若手教育にも：検討項目20件・注記・検討シート</span></div>
-  ${(()=>{let done=false;try{done=localStorage.getItem("bimgen_tour_done")==="1";}catch(e){}return done?"":`<div class="start-first">
-   <div><b>はじめての方へ</b>　デモ案件を開く → 右下の「検討判定」を見る → 段階バー④で検討シートを出す。3分で分かります。</div>
-   <button class="btn primary" style="white-space:nowrap" onclick="startTour()">ガイド付きでデモを開く</button></div>`;})()}
-  <button class="start-real" onclick="openRealDemo()"><span class="sr-tag">実案件ベース</span><b>実案件で見る　—　都内・共同住宅12階（狭小地・地下鉄直下）</b><small>実際の案件の敷地形状・階数・道路幅で、仮囲い・TC・生コン車まで入った状態。回す→工程→仮設、で1分で分かります</small></button>
-  <div class="start-sec">用途別サンプルを見る（仮設・車両入り。押すだけで3Dが立ちます）</div>
-  <div class="start-grid">${TEMPLATES.map(t=>`<button class="start-tpl" onclick="newFromTemplate('${t.key}')"><span class="start-ico">${t.icon}</span><b>${t.name}</b><small>${t.sub}</small></button>`).join("")}</div>
-  ${(()=>{const d=readDraft();if(!d||!draftEnabled())return "";const t=new Date(d.savedAt).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
-    return `<button class="start-act resume" onclick="restoreDraft()">前回の続きから<small>自動退避 ${t}　${_esc(d.name||"（案件名未入力）")}</small></button>`;})()}
-  <div class="start-row">
-   <button class="start-act" style="background:rgba(46,111,190,.08);border-color:rgba(46,111,190,.35)" onclick="newBlank()">図面・地図から始める（白紙）<small>建物・道路なし。下敷きを敷いてなぞる</small></button>
-   <button class="start-act demo" onclick="openDemoCase()">デモ案件を開く<small>傾斜地・仮囲い・クレーン・注記が入った状態</small></button>
-   <button class="start-act" style="background:rgba(46,125,91,.08);border-color:rgba(46,125,91,.35)" onclick="openBimSample()">BIM連携用フルサンプル<small>全項目に値入り。BIM出力・検討シートの検証用</small></button>
-   <button class="start-act" onclick="document.getElementById('json-file').click();closeStart()">保存した案件を開く<small>.json / .bsjson</small></button>
-   <button class="start-act" onclick="closeStart()">→ このまま続ける<small>現在の内容を編集</small></button>
+
+  <div class="v4-hero">
+   <div class="v4-kicker">3D CONSTRUCTION PLANNING / EARLY STAGE</div>
+   <h1>図面から、<br><em>施工を考える。</em></h1>
+   <p>図面・地図を立体化し、工程と仮設をその場で動かす。<br>営業・施工の初期検討を、ひとつの3D画面で。</p>
   </div>
-  <div class="start-credit">企画・設計・開発：日本建設株式会社 東京支店 営業部 伊藤 絃　—　実務で感じた課題を起点に、一から内製した業務改善ツール</div>
-  <div class="start-foot">この画面は右上「＋ 新規」からいつでも開けます。数値はあとから全て変更できます。<br>
-   <label style="display:inline-flex;align-items:center;gap:5px;margin-top:6px;cursor:pointer"><input type="checkbox" ${draftEnabled()?"checked":""} onchange="setDraftEnabled(this.checked);openStart()" style="accent-color:var(--amber)">作業中の内容をこの端末に自動退避する（共用PCではオフ推奨）</label>${readDraft()&&draftEnabled()?`　<a href="#" onclick="clearDraft();return false" style="color:var(--mut)">下書きを削除</a>`:""}</div>
+
+  <div class="v4-entry-grid">
+   <button class="v4-entry real" onclick="openRealDemo()">
+    <span class="v4-entry-no">01</span><span class="v4-entry-tag">REAL PROJECT</span>
+    <b>実案件で<br>BimGenを体験する。</b>
+    <small>都内共同住宅 / RC12F<br>狭小地・地下鉄・仮設計画</small>
+    <i>EXPLORE PROJECT <strong>→</strong></i>
+   </button>
+   <button class="v4-entry new" onclick="v4NewProject()">
+    <span class="v4-entry-no">02</span><span class="v4-entry-tag">NEW PROJECT</span>
+    <b>自分の案件を<br>3Dで立ち上げる。</b>
+    <small>諸元から簡易作成 / 図面・地図から作成<br>あとから詳細編集できます</small>
+    <i>CREATE PROJECT <strong>→</strong></i>
+   </button>
+  </div>
+
+  <div class="v4-cap">
+   <div><span>01</span><b>3D化</b><small>DRAWING → MODEL</small></div>
+   <div><span>02</span><b>施工検討</b><small>PLAN → SIMULATE</small></div>
+   <div><span>03</span><b>条件判定</b><small>CHECK → REVIEW</small></div>
+   <div><span>04</span><b>共有</b><small>OUTPUT → SHARE</small></div>
+  </div>
+
+  ${resume}
+
+  <details class="v4-more">
+   <summary><span>OTHER ENTRY</span> その他のサンプル・保存データを開く <b>＋</b></summary>
+   <div class="v4-more-body">
+    <div class="v4-sample-grid">${TEMPLATES.map((t,i)=>`<button class="v4-sample" onclick="newFromTemplate('${t.key}')"><span>${String(i+1).padStart(2,"0")}</span><b>${t.name}</b><small>${t.sub}</small></button>`).join("")}</div>
+    <div class="v4-subactions">
+     <button onclick="openDemoCase()">DEMO CASE<small>傾斜地・仮囲い・クレーン入り</small></button>
+     <button onclick="openBimSample()">BIM FULL SAMPLE<small>BIM出力・検討シート検証用</small></button>
+     <button onclick="document.getElementById('json-file').click();closeStart()">OPEN FILE<small>.json / .bsjson</small></button>
+     <button onclick="startTour()">QUICK GUIDE<small>ガイド付きで操作を見る</small></button>
+    </div>
+   </div>
+  </details>
+
+  <div class="v4-credit"><span>PLANNED / DESIGNED / DEVELOPED IN-HOUSE</span><b>企画・設計・開発　日本建設株式会社 東京支店 営業部 伊藤 絃</b><small>実務で感じた課題を起点に、一から内製した業務改善ツール</small></div>
  </div>`;
  s.style.display="";s.classList.remove("hide");
+ requestAnimationFrame(()=>s.classList.add("ready"));
 };
 
 // ───── レイヤー（表示の絞り込み）：dragKey で対象を判定して非表示にする ─────
@@ -3708,12 +3757,32 @@ function renderMobile(){
  const badge=nNg?`<button class="mb ng" onclick="openSheet('check')">要検討 ${nNg}${nW?"・注意 "+nW:""}</button>`:(nW?`<button class="mb warn" onclick="openSheet('check')">注意 ${nW}</button>`:`<button class="mb ok" onclick="openSheet('check')">判定OK</button>`);
  const PH={demo:"既存解体",retain:"山留め・掘削",pile:"杭工事",steel:"鉄骨建て方",build:"躯体・仮設",plan:"完成"};
  const si=_selInfo();
- const mode=`<span class="mmode" title="物はタップで選択。選択中だけドラッグで動きます">${si?"✏ "+si.label:"👆 タップで選択"}</span>`;
+ const mode=`<span class="mmode ${si?"edit":""}" title="物はタップで選択。選択中だけ操作できます"><small>${si?"EDIT MODE":"VIEW MODE"}</small>${si?si.label:"LOCKED"}</span>`;
  top.innerHTML=`<button class="mt-btn" onclick="openStart()" title="案件を開く">≡</button><div class="mt-title"><b>${(U.p.name||"BimGen").slice(0,20)}</b><span>${PH[U.tw.mode]||""}</span></div>${mode}${badge}`;
- const tabs=[["phase","工程","◧"],["temp","仮設","▲"],["view","表示","◎"],["edit","編集","✎"]];
+ const tabs=[["phase","工程","01"],["temp","仮設","02"],["view","表示","03"],["edit","編集","04"]];
  bar.innerHTML=tabs.map(t=>`<button class="mbtn ${_sheet===t[0]?"on":""}" onclick="openSheet('${t[0]}')"><span>${t[2]}</span>${t[1]}</button>`).join("");
  let ab=document.getElementById("mact");if(!ab){ab=document.createElement("div");ab.id="mact";document.body.appendChild(ab);}
- if(si&&!_sheet){ab.style.display="";ab.innerHTML=`<span class="ma-l">${si.label}</span><button class="ms-sq" onclick="mSelMove(-1,0)">←</button><button class="ms-sq" onclick="mSelMove(1,0)">→</button><button class="ms-sq" onclick="mSelMove(0,-1)">↑</button><button class="ms-sq" onclick="mSelMove(0,1)">↓</button><button class="ms-sq" onclick="mSelRot(15)">↻</button><button class="ms-sq" onclick="openObjMenu(U.sel)" title="その他">⋯</button><button class="ms-sq" onclick="U.sel=null;rebuild();renderMobile()">✕</button>`;}
+ if(si&&!_sheet){
+  ab.style.display="flex";
+  const sub=(si.kind==="crane")?(U.tw.craneModel+" · R "+((CRANE_SPECS[U.tw.craneModel]||{}).work||"-")+"m"):(si.kind==="co"&&U.cobj[si.i]?((COBJ_TYPES[U.cobj[si.i].type]||{}).label||"OBJECT"):"MOVE / ROTATE");
+  ab.innerHTML=`<div class="oc-shell">
+   <div class="oc-head"><div><span>OBJECT CONTROL</span><b>${si.label}</b><small>${sub}</small></div><button class="oc-close" onclick="U.sel=null;rebuild();renderMobile()" aria-label="操作を終了">×</button></div>
+   <div class="oc-body">
+    <div class="oc-dpad">
+     <button class="oc-key oc-up" onclick="mSelMove(0,-1);v4Nudge('Z −1.0m')" aria-label="上へ">↑</button>
+     <button class="oc-key oc-left" onclick="mSelMove(-1,0);v4Nudge('X −1.0m')" aria-label="左へ">←</button>
+     <span class="oc-core">MOVE<small>1.0m</small></span>
+     <button class="oc-key oc-right" onclick="mSelMove(1,0);v4Nudge('X +1.0m')" aria-label="右へ">→</button>
+     <button class="oc-key oc-down" onclick="mSelMove(0,1);v4Nudge('Z +1.0m')" aria-label="下へ">↓</button>
+    </div>
+    <div class="oc-side">
+     <button class="oc-rot" onclick="mSelRot(-15);v4Nudge('ROT −15°')">↺<small>−15°</small></button>
+     <button class="oc-rot" onclick="mSelRot(15);v4Nudge('ROT +15°')">↻<small>+15°</small></button>
+     <button class="oc-detail" onclick="openObjMenu(U.sel)">DETAIL</button>
+    </div>
+   </div>
+  </div>`;
+ }
  else ab.style.display="none";
  let pk=document.getElementById("mpeek");if(!pk){pk=document.createElement("button");pk.id="mpeek";document.body.appendChild(pk);
   let py=null;pk.addEventListener("touchstart",(e)=>{py=e.touches[0].clientY;},{passive:true});pk.addEventListener("touchend",(e)=>{if(py!=null&&py-e.changedTouches[0].clientY>20){openSheet(_lastSheet);}py=null;},{passive:true});
@@ -3724,7 +3793,7 @@ function renderMobile(){
  let h="",title="";
  if(_sheet==="phase"){title="工程フェーズ";
   const PHASES=[["demo","既存解体"],["retain","山留め・掘削"],["pile","杭工事"],["steel","鉄骨建て方"],["build","躯体・仮設"],["plan","完成"]];
-  h=`<div class="ms-grid">${PHASES.map(([k,l])=>`<button class="ms-btn ${U.tw.mode===k?"on":""}" onclick="setMode('${k}');renderMobile()">${l}</button>`).join("")}</div>
+  h=`<div class="ms-grid">${PHASES.map(([k,l])=>`<button class="ms-btn ${U.tw.mode===k?"on":""}" onclick="setMode('${k}');v4PhaseFlash('${k}','${l}');renderMobile()">${l}</button>`).join("")}</div>
    ${(U.tw.mode==="build"||U.tw.mode==="steel")?`<div class="ms-h">進捗（〜階）</div><div class="ms-row"><button class="ms-btn" onclick="S('tw.step',Math.max(1,Math.round(numv(U.tw.step,1))-1));renderMobile()">−</button><div class="ms-val">${Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1)))} 階</div><button class="ms-btn" onclick="S('tw.step',Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1))+1));renderMobile()">＋</button></div>`:""}
    <div class="ms-note">工程を変えると、山留め・杭・鉄骨・躯体・完成の状態に3Dが切り替わります。</div>`;
  }else if(_sheet==="temp"){title="仮設を触る";
