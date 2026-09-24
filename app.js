@@ -2853,7 +2853,7 @@ function renderPanel(){
   }
   else if(U.tw.mode==="build"){
    const secCrane = SL("躯体の進捗（〜階）",U.tw.step,"(v)=>S('tw.step',v)",1,Math.max(1,Math.round(posv(U.p.floors,14))),1)
-    +CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")
+    +`<div id="tutorial-tc-control">${CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")}</div>`
     +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${CRANE_SPECS[k].label}</option>`).join("")}</select></label><div style="font-size:10px;color:#2552A0;margin:-2px 0 4px">作業半径 ${craneSpec(U.tw.craneModel).work}m ／ 定格 ${craneSpec(U.tw.craneModel).cap}t ／ 尾部 ${craneSpec(U.tw.craneModel).tail}m</div>${craneSpec(U.tw.craneModel).mast==="tube"?SL("設置高さ m",primaryCraneHeight(craneSpec(U.tw.craneModel),posv(U.p.height,42)/Math.max(1,posv(U.p.floors,1))*Math.max(1,numv(U.tw.step,1))),"(v)=>S('tw.craneHeight',v)",craneSpec(U.tw.craneModel).selfH,craneSpec(U.tw.craneModel).maxInstallH||51,0.5):""}${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}${CK("作業半径・尾部旋回の円",U.tw.radius,"(v)=>S('tw.radius',v)")}</div>`:"")
     +`<button class="addbtn tc-add" onclick="addTowerCrane('JCL015')">＋ タワークレーンをもう1台追加</button><div class="hint">追加TCは独立して位置・機種・高さを調整できます。</div>`;
    const secFence = fenceSectionHtml()
