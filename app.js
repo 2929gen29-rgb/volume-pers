@@ -3764,36 +3764,42 @@ function renderMobile(){
  let ab=document.getElementById("mact");if(!ab){ab=document.createElement("div");ab.id="mact";document.body.appendChild(ab);}
  if(si&&!_sheet){
   ab.style.display="flex";
-  const sub=(si.kind==="crane")?(U.tw.craneModel+" · R "+((CRANE_SPECS[U.tw.craneModel]||{}).work||"-")+"m"):(si.kind==="co"&&U.cobj[si.i]?((COBJ_TYPES[U.cobj[si.i].type]||{}).label||"OBJECT"):"MOVE / ROTATE");
-  ab.innerHTML=`<div class="oc-shell">
-   <div class="oc-head"><div><span>OBJECT CONTROL</span><b>${si.label}</b><small>${sub}</small></div><button class="oc-close" onclick="U.sel=null;rebuild();renderMobile()" aria-label="操作を終了">×</button></div>
-   <div class="oc-body">
-    <div class="oc-dpad">
-     <button class="oc-key oc-up" onclick="mSelMove(0,-1);v4Nudge('Z −1.0m')" aria-label="上へ">↑</button>
-     <button class="oc-key oc-left" onclick="mSelMove(-1,0);v4Nudge('X −1.0m')" aria-label="左へ">←</button>
-     <span class="oc-core">MOVE<small>1.0m</small></span>
-     <button class="oc-key oc-right" onclick="mSelMove(1,0);v4Nudge('X +1.0m')" aria-label="右へ">→</button>
-     <button class="oc-key oc-down" onclick="mSelMove(0,1);v4Nudge('Z +1.0m')" aria-label="下へ">↓</button>
+  const detailKey=(si.kind==="crane")?U.tw.craneModel:(si.kind==="co"&&U.cobj[si.i]?((U.cobj[si.i].type||"")+"|"+(U.cobj[si.i].size||"")):si.kind);
+  const controlKey=String(U.sel||"")+"|"+detailKey;
+  if(ab.dataset.controlKey!==controlKey){
+   ab.dataset.controlKey=controlKey;
+   const sub=(si.kind==="crane")?(U.tw.craneModel+" · R "+((CRANE_SPECS[U.tw.craneModel]||{}).work||"-")+"m"):(si.kind==="co"&&U.cobj[si.i]?((COBJ_TYPES[U.cobj[si.i].type]||{}).label||"OBJECT"):"MOVE / ROTATE");
+   ab.innerHTML=`<div class="oc-shell">
+    <div class="oc-head"><div><span>OBJECT CONTROL</span><b>${si.label}</b><small>${sub}</small></div><button class="oc-close" onclick="U.sel=null;rebuild();renderMobile()" aria-label="操作を終了">×</button></div>
+    <div class="oc-body">
+     <div class="oc-dpad">
+      <button class="oc-key oc-up" onclick="mSelMove(0,-1);v4Nudge('Z −1.0m')" aria-label="上へ">↑</button>
+      <button class="oc-key oc-left" onclick="mSelMove(-1,0);v4Nudge('X −1.0m')" aria-label="左へ">←</button>
+      <span class="oc-core">MOVE<small>1.0m</small></span>
+      <button class="oc-key oc-right" onclick="mSelMove(1,0);v4Nudge('X +1.0m')" aria-label="右へ">→</button>
+      <button class="oc-key oc-down" onclick="mSelMove(0,1);v4Nudge('Z +1.0m')" aria-label="下へ">↓</button>
+     </div>
+     <div class="oc-side">
+      <button class="oc-rot" onclick="mSelRot(-15);v4Nudge('ROT −15°')">↺<small>−15°</small></button>
+      <button class="oc-rot" onclick="mSelRot(15);v4Nudge('ROT +15°')">↻<small>+15°</small></button>
+      <button class="oc-detail" onclick="openObjMenu(U.sel)">DETAIL</button>
+     </div>
     </div>
-    <div class="oc-side">
-     <button class="oc-rot" onclick="mSelRot(-15);v4Nudge('ROT −15°')">↺<small>−15°</small></button>
-     <button class="oc-rot" onclick="mSelRot(15);v4Nudge('ROT +15°')">↻<small>+15°</small></button>
-     <button class="oc-detail" onclick="openObjMenu(U.sel)">DETAIL</button>
-    </div>
-   </div>
-  </div>`;
+   </div>`;
+  }
  }
- else ab.style.display="none";
+ else {ab.style.display="none";ab.dataset.controlKey="";}
  let pk=document.getElementById("mpeek");if(!pk){pk=document.createElement("button");pk.id="mpeek";document.body.appendChild(pk);
   let py=null;pk.addEventListener("touchstart",(e)=>{py=e.touches[0].clientY;},{passive:true});pk.addEventListener("touchend",(e)=>{if(py!=null&&py-e.changedTouches[0].clientY>20){openSheet(_lastSheet);}py=null;},{passive:true});
   pk.onclick=()=>openSheet(_lastSheet);}
  const NAMES={phase:"工程",temp:"仮設",view:"表示",edit:"編集",check:"判定",obj:"選択中の物"};
  if(!_sheet&&_lastSheet&&!si){pk.style.display="";pk.textContent="▲ "+(NAMES[_lastSheet]||"")+" を再表示";}else pk.style.display="none";
+ sheet.dataset.sheet=_sheet||"";
  if(!_sheet){sheet.classList.remove("open");back.classList.remove("open");return;}
  let h="",title="";
  if(_sheet==="phase"){title="工程フェーズ";
   const PHASES=[["demo","既存解体"],["retain","山留め・掘削"],["pile","杭工事"],["steel","鉄骨建て方"],["build","躯体・仮設"],["plan","完成"]];
-  h=`<div class="ms-grid">${PHASES.map(([k,l])=>`<button class="ms-btn ${U.tw.mode===k?"on":""}" onclick="setMode('${k}');v4PhaseFlash('${k}','${l}');renderMobile()">${l}</button>`).join("")}</div>
+  h=`<div class="ms-grid">${PHASES.map(([k,l])=>`<button class="ms-btn ${U.tw.mode===k?"on":""}" onclick="setMode('${k}');closeSheet();v4PhaseFlash('${k}','${l}');renderMobile()">${l}</button>`).join("")}</div>
    ${(U.tw.mode==="build"||U.tw.mode==="steel")?`<div class="ms-h">進捗（〜階）</div><div class="ms-row"><button class="ms-btn" onclick="S('tw.step',Math.max(1,Math.round(numv(U.tw.step,1))-1));renderMobile()">−</button><div class="ms-val">${Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1)))} 階</div><button class="ms-btn" onclick="S('tw.step',Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1))+1));renderMobile()">＋</button></div>`:""}
    <div class="ms-note">工程を変えると、山留め・杭・鉄骨・躯体・完成の状態に3Dが切り替わります。</div>`;
  }else if(_sheet==="temp"){title="仮設を触る";
