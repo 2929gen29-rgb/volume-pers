@@ -1438,3 +1438,148 @@ body.simple .ms-chk{font-size:calc(15px * var(--bim-ui-scale))!important}
  .set-mode{grid-template-columns:1fr 1fr}
  .set-foot{flex-wrap:wrap}
 }
+
+
+/* ============================================================
+   BimGen UI v4 / Stage 6 — Guided Project + restrained motion
+   ZZZ-inspired principles only: high-contrast hierarchy,
+   numeric tags, decisive micro-motion. No copied assets/trade dress.
+   ============================================================ */
+
+/* SETTINGS is a fixed utility, never part of a wrapping toolbar */
+#settings-fixed{
+  position:fixed;top:12px;right:12px;z-index:14;
+  display:flex;align-items:center;gap:6px;height:38px;padding:0 11px;
+  border:1px solid #304866;border-radius:9px;background:linear-gradient(145deg,#111D2E,#182940);
+  color:#EEF4FC;font-family:var(--font);font-weight:800;cursor:pointer;
+  box-shadow:0 6px 18px rgba(10,20,34,.18);
+  transition:transform 160ms var(--v4-ease),border-color 160ms var(--v4-ease),background 160ms var(--v4-ease),box-shadow 160ms var(--v4-ease)
+}
+#settings-fixed span{font-size:17px;line-height:1}
+#settings-fixed small{font-family:var(--mono);font-size:6.5px;letter-spacing:.12em;color:#9DB4D2}
+#settings-fixed:hover{transform:translateY(-1px);border-color:#5578A6;background:linear-gradient(145deg,#16243A,#1D3350);box-shadow:0 9px 22px rgba(10,20,34,.22)}
+#settings-fixed:active{transform:translateY(1px) scale(.98)}
+#bar{right:102px!important}
+
+/* Stronger visual hierarchy without making the panel louder */
+#phead{font-size:14px!important;font-weight:800!important;letter-spacing:.01em}
+.brand{font-size:15px!important}
+#tabgroups{background:#101B2B!important;border-bottom-color:#253750!important}
+#tabgroups .tg.step{color:#8FA0B7!important;background:transparent!important;border-bottom:3px solid transparent!important;transition:background 160ms ease,color 160ms ease,border-color 160ms ease,transform 160ms ease!important}
+#tabgroups .tg.step .step-n{background:#24344A!important;color:#9FB0C5!important;border:1px solid rgba(255,255,255,.04)}
+#tabgroups .tg.step .step-l{font-size:11.5px!important;font-weight:750!important}
+#tabgroups .tg.step .step-e{font-size:6px!important;letter-spacing:.12em!important;color:#667A95!important}
+#tabgroups .tg.step:hover{background:#16253A!important;color:#E4ECF7!important}
+#tabgroups .tg.step.on{background:linear-gradient(180deg,#17283F,#122237)!important;color:#FFF!important;border-bottom-color:#4B82FF!important}
+#tabgroups .tg.step.on .step-n{background:#4B82FF!important;color:#FFF!important;box-shadow:0 0 0 3px rgba(75,130,255,.13)}
+#subtabs{background:#F8FAFD!important;border-bottom:1px solid #DCE3ED}
+#subtabs div{font-size:12px!important;font-weight:650!important;color:#63748B!important;border-bottom:2px solid transparent;transition:color 150ms ease,background 150ms ease,border-color 150ms ease}
+#subtabs div:hover{background:#EEF3F9;color:#2D425E!important}
+#subtabs div.on{background:#FFF!important;color:#1B4D99!important;border-bottom-color:#4B82FF;font-weight:800!important}
+.pc-now b{font-size:13px!important;letter-spacing:.005em}
+.pc-now span{font-size:9.5px!important;color:#A7B5C8!important}
+.pc-quick span{font-size:8.5px!important}
+#body{line-height:1.48}
+#body .hint{line-height:1.55}
+#body label.f>span{font-weight:650;color:#4C5E75}
+
+/* One short tactile motion per action; nothing loops except the current tutorial target */
+.ui-action-fire{animation:bimActionFire 190ms cubic-bezier(.2,.8,.2,1)!important}
+@keyframes bimActionFire{
+  0%{transform:scale(1)}
+  45%{transform:scale(.965)}
+  100%{transform:scale(1)}
+}
+button,.btn,.tool,.mbtn,.md-cmd,.md-main,.obj-add-grid button,.obj-cats button,.pc-flow button{
+  transition:transform 160ms var(--v4-ease),background 160ms var(--v4-ease),border-color 160ms var(--v4-ease),color 160ms var(--v4-ease),box-shadow 160ms var(--v4-ease)
+}
+@media (hover:hover){
+  .obj-add-grid button:hover,.place-link:hover,.md-cmd:hover{transform:translateY(-1px)}
+}
+.phase-grid .btn.phase.active{box-shadow:inset 0 -3px 0 #4B82FF,0 5px 12px rgba(39,83,150,.1)}
+
+/* Guided project */
+body.tutorial-mode #settings-fixed{opacity:.32;filter:saturate(.35)}
+#real-tutorial{position:fixed;inset:0;z-index:82;pointer-events:none}
+.rt-skip{
+  position:fixed;top:16px;left:50%;transform:translateX(-50%);pointer-events:auto;
+  height:31px;padding:0 13px;border:1px solid rgba(255,255,255,.14);border-radius:99px;
+  background:rgba(9,16,27,.76);backdrop-filter:blur(9px);color:#B8C4D3;
+  font-family:var(--mono);font-size:7px;font-weight:800;letter-spacing:.12em;cursor:pointer
+}
+.rt-skip:hover{color:#FFF;border-color:rgba(255,255,255,.3)}
+.rt-progress{position:fixed;left:50%;top:55px;transform:translateX(-50%);display:flex;gap:5px}
+.rt-progress i{display:block;width:28px;height:3px;border-radius:8px;background:rgba(22,36,61,.18)}
+.rt-progress i.done{background:#77A0E8}.rt-progress i.on{background:#4B82FF;box-shadow:0 0 0 3px rgba(75,130,255,.1)}
+.rt-card{
+  position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+  width:min(560px,calc(100vw - 30px));padding:15px 17px 14px;
+  border:1px solid #304663;border-radius:13px;background:linear-gradient(145deg,rgba(12,22,36,.97),rgba(21,37,58,.97));
+  color:#EEF3FA;box-shadow:0 18px 50px rgba(3,10,20,.32);backdrop-filter:blur(12px);
+  pointer-events:auto;animation:rtCardIn 260ms var(--v4-ease)
+}
+@keyframes rtCardIn{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+.rt-card>small{display:block;font-family:var(--mono);font-size:7px;font-weight:800;letter-spacing:.15em;color:#76A3F0}
+.rt-card h2{margin:5px 0 4px;font-size:20px;line-height:1.28;letter-spacing:.005em;color:#FFF}
+.rt-card h2 em{font-style:normal;color:#8DB2FF}
+.rt-card p{margin:0;font-size:11px;line-height:1.65;color:#A7B4C5}
+.rt-primary{
+  width:100%;min-height:45px;margin-top:12px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 13px;border:1px solid #5D8DE6;border-radius:8px;background:linear-gradient(135deg,#315FBA,#467DE8);
+  color:#FFF;font-family:var(--font);font-size:12px;font-weight:800;text-align:left;pointer-events:auto;cursor:pointer;
+  box-shadow:0 8px 18px rgba(33,82,171,.22)
+}
+.rt-primary b{font-size:20px;font-weight:500}.rt-primary:hover{transform:translateY(-1px);box-shadow:0 11px 24px rgba(33,82,171,.28)}
+.rt-primary:active{transform:translateY(1px) scale(.99)}
+.rt-wait{display:flex;align-items:center;gap:8px;margin-top:11px;padding:8px 10px;border:1px solid rgba(255,255,255,.08);border-radius:7px;background:rgba(255,255,255,.035);color:#90A1B8;font-size:9px}
+.rt-wait i{width:7px;height:7px;border-radius:50%;background:#4B82FF;box-shadow:0 0 0 5px rgba(75,130,255,.12)}
+.rt-card.blocked{animation:rtBlocked 220ms ease}
+@keyframes rtBlocked{0%,100%{transform:translateX(-50%)}35%{transform:translateX(calc(-50% - 5px))}70%{transform:translateX(calc(-50% + 5px))}}
+.rt-card.complete{border-color:#4C709F;background:linear-gradient(145deg,#0C1A2B,#17304D)}
+.rt-card.complete:before{content:"";display:block;width:44px;height:3px;margin-bottom:9px;border-radius:8px;background:#61C98B}
+.rt-card.complete .rt-primary{background:linear-gradient(135deg,#214E9B,#356DCE)}
+
+/* Current allowed target */
+.tutorial-target{
+  position:relative!important;z-index:84!important;
+  outline:2px solid #4B82FF!important;outline-offset:3px!important;
+  box-shadow:0 0 0 7px rgba(75,130,255,.14),0 8px 24px rgba(21,62,132,.18)!important;
+  animation:tutorialTargetPulse 1.55s ease-in-out infinite!important
+}
+@keyframes tutorialTargetPulse{
+  0%,100%{box-shadow:0 0 0 6px rgba(75,130,255,.12),0 8px 24px rgba(21,62,132,.16)}
+  50%{box-shadow:0 0 0 11px rgba(75,130,255,.045),0 10px 28px rgba(21,62,132,.24)}
+}
+#tutorial-tc-control.tutorial-target{border-radius:8px;padding:4px;background:#F2F7FF}
+
+/* Guided trace: only the next point is clickable */
+#rt-trace-layer{position:fixed;inset:0;z-index:83;pointer-events:none}
+#rt-trace-layer svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.rt-trace-line{stroke:#4B82FF;stroke-width:4;stroke-linecap:round;filter:drop-shadow(0 2px 3px rgba(19,58,127,.25))}
+.rt-trace-dot{
+  position:fixed;transform:translate(-50%,-50%);width:33px;height:33px;border-radius:50%;
+  border:2px solid #FFF;background:#4B82FF;color:#FFF;font-family:var(--mono);font-weight:900;
+  box-shadow:0 0 0 6px rgba(75,130,255,.16),0 5px 15px rgba(27,61,118,.24);
+  pointer-events:none
+}
+.rt-trace-dot i{font-style:normal;font-size:10px}
+.rt-trace-dot.current{width:39px;height:39px;pointer-events:auto;cursor:pointer;animation:tutorialTargetPulse 1.45s ease-in-out infinite}
+.rt-trace-dot.done{background:#2E7D5B;box-shadow:0 0 0 5px rgba(46,125,91,.11)}
+.rt-trace-dot.next{opacity:.28;background:#7C8DA4}
+
+/* Fixed settings + tutorial spacing on touch UI */
+@media(max-width:820px){
+  #settings-fixed{top:8px;right:8px;width:38px;height:38px;padding:0;justify-content:center;border-radius:10px}
+  #settings-fixed small{display:none}
+  #settings-fixed span{font-size:18px}
+  #bar{right:12px!important}
+  #mtop{padding-right:52px!important}
+  .rt-skip{top:56px}
+  .rt-progress{top:96px}
+  .rt-card{bottom:calc(78px + max(env(safe-area-inset-bottom),10px));padding:13px 14px}
+  .rt-card h2{font-size:17px}.rt-card p{font-size:10px}
+}
+@media(prefers-reduced-motion:reduce){
+  .ui-action-fire,.tutorial-target,.rt-trace-dot.current,.rt-card{animation:none!important}
+  button,.btn,.tool,.mbtn,.md-cmd,.md-main,.obj-add-grid button,.obj-cats button,.pc-flow button,#settings-fixed{transition:none!important}
+}
