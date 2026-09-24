@@ -976,19 +976,19 @@ function rebuild(){
   geo.rotateX(-Math.PI/2);            // XY平面 → 地面(XZ)へ
   geo.translate(0,0.12,0);
   if(!U._exporting&&!L&&(U.sel==="site"||(U.sel||"").startsWith("spt:")))addVertexTools(siteG,sp,"spt:",()=>0.9,0x2E6FBE,0,true);
-  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0x8f9dac:0xaab7c4,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND,side:THREE.DoubleSide}));
+  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0x71889d:0x7399b8,transparent:PH_GROUND,opacity:PH_GROUND?0.58:1,depthWrite:!PH_GROUND,side:THREE.DoubleSide}));
   sm.receiveShadow=!L;siteG.add(sm);
   // 外周ライン
   const lp=[]; sp.forEach(p=>lp.push(p.x,0.14,-p.z)); lp.push(sp[0].x,0.14,-sp[0].z);
   const lg=new THREE.BufferGeometry();lg.setAttribute("position",new THREE.BufferAttribute(new Float32Array(lp),3));
-  siteG.add(new THREE.Line(lg,new THREE.LineBasicMaterial({color:L?0x8a94a8:0x58697d})));
+  siteG.add(new THREE.Line(lg,new THREE.LineBasicMaterial({color:L?0x708097:0x36536f})));
  }else{
   // ── 矩形敷地（従来：四隅高さで傾斜）──
   const seg=12,vts=[],idx=[];
   for(let j=0;j<=seg;j++)for(let i=0;i<=seg;i++){const x=-sw/2+sw*i/seg,z=-sd/2+sd*j/seg;vts.push(x,terrainH(x,z,sw,sd,hh)+0.12,z);}
   for(let j=0;j<seg;j++)for(let i=0;i<seg;i++){const a=j*(seg+1)+i;idx.push(a,a+seg+1,a+1,a+1,a+seg+1,a+seg+2);}
   const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.BufferAttribute(new Float32Array(vts),3));geo.setIndex(idx);geo.computeVertexNormals();
-  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0x8f9dac:0xaab7c4,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND}));
+  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0x71889d:0x7399b8,transparent:PH_GROUND,opacity:PH_GROUND?0.58:1,depthWrite:!PH_GROUND}));
   sm.receiveShadow=!L;siteG.add(sm);
   if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo,5),new THREE.LineBasicMaterial({color:0x8a94a8}));siteG.add(e);}
  }
@@ -2462,7 +2462,7 @@ window.jumpTab=(group,tab)=>{U.tabGroup=group;U.tab=tab;renderPanel();};
 function renderPanel(){
  // 段階バー：作業の流れ順（① 下地を貼る → ② なぞる → ③ 仮設を計画 → ④ 検討・出力）
  // 内部のタブ名（U.tab）は従来どおり。表示名だけ流れに合わせる
- const TAB_LABEL={"下敷き":"図面・地図を敷く","敷地・地形":"敷地・道路","形状":"建物","諸元":"諸元","近隣":"近隣","仮設":"工程・クレーン・仮囲い","施工/CAD":"重機・車両・注記","検討":"判定・OJT・出力"};
+ const TAB_LABEL={"下敷き":"図面・地図","敷地・地形":"敷地・道路","形状":"建物","諸元":"案件情報","近隣":"近隣","仮設":"工程・TC・仮囲い","施工/CAD":"配置・重機","検討":"判定・出力"};
  const TAB_GROUPS=[
    {key:"1", label:"下地を貼る", tabs:["下敷き"]},
    {key:"2", label:"なぞる", tabs:["敷地・地形","形状","諸元","近隣"]},
@@ -2479,17 +2479,24 @@ function renderPanel(){
    ? `<div id="subtabs">${curG.tabs.map(t=>`<div class="${U.tab===t?"on":""}" onclick="U.tab='${t}';renderPanel()">${TAB_LABEL[t]||t}</div>`).join("")}</div>`
    : "";
  const FLOW_NAV=[
-   ["2","諸元","📋","案件",!!(U.p.name&& !String(U.p.name).startsWith("新規案件") && posv(U.p.floors,0))],
-   ["1","下敷き","🗺","元図",!!(U.under&&U.under.tex)],
-   ["2","敷地・地形","📐","敷地・道路",!!(siteArea()>0&&((U.roads||[]).length||U.road.show!==false))],
-   ["2","形状","🏢","建物",!!(U.blocks&&U.blocks.length)],
-   ["2","近隣","🏙","近隣（任意）",!!(U.nbs&&U.nbs.length)],
-   ["3","仮設","🏗","工程・仮設",!!(U.tw&&(U.tw.mode!=="plan"||U.tw.crane||U.tw.fence||U.tw.scaffold||U.tw.ev||(U.cobj&&U.cobj.length)))],
-   ["3","施工/CAD","🚚","重機・通路",!!(U.cobj&&U.cobj.length)],
-   ["4","検討","✓","判定・出力",false]
+   ["2","諸元","01","案件",!!(U.p.name&& !String(U.p.name).startsWith("新規案件") && posv(U.p.floors,0))],
+   ["1","下敷き","02","元図",!!(U.under&&U.under.tex)],
+   ["2","敷地・地形","03","敷地・道路",!!(siteArea()>0&&((U.roads||[]).length||U.road.show!==false))],
+   ["2","形状","04","建物",!!(U.blocks&&U.blocks.length)],
+   ["2","近隣","05","近隣（任意）",!!(U.nbs&&U.nbs.length)],
+   ["3","仮設","06","工程・仮設",!!(U.tw&&(U.tw.mode!=="plan"||U.tw.crane||U.tw.fence||U.tw.scaffold||(U.cobj&&U.cobj.length)))],
+   ["3","施工/CAD","07","配置・重機",!!(U.cobj&&U.cobj.length)],
+   ["4","検討","08","判定・出力",false]
  ];
- const flowBar=`<div id="project-flow"><div class="pf-head"><small>PROJECT FLOW</small><b>実案件の入力・検討</b><span>どこからでも移動できます</span></div><div class="pf-scroll">${FLOW_NAV.map(([g,t,ic,l,done],i)=>`<button class="pf-step ${U.tab===t?"on":""} ${done?"done":""}" onclick="jumpTab('${g}','${t}')"><i>${done?"✓":String(i+1).padStart(2,"0")}</i><span>${ic}</span><b>${l}</b></button>`).join("")}</div></div>`;
- $("#tabs").innerHTML=`<div id="tabgroups">${groupBar}</div>${subBar}${flowBar}`;
+ const _desc=TAB_DESC[U.tab]||["この画面で設定","必要な項目だけ入力します。"],_quick=TAB_QUICK[U.tab]||[];
+ const _flowOpen=!!U._flowOpen;
+ const commandBar=`<div id="project-command">
+   <div class="pc-now"><small>NOW / ${TAB_SYS[U.tab]||"PROJECT"}</small><b>${_desc[0]}</b><span>${_desc[1]}</span></div>
+   <div class="pc-quick">${_quick.slice(0,3).map((q,i)=>`<span><i>${i+1}</i>${q}</span>`).join("")}</div>
+   <button class="pc-flow-toggle" onclick="U._flowOpen=!U._flowOpen;renderPanel()"><span>PROJECT FLOW / 全体の流れ</span><b>${_flowOpen?"−":"＋"}</b></button>
+   ${_flowOpen?`<div class="pc-flow">${FLOW_NAV.map(([g,t,n,l,done])=>`<button class="${U.tab===t?"on":""} ${done?"done":""}" onclick="jumpTab('${g}','${t}')"><i>${done?"✓":n}</i><b>${l}</b></button>`).join("")}</div>`:""}
+  </div>`;
+ $("#tabs").innerHTML=`<div id="tabgroups">${groupBar}</div>${subBar}${commandBar}`;
  let h="";
  if(U.tab==="諸元"){
   // 自動算出プレビュー用の値
@@ -2796,10 +2803,8 @@ function renderPanel(){
      <label class="f"><span>高さ m</span><input type="number" step="0.5" value="${U.demo.h}" oninput="S('demo.h',this.value)"></label>
     </div>`
    +`<div style="border-top:1px solid var(--line);margin:8px 0"></div>`
-   +CK("ラフタークレーン（ドラッグ可）",U.tw.rough,"(v)=>S('tw.rough',v)")
    +CK("仮囲い（ゲート付き）",U.tw.fence,"(v)=>S('tw.fence',v)")
-   +CK("生コン車／ダンプ（ドラッグ可）",U.tw.mixer,"(v)=>S('tw.mixer',v)")
-   +`<div class="hint">Ctrl＋ドラッグで重機の向きを回転できます。</div>`;
+   +`<button class="place-link" onclick="jumpTab('3','施工/CAD')"><span>PLACE OBJECTS</span><b>解体重機・車両を配置する →</b></button>`;
   }
   if(U.tw.mode==="retain"){
    const pc=U._pileCount;
@@ -2808,8 +2813,8 @@ function renderPanel(){
    +SL("山留め壁の余裕（建物外周から）m",U.tw.retainMargin,"(v)=>S('tw.retainMargin',v)",0.3,3,0.1)
    +`<div style="border-top:1px solid var(--hair);margin:8px 0"></div>`
    +fenceSectionHtml()
-   +CK("バックホウ／ラフター（ドラッグ可）",U.tw.rough,"(v)=>S('tw.rough',v)")
-   +`<div class="hint">検討の観点：近隣建物との離隔（沈下・傾き）、地下埋設物（施工/CADの地下支障物）、残土搬出の車両動線。<b>OJT 3-3〜3-11</b> を参照。</div>`;
+   +`<button class="place-link" onclick="jumpTab('3','施工/CAD')"><span>PLACE OBJECTS</span><b>バックホウ・搬出車両を配置する →</b></button>`
+   +`<div class="hint">検討の観点：近隣建物との離隔、地下埋設物、残土搬出の車両動線。<b>OJT 3-3〜3-11</b></div>`;
   }
   else if(U.tw.mode==="pile"){
    const pc=U._pileCount||{n:0,old:0};
@@ -2823,8 +2828,8 @@ function renderPanel(){
       <div class="grid2">${SL("既存範囲の拡がり m",U.tw.oldExtend,"(v)=>S('tw.oldExtend',v)",0,10,0.5)}${SL("既存の位置ずれ 左右 m",U.tw.oldDx,"(v)=>S('tw.oldDx',v)",-10,10,0.5)}</div>${SL("既存の位置ずれ 前後 m",U.tw.oldDz,"(v)=>S('tw.oldDz',v)",-10,10,0.5)}</div>`:"")
    +`<div style="border-top:1px solid var(--hair);margin:8px 0"></div>`
    +fenceSectionHtml()
-   +CK("杭打機（ラフター相当・ドラッグ可）",U.tw.rough,"(v)=>S('tw.rough',v)")
-   +`<div class="hint">図面から正確な杭位置を起こす機能ではなく、<b>配置の当たりを立体で確認するもの</b>です。正確な位置は杭伏図で。<b>OJT 3-16・7-3</b> を参照。</div>`;
+   +`<button class="place-link" onclick="jumpTab('3','施工/CAD')"><span>PLACE OBJECTS</span><b>杭打機・基礎重機を配置する →</b></button>`
+   +`<div class="hint">杭位置は配置の当たりを立体確認するための概算表示です。正確な位置は杭伏図で。<b>OJT 3-16・7-3</b></div>`;
   }
   else if(U.tw.mode==="steel"){
    h+=`<div class="hint" style="margin:0 0 8px">鉄骨の柱・梁・デッキを建て方の進捗に応じて表示。クレーンの作業半径で最遠の柱まで届くかを確認できます。</div>`
@@ -2841,56 +2846,34 @@ function renderPanel(){
    const secCrane = SL("躯体の進捗（〜階）",U.tw.step,"(v)=>S('tw.step',v)",1,Math.max(1,Math.round(posv(U.p.floors,14))),1)
     +CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")
     +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${CRANE_SPECS[k].label}</option>`).join("")}</select></label><div style="font-size:10px;color:#2552A0;margin:-2px 0 4px">作業半径 ${craneSpec(U.tw.craneModel).work}m ／ 定格 ${craneSpec(U.tw.craneModel).cap}t ／ 尾部 ${craneSpec(U.tw.craneModel).tail}m</div>${craneSpec(U.tw.craneModel).mast==="tube"?SL("設置高さ m",primaryCraneHeight(craneSpec(U.tw.craneModel),posv(U.p.height,42)/Math.max(1,posv(U.p.floors,1))*Math.max(1,numv(U.tw.step,1))),"(v)=>S('tw.craneHeight',v)",craneSpec(U.tw.craneModel).selfH,craneSpec(U.tw.craneModel).maxInstallH||51,0.5):""}${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}${CK("作業半径・尾部旋回の円",U.tw.radius,"(v)=>S('tw.radius',v)")}</div>`:"")
-    +`<button class="addbtn tc-add" onclick="addTowerCrane('JCL015')">＋ タワークレーンをもう1台追加</button><div class="hint">追加TCは施工オブジェクトとして複数配置できます。選択後に機種・設置高さ・位置・旋回を変更できます。</div>`
-    +CK("ラフタークレーン（ドラッグ可）",U.tw.rough,"(v)=>S('tw.rough',v)");
+    +`<button class="addbtn tc-add" onclick="addTowerCrane('JCL015')">＋ タワークレーンをもう1台追加</button><div class="hint">追加TCは独立して位置・機種・高さを調整できます。</div>`;
    const secFence = fenceSectionHtml()
     +CK("外部足場＋養生シート",U.tw.scaffold,"(v)=>S('tw.scaffold',v)");
-   const secVeh = CK("ロングスパンEV（簡易・ドラッグ可）",U.tw.ev,"(v)=>S('tw.ev',v)")
-    +`<div class="hint" style="margin:-2px 0 6px">マスト高さを選べる部品版は「③ 仮設を計画 → 重機・車両・注記 → 仮設・人員 → ロングスパンEV」。複数台・どのフェーズでも置けます。</div>`
-    +CK("生コン車（ドラッグ可）",U.tw.mixer,"(v)=>S('tw.mixer',v)")
-    +`<div class="hint">出入口・詰所・資材置場などは「施工/CAD」タブの施工オブジェクト（仮囲いゲート・警備員ほか）をドラッグ配置できます。</div>`;
+   const secPlace = `<button class="place-link big" onclick="jumpTab('3','施工/CAD')"><span>OBJECT LIBRARY</span><b>重機・車両・LSEV・朝顔・安全通路を配置 →</b><small>配置物は「配置・重機」に集約しました</small></button>`;
    h += SEC("揚重・クレーン", secCrane, {key:"tw-crane", icon:"🏗", open:true})
       + SEC("仮囲い・足場", secFence, {key:"tw-fence", icon:"🚧", open:true})
-      + SEC("車両・その他", secVeh, {key:"tw-veh", icon:"🚚", open:false});
+      + secPlace;
   }
-  h+=CK("電柱・架線（前面道路）",U.tw.poles,"(v)=>S('tw.poles',v)")
+  const secAux=CK("電柱・架線（前面道路）",U.tw.poles,"(v)=>S('tw.poles',v)")
    +CK("スケール用の人物を置く",!!U.tw.person,"(v)=>S('tw.person',v)")
-  +`<div class="hint">ドラッグ＝移動／<b>Ctrl＋ドラッグ＝向き回転</b>。作業半径円で揚重範囲を確認できます。</div>`;
+   +`<div class="hint">普段は閉じたままでOK。必要な時だけ表示します。</div>`;
+  h+=SEC("その他の表示",secAux,{key:"tw-aux",icon:"⋯",open:false});
  }
  if(U.tab==="施工/CAD"){
-  // 施工オブジェクトを追加（カテゴリ別に整理して選びやすく）
   const COBJ_CATS=[
-    {name:"🏗 重機・クレーン", keys:["towercrane","rough","backhoe","found"]},
-    {name:"🚚 車両", keys:["mixer","pump","truck"]},
-    {name:"🚧 仮設・人員", keys:["safepath","stage","lsev","komalift","temp","guard","walkzone"]},
-    {name:"⚠ 支障物", keys:["obstacle"]},
+    {key:"heavy",code:"01",name:"重機・クレーン",sub:"揚重・掘削・杭",keys:["towercrane","rough","backhoe","found"]},
+    {key:"vehicle",code:"02",name:"車両",sub:"生コン・ポンプ・搬入",keys:["mixer","pump","truck"]},
+    {key:"temp",code:"03",name:"仮設設備",sub:"EV・朝顔・構台",keys:["safepath","stage","lsev","komalift","temp"]},
+    {key:"safety",code:"04",name:"安全・支障物",sub:"警備・歩行帯・現地物",keys:["guard","walkzone","obstacle"]}
   ];
-  h=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin:0 0 6px">施工オブジェクトを追加</div>`;
-  h+=COBJ_CATS.map(cat=>{
-    const btns=cat.keys.filter(k=>COBJ_TYPES[k]).map(k=>`<button class="btn" style="font-size:10.5px;padding:6px 8px" onclick="addCO('${k}')">＋${COBJ_TYPES[k].label}</button>`).join("");
-    return `<div style="margin-bottom:7px"><div style="font-size:10px;color:var(--mut);font-weight:600;margin-bottom:3px">${cat.name}</div><div style="display:flex;flex-wrap:wrap;gap:5px">${btns}</div></div>`;
-  }).join("");
-  h+=`<div style="border-top:1px solid var(--hair);margin:8px 0"></div>`;
+  if(!U._cobjCat||!COBJ_CATS.some(c=>c.key===U._cobjCat))U._cobjCat="heavy";
+  const cat=COBJ_CATS.find(c=>c.key===U._cobjCat)||COBJ_CATS[0];
+  h=`<div class="obj-command"><div><small>OBJECT LIBRARY / ${cat.code}</small><b>配置する物を選ぶ</b><span>工程に応じて必要な物だけ置く。配置後は3Dで直接動かします。</span></div><button onclick="toggleLayers()">LAYER</button></div>
+    <div class="obj-cats">${COBJ_CATS.map(c=>`<button class="${c.key===cat.key?"on":""}" onclick="U._cobjCat='${c.key}';renderPanel()"><i>${c.code}</i><b>${c.name}</b><small>${c.sub}</small></button>`).join("")}</div>
+    <div class="obj-add-grid">${cat.keys.filter(k=>COBJ_TYPES[k]).map(k=>`<button onclick="addCO('${k}')"><span>＋</span><b>${COBJ_TYPES[k].label}</b><small>${COBJ_TYPES[k].sizes[0].label||""}</small></button>`).join("")}</div>`;
   {const _phaseItems=U.cobj.map((c,i)=>({c,i})).filter(o=>cobjVisibleInPhase(o.c,U.tw.mode)),_hidden=U.cobj.length-_phaseItems.length;
-  if(_phaseItems.length){h+=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:5px">この工程の配置済み（${_phaseItems.length}）${_hidden?`<small style="font-weight:400;margin-left:6px">${_hidden}件は他工程</small>`:""}</div>`+_phaseItems.map(({c,i})=>{
-    const t=COBJ_TYPES[c.type]; const sz=cobjSize(c.type,c.size)||{};
-    const seld=(U.sel==="co:"+i);
-    const opts=(t&&t.sizes.length>1)?`<select style="padding:4px 6px;font-size:11px;margin:4px 0" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onchange="setCOSize(${i},this.value)">${t.sizes.map(s=>`<option value="${s.key}" ${c.size===s.key?"selected":""}>${s.label}（${s.w}×${s.d}m）</option>`).join("")}</select>`:"";
-    const guide=[];
-    if(sz.out)guide.push(`張出${sz.out}m`); if(sz.tail)guide.push(`尾部旋回${sz.tail}m`); if(sz.work)guide.push(`作業半径${sz.work}m`);
-    return `<div class="card" style="${c._warn?'border-color:#D64545;background:#FDF1F1':(seld?'border-color:#F2A33C;background:#FFFBF0':'')}" onclick="selCO(${i})">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-     <b style="font-size:11.5px">${seld?"▸ ":""}${t?t.label:c.type}${c._warn?' <span style="color:#D64545">⚠歩行帯と干渉</span>':''}</b>
-     <button class="del" onclick="event.stopPropagation();delCO(${i})">削除</button></div>
-    ${opts}
-    ${(c.type==="temp"&&c.size==="asagao")?`<div onclick="event.stopPropagation()">${SL("設置高さ m",numv(c.mountH,4),"(v)=>{U.cobj["+i+"].mountH=v;rebuild()}",2,40,0.5)}</div>`:""}
-    ${c.type==="towercrane"?`<div onclick="event.stopPropagation()">${SL("設置高さ m",numv(c.h,craneSpec(c.size).selfH),"(v)=>setCOHeight("+i+",v)",craneSpec(c.size).selfH,craneSpec(c.size).maxInstallH||51,0.5)}</div>`:""}
-    <div class="co-meta-line"><span>工程 ${({"demo":"既存解体","retain":"山留・掘削","pile":"杭","steel":"鉄骨","build":"躯体・仮設","plan":"完成"})[c.phase||U.tw.mode]||"施工"}</span><span>基準 X=${numv(c.x,0).toFixed(1)}m / Z=${numv(c.z,0).toFixed(1)}m / ${numv(c.ry,0)}°</span><small>起算距離：${refDistanceText(numv(c.x,0),numv(c.z,0))}</small></div>
-    ${guide.length?`<div style="font-size:10px;color:#2552A0;margin-top:2px">ガイド: ${guide.join(" / ")}${seld?"（表示中）":"（選択で表示）"}</div>`:""}
-   </div>`;}).join("");}
-  else h+=`<div class="hint">${_hidden?"この工程には配置物がありません（他工程に "+_hidden+"件）。":"まだ配置物がありません。"} ボタンで重機・車両・仮設材を配置できます。</div>`;
+   h+=`<details class="obj-placed" ${U._placedOpen?"open":""} ontoggle="U._placedOpen=this.open"><summary><span>PLACED / この工程の配置済み</span><b>${_phaseItems.length}</b>${_hidden?`<small>他工程 ${_hidden}</small>`:""}</summary><div>${_phaseItems.length?_phaseItems.map(({c,i})=>{const t=COBJ_TYPES[c.type]||{},s=cobjSize(c.type,c.size)||{};return `<button class="obj-row ${U.sel==="co:"+i?"on":""}" onclick="selCO(${i});focusSelectionCamera('co:${i}',{duration:220})"><span><b>${t.label||c.type}</b><small>${s.label||c.size||""}　X ${numv(c.x,0).toFixed(1)} / Z ${numv(c.z,0).toFixed(1)}</small></span><i>→</i></button>`;}).join(""):`<div class="obj-empty">この工程にはまだ配置物がありません。</div>`}</div></details>`;
   }
-  if(!U.cobj.length)h+=`<div class="hint">ボタンで重機・車両・仮設材を配置。<b>クリックで選択</b>すると干渉ガイド（張出・旋回・作業半径）が表示され、サイズも変更できます。ドラッグ＝移動／Ctrl＋ドラッグ＝回転。歩行帯に重機が重なると赤警告します。</div>`;
   h+=`<div style="margin-top:6px">${CK("スナップ（道路・敷鉄板に吸着／15°刻み回転）",U.snap,"(v)=>S('snap',v,false)")}</div>`;
   // 補助ツール（寸法線・グリッド・道路条件・DXF）を折りたたみに集約
   let secTools=`<div style="font-size:10.5px;font-weight:600;color:var(--mut);margin-bottom:3px">寸法・起算距離</div>
@@ -4308,7 +4291,7 @@ function renderMobile(){
  let pk=document.getElementById("mpeek");if(!pk){pk=document.createElement("button");pk.id="mpeek";document.body.appendChild(pk);
   let py=null;pk.addEventListener("touchstart",(e)=>{py=e.touches[0].clientY;},{passive:true});pk.addEventListener("touchend",(e)=>{if(py!=null&&py-e.changedTouches[0].clientY>20){openSheet(_lastSheet);}py=null;},{passive:true});
   pk.onclick=()=>openSheet(_lastSheet);}
- const NAMES={edit:"編集",check:"判定",obj:"選択中の物",layers:"レイヤー"};
+ const NAMES={edit:"編集",check:"判定",obj:"選択中の物",layers:"レイヤー",catalog:"配置"};
  if(!_sheet&&_lastSheet&&!si&&NAMES[_lastSheet]){pk.style.display="";pk.textContent="▲ "+NAMES[_lastSheet]+" を再表示";}else pk.style.display="none";
 
  // 3Dを見ながら使う工程・仮設・表示は、大きなシートではなくフローティングドックに描画
@@ -4325,19 +4308,13 @@ function renderMobile(){
    if(U.tw.mode==="plan"){
     dh=`<div class="md-head"><span>TEMPORARY WORKS</span><b>完成フェーズ</b><button onclick="closeMobileDock()">×</button></div><div class="md-complete"><b>仮設物は完成時に自動で外れます</b><span>クレーン・足場・重機・安全通路を編集する場合は施工工程へ戻ります。</span><button onclick="setMode('build')">05 躯体・仮設へ戻る</button></div>`;
    }else{
-   const has=(t)=>_cobjIdx(t)>=0;
    const item=(key,label,sub,on,main,power)=>`<div class="md-item ${on?"on":""}"><button class="md-main" onclick="${main}"><small>${key}</small><b>${label}</b><span>${sub}</span></button><button class="md-power ${on?"on":""}" onclick="event.stopPropagation();${power}" aria-label="${label}を${on?"OFF":"ON"}">${on?"●":"○"}</button></div>`;
-   dh=`<div class="md-head"><span>TEMPORARY WORKS</span><b>3Dを見ながら配置</b><button onclick="closeMobileDock()">×</button></div>
+   dh=`<div class="md-head"><span>TEMPORARY WORKS</span><b>工程の基本仮設</b><button onclick="closeMobileDock()">×</button></div>
     <div class="md-scroll">
      ${item("TC","クレーン",U.tw.crane?(U.tw.craneModel||"ON"):"OFF",!!U.tw.crane,"mDockCrane()","mDockCrane("+(!U.tw.crane)+")")}
      ${item("FN","仮囲い",U.tw.fence?"ON":"OFF",!!U.tw.fence,"mDockFence()","mDockFence("+(!U.tw.fence)+")")}
      ${item("SC","足場",U.tw.scaffold?"ON":"OFF",!!U.tw.scaffold,"mDockScaffold()","mDockScaffold()")}
-     ${item("MX","生コン",has("mixer")?"8t":"OFF",has("mixer"),"mDockSelectCO('mixer','8t')","mDockPowerCO('mixer','8t')")}
-     ${item("PP","ポンプ",has("pump")?"ON":"OFF",has("pump"),"mDockSelectCO('pump','m4t')","mDockPowerCO('pump','m4t')")}
-     ${item("EV","LSEV",U.tw.ev?"ON":"OFF",!!U.tw.ev,"mDockEV()","mDockEV("+(!U.tw.ev)+")")}
-     ${item("RF","ラフター",has("rough")?"25t":"OFF",has("rough"),"mDockSelectCO('rough','25t')","mDockPowerCO('rough','25t')")}
-     <div class="md-item"><button class="md-main" onclick="mDockAddTower()"><small>TC+</small><b>TC追加</b><span>JCL015</span></button></div>
-     <div class="md-item"><button class="md-main" onclick="mDockAddSafety()"><small>SP</small><b>安全通路</b><span>コーン＋バー</span></button></div>
+     <div class="md-item add"><button class="md-main" onclick="openSheet('catalog')"><small>ADD</small><b>配置する</b><span>重機・車両・仮設物</span></button></div>
     </div>`;
    }
   }else if(_dock==="view"){
@@ -4385,9 +4362,19 @@ function renderMobile(){
    <div class="ms-row"><button class="ms-btn" onclick="U.auto=!U.auto;renderBar();renderMobile()">${U.auto?"自動回転 停止":"自動回転"}</button><button class="ms-btn" onclick="closeSheet();togglePresent()">全画面</button></div>
    <div class="ms-row"><button class="ms-btn primary" onclick="resetDisplay()">画面表示をリセット</button></div>
    <div class="ms-h">表示するもの</div><div class="ms-list">${LAYER_DEF.map(d=>`<label class="ms-chk"><input type="checkbox" ${(U.layers||{})[d[0]]!==false?"checked":""} onchange="toggleLayer('${d[0]}',this.checked);renderMobile()"><span>${d[1]}</span></label>`).join("")}</div>`;
- }else if(_sheet==="layers"){title="レイヤー表示";
-  h=`<div class="ms-list">${LAYER_DEF.map(d=>`<label class="ms-chk"><input type="checkbox" ${(U.layers||{})[d[0]]!==false?"checked":""} onchange="toggleLayer('${d[0]}',this.checked);renderMobile()"><span>${d[1]}</span></label>`).join("")}</div>
-   <div class="ms-row"><button class="ms-btn" onclick="LAYER_DEF.forEach(d=>U.layers[d[0]]=true);rebuild();renderMobile()">全部表示</button><button class="ms-btn" onclick="LAYER_DEF.forEach(d=>U.layers[d[0]]=false);U.layers.building=true;U.layers.site=true;rebuild();renderMobile()">建物・敷地だけ</button></div>`;
+ }else if(_sheet==="catalog"){title="配置・重機";
+  const CATS=[
+   ["重機",["towercrane","rough","backhoe","found"]],
+   ["車両",["mixer","pump","truck"]],
+   ["仮設",["safepath","stage","lsev","komalift","temp"]],
+   ["安全",["guard","walkzone","obstacle"]]
+  ];
+  h=`<div class="ms-note">ここから追加 → 3D上で選択 → OBJECT CONTROLで移動・回転。工程ごとに配置物は分かれます。</div>`
+   +CATS.map(([n,ks])=>`<div class="ms-h">${n}</div><div class="ms-catalog">${ks.map(k=>`<button onclick="addCO('${k}');closeSheet();renderMobile()"><b>＋ ${COBJ_TYPES[k].label}</b><small>${COBJ_TYPES[k].sizes[0].label||""}</small></button>`).join("")}</div>`).join("");
+ }else if(_sheet==="layers"){title="レイヤー・編集";
+  h=`<div class="ms-h">表示プリセット</div><div class="ms-grid"><button class="ms-btn" onclick="setLayerPreset('all');renderMobile()">全部</button><button class="ms-btn" onclick="setLayerPreset('model');renderMobile()">建物</button><button class="ms-btn" onclick="setLayerPreset('temp');renderMobile()">施工計画</button><button class="ms-btn" onclick="setLayerPreset('context');renderMobile()">周辺条件</button></div>
+   <div class="ms-h">動かせる物</div><div class="ms-row"><button class="ms-btn ${UI_PREF.editScope==="all"?"on":""}" onclick="setEditScope('all');renderMobile()">すべて</button><button class="ms-btn ${UI_PREF.editScope==="temp"?"on":""}" onclick="setEditScope('temp');renderMobile()">仮設物だけ</button></div>
+   <div class="ms-h">個別表示</div><div class="ms-list">${LAYER_DEF.map(d=>`<label class="ms-chk"><input type="checkbox" ${(U.layers||{})[d[0]]!==false?"checked":""} onchange="toggleLayer('${d[0]}',this.checked);renderMobile()"><span>${d[1]}</span></label>`).join("")}</div>`;
  }else if(_sheet==="check"){title="検討判定";
   const ico={ok:"●",warn:"▲",ng:"✕",na:"－"};
   h=`<div class="ms-list">${cs.map(c=>`<div class="ms-check ${c.lv}"><div class="ms-ci">${ico[c.lv]}</div><div class="ms-ct"><b>${c.label}</b><span class="ms-cv">${c.val}</span><small>${c.note}</small></div></div>`).join("")||'<div class="ms-note">判定項目がありません</div>'}</div>
