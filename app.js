@@ -144,9 +144,11 @@ const COBJ_PHASE_DEFAULT={
 };
 function cobjVisibleInPhase(c,phase){
  if(!c)return false;
- if(c.phase==="all")return c.type==="obstacle"||phase!=="plan";
+ // 完成フェーズは恒久支障物だけ。施工用の仮設物は強制的に非表示。
+ if(phase==="plan")return c.type==="obstacle";
+ if(c.phase==="all")return true;
  if(c.phase)return c.phase===phase;
- const a=COBJ_PHASE_DEFAULT[c.type];return a?a.includes(phase):phase!=="plan";
+ const a=COBJ_PHASE_DEFAULT[c.type];return a?a.includes(phase):true;
 }
 window.cobjVisibleInPhase=cobjVisibleInPhase;
 // 指定タイプ・クラスの寸法を引く
@@ -1331,7 +1333,7 @@ function rebuild(){
   let warn=false;
   if(walkZone){const cb=aabb(numv(c.x,0),numv(c.z,0),w,d,ry);
    const wb={x0:walkZone.x-walkZone.w/2,x1:walkZone.x+walkZone.w/2,z0:walkZone.z-walkZone.d/2,z1:walkZone.z+walkZone.d/2};
-   if(c.type!=="walkzone"&&overlap(cb,wb))warn=true;}
+   if(c.type!=="walkzone"&&c.type!=="safepath"&&overlap(cb,wb))warn=true;}
   c._warn=warn;
   const cg=new THREE.Group(); cg.userData.dragKey="co:"+i;
   const seld=(U.sel==="co:"+i);
@@ -2355,7 +2357,7 @@ function v4PhaseSceneTransition(next){
  const token=++_phaseFxToken,from=V4_PHASE_META[U.tw.mode]||{no:"--",en:"",ja:""},to=V4_PHASE_META[next];
  const reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
  snapshot();
- if(reduce){U.tw.mode=next;rebuild();renderPanel();if(typeof renderMobile==="function")renderMobile();return;}
+ if(reduce){U.tw.mode=next;U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();if(typeof renderMobile==="function")renderMobile();return;}
  let el=document.getElementById("v4-phase-scene");
  if(!el){el=document.createElement("div");el.id="v4-phase-scene";document.body.appendChild(el);}
  el.className="";
@@ -2370,7 +2372,15 @@ function v4PhaseSceneTransition(next){
  cameraTween({theta:ctrl.theta+.025,r:Math.min(800,baseR*1.025)},170);
  setTimeout(()=>{
   if(token!==_phaseFxToken)return;
-  U.tw.mode=next;rebuild();renderPanel();if(typeof renderMobile==="function")renderMobile();
+  U.tw.mode=next;
+  {const sk=String(U.sel||"");let keep=true;
+   if(sk.startsWith("co:")){const c=U.cobj[+sk.slice(3)];keep=!!c&&cobjVisibleInPhase(c,next);}
+   else if(sk==="crane")keep=(next==="build"||next==="steel");
+   else if(sk==="ev")keep=(next==="build");
+   else if(sk==="fence"||sk.startsWith("fpt:"))keep=(next!=="plan");
+   if(!keep){U.sel=null;_selCamBase=null;_selCamKey=null;}
+  }
+  rebuild();renderPanel();if(typeof renderMobile==="function")renderMobile();
   el.classList.add("swap");cameraTween({theta:ctrl.theta-.025,r:baseR},300);
  },145);
  setTimeout(()=>{if(token===_phaseFxToken){el.classList.add("out");document.body.classList.remove("phase-switching");}},500);
@@ -2840,7 +2850,8 @@ function renderPanel(){
     return `<div style="margin-bottom:7px"><div style="font-size:10px;color:var(--mut);font-weight:600;margin-bottom:3px">${cat.name}</div><div style="display:flex;flex-wrap:wrap;gap:5px">${btns}</div></div>`;
   }).join("");
   h+=`<div style="border-top:1px solid var(--hair);margin:8px 0"></div>`;
-  if(U.cobj.length){h+=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:5px">配置済み（${U.cobj.length}）</div>`+U.cobj.map((c,i)=>{
+  {const _phaseItems=U.cobj.map((c,i)=>({c,i})).filter(o=>cobjVisibleInPhase(o.c,U.tw.mode)),_hidden=U.cobj.length-_phaseItems.length;
+  if(_phaseItems.length){h+=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:5px">この工程の配置済み（${_phaseItems.length}）${_hidden?`<small style="font-weight:400;margin-left:6px">${_hidden}件は他工程</small>`:""}</div>`+_phaseItems.map(({c,i})=>{
     const t=COBJ_TYPES[c.type]; const sz=cobjSize(c.type,c.size)||{};
     const seld=(U.sel==="co:"+i);
     const opts=(t&&t.sizes.length>1)?`<select style="padding:4px 6px;font-size:11px;margin:4px 0" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onchange="setCOSize(${i},this.value)">${t.sizes.map(s=>`<option value="${s.key}" ${c.size===s.key?"selected":""}>${s.label}（${s.w}×${s.d}m）</option>`).join("")}</select>`:"";
@@ -2856,7 +2867,9 @@ function renderPanel(){
     <div class="co-meta-line"><span>工程 ${({"demo":"既存解体","retain":"山留・掘削","pile":"杭","steel":"鉄骨","build":"躯体・仮設","plan":"完成"})[c.phase||U.tw.mode]||"施工"}</span><span>基準 X=${numv(c.x,0).toFixed(1)}m / Z=${numv(c.z,0).toFixed(1)}m / ${numv(c.ry,0)}°</span><small>起算距離：${refDistanceText(numv(c.x,0),numv(c.z,0))}</small></div>
     ${guide.length?`<div style="font-size:10px;color:#2552A0;margin-top:2px">ガイド: ${guide.join(" / ")}${seld?"（表示中）":"（選択で表示）"}</div>`:""}
    </div>`;}).join("");}
-  else h+=`<div class="hint">ボタンで重機・車両・仮設材を配置。<b>クリックで選択</b>すると干渉ガイド（張出・旋回・作業半径）が表示され、サイズも変更できます。ドラッグ＝移動／Ctrl＋ドラッグ＝回転。歩行帯に重機が重なると赤警告します。</div>`;
+  else h+=`<div class="hint">${_hidden?"この工程には配置物がありません（他工程に "+_hidden+"件）。":"まだ配置物がありません。"} ボタンで重機・車両・仮設材を配置できます。</div>`;
+  }
+  if(!U.cobj.length)h+=`<div class="hint">ボタンで重機・車両・仮設材を配置。<b>クリックで選択</b>すると干渉ガイド（張出・旋回・作業半径）が表示され、サイズも変更できます。ドラッグ＝移動／Ctrl＋ドラッグ＝回転。歩行帯に重機が重なると赤警告します。</div>`;
   h+=`<div style="margin-top:6px">${CK("スナップ（道路・敷鉄板に吸着／15°刻み回転）",U.snap,"(v)=>S('snap',v,false)")}</div>`;
   // 補助ツール（寸法線・グリッド・道路条件・DXF）を折りたたみに集約
   let secTools=`<div style="font-size:10.5px;font-weight:600;color:var(--mut);margin-bottom:3px">寸法・起算距離</div>
@@ -2970,8 +2983,9 @@ function collectChecks(){
     out.push({cat:"地形",label:"道路勾配",val:`${rg.toFixed(1)}%`,lv:rg>8?"warn":"ok",note:rg>8?"生コン車・重機の据付に注意":"問題なし"});}
  }catch(e){}
  // 3) 歩行帯干渉
- const nWarn=(U.cobj||[]).filter(c=>c._warn).length;
- if((U.cobj||[]).length)out.push({cat:"施工",label:"歩行帯との干渉",val:nWarn?`${nWarn}台が干渉`:"干渉なし",lv:nWarn?"ng":"ok",note:nWarn?"配置変更または歩行者誘導計画":"問題なし"});
+ const phaseObjs=(U.cobj||[]).filter(c=>cobjVisibleInPhase(c,U.tw.mode));
+ const nWarn=phaseObjs.filter(c=>c._warn).length;
+ if(phaseObjs.length)out.push({cat:"施工",label:"歩行帯との干渉",val:nWarn?`${nWarn}台が干渉`:"干渉なし",lv:nWarn?"ng":"ok",note:nWarn?"配置変更または歩行者誘導計画":"問題なし"});
  // 4) 法規（建蔽率・容積率：目安値と比較）
  try{const site=posv(U.p.siteArea,0)||siteArea();const st=U._stats||{floorArea:0};
   const tFloor=posv(U.p.tArea,0)||st.floorArea;
@@ -4074,7 +4088,7 @@ window.openSheet=(k)=>{
  _sheet=k;if(k!=="obj")_lastSheet=k;U._mEdit=true;renderMobile();
 };
 // 仮設シート用：指定タイプの車両を1台だけON/OFF、移動・回転
-function _cobjIdx(type){let last=-1;(U.cobj||[]).forEach((c,i)=>{if(c.type===type)last=i;});return last;}
+function _cobjIdx(type){let last=-1;(U.cobj||[]).forEach((c,i)=>{if(c.type===type&&cobjVisibleInPhase(c,U.tw.mode))last=i;});return last;}
 window.mToggleCO=(type,size)=>{const i=_cobjIdx(type);if(i>=0){snapshot();U.cobj.splice(i,1);U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();}else{addCO(type);const k=U.cobj.length-1;if(size&&U.cobj[k]){const sz=cobjSize(type,size);if(sz){U.cobj[k].size=size;U.cobj[k].w=sz.w;U.cobj[k].d=sz.d;U.cobj[k].h=sz.h;}}rebuild();}renderMobile();};
 window.mDockSelectCO=(type,size)=>{
  let i=_cobjIdx(type);
@@ -4086,7 +4100,7 @@ window.mDockSelectCO=(type,size)=>{
 };
 window.mDockPowerCO=(type,size)=>{
  const i=_cobjIdx(type);
- if(i>=0){snapshot();U.cobj.splice(i,1);if(U.sel==="co:"+i||String(U.sel||"").startsWith("co:"))U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();renderMobile();return;}
+ if(i>=0){snapshot();U.cobj.splice(i,1);const sk=String(U.sel||"");if(sk==="co:"+i)U.sel=null;else if(sk.startsWith("co:")){const si=+sk.slice(3);if(si>i)U.sel="co:"+(si-1);}_selCamBase=null;_selCamKey=null;rebuild();renderPanel();renderMobile();return;}
  mDockSelectCO(type,size);
 };
 window.mDockCrane=(power)=>{
@@ -4217,6 +4231,9 @@ function renderMobile(){
     <div class="md-scroll">${ps.map(([k,n,l])=>`<button class="md-cmd ${U.tw.mode===k?"on":""}" onclick="setMode('${k}');renderMobile()"><small>${n}</small><b>${l}</b></button>`).join("")}
     ${(U.tw.mode==="build"||U.tw.mode==="steel")?`<div class="md-step"><small>STEP</small><button onclick="S('tw.step',Math.max(1,Math.round(numv(U.tw.step,1))-1));renderMobile()">−</button><b>${Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1)))}F</b><button onclick="S('tw.step',Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1))+1));renderMobile()">＋</button></div>`:""}</div>`;
   }else if(_dock==="temp"){
+   if(U.tw.mode==="plan"){
+    dh=`<div class="md-head"><span>TEMPORARY WORKS</span><b>完成フェーズ</b><button onclick="closeMobileDock()">×</button></div><div class="md-complete"><b>仮設物は完成時に自動で外れます</b><span>クレーン・足場・重機・安全通路を編集する場合は施工工程へ戻ります。</span><button onclick="setMode('build')">05 躯体・仮設へ戻る</button></div>`;
+   }else{
    const has=(t)=>_cobjIdx(t)>=0;
    const item=(key,label,sub,on,main,power)=>`<div class="md-item ${on?"on":""}"><button class="md-main" onclick="${main}"><small>${key}</small><b>${label}</b><span>${sub}</span></button><button class="md-power ${on?"on":""}" onclick="event.stopPropagation();${power}" aria-label="${label}を${on?"OFF":"ON"}">${on?"●":"○"}</button></div>`;
    dh=`<div class="md-head"><span>TEMPORARY WORKS</span><b>3Dを見ながら配置</b><button onclick="closeMobileDock()">×</button></div>
@@ -4231,6 +4248,7 @@ function renderMobile(){
      <div class="md-item"><button class="md-main" onclick="mDockAddTower()"><small>TC+</small><b>TC追加</b><span>JCL015</span></button></div>
      <div class="md-item"><button class="md-main" onclick="mDockAddSafety()"><small>SP</small><b>安全通路</b><span>コーン＋バー</span></button></div>
     </div>`;
+   }
   }else if(_dock==="view"){
    const vb=(key,label,fn,on)=>`<button class="md-cmd ${on?"on":""}" onclick="${fn}"><small>${key}</small><b>${label}</b></button>`;
    dh=`<div class="md-head"><span>VIEW CONTROL</span><b>視点・表示</b><button onclick="closeMobileDock()">×</button></div>
