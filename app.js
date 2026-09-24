@@ -228,6 +228,9 @@ sun.shadow.bias=-0.00012;sun.shadow.normalBias=0.025;
 Object.assign(sun.shadow.camera,{left:-140,right:140,top:140,bottom:-140,far:600});
 scene.add(sun);
 const ctrl={theta:Math.PI/4+.3,phi:1.05,r:150,ty:18,cx:0,cz:0,ptrs:new Map(),pinch:0,panMid:null};
+const _coarsePointer=matchMedia("(pointer:coarse)").matches;
+const _tapMovePx=_coarsePointer?14:8;
+const _longPressMs=_coarsePointer?650:550;
 let _camTween=null;
 function _camEase(t){return 1-Math.pow(1-t,3);}
 function _thetaDelta(a,b){let d=b-a;while(d>Math.PI)d-=Math.PI*2;while(d<-Math.PI)d+=Math.PI*2;return d;}
@@ -333,7 +336,7 @@ function panBy(dxp,dyp){
  let fx=-Math.cos(th), fz=-Math.sin(th);
  // 画面右ベクトル（y軸まわり）：(fx,fz)→(fz,-fx)
  const rx=fz, rz=-fx;
- const k=ctrl.r*0.0015;  // 距離に応じた移動量（遠いほど速く）
+ const k=ctrl.r*(_coarsePointer?0.00112:0.0015);  // 指操作は少し穏やかに
  // 指を右(dxp>0)→ワールドが右に動く→注視点は-right。指を下(dyp>0)→注視点は+fwd（奥）
  ctrl.cx += (-rx*dxp + fx*dyp)*k;
  ctrl.cz += (-rz*dxp + fz*dyp)*k;
@@ -425,7 +428,7 @@ el.addEventListener("pointerdown",(e)=>{
   if(_simple&&o){
    const key=o.userData.dragKey;
    _tapCand={key,x:e.clientX,y:e.clientY,t:Date.now()};
-   clearTimeout(_lpTimer);_lpTimer=setTimeout(()=>{if(_tapCand&&_tapCand.key===key){_tapCand=null;U.sel=key;dragObj=null;ctrl.ptrs.clear();openObjMenu(key);}},550);
+   clearTimeout(_lpTimer);_lpTimer=setTimeout(()=>{if(_tapCand&&_tapCand.key===key){_tapCand=null;U.sel=key;dragObj=null;ctrl.ptrs.clear();openObjMenu(key);}},_longPressMs);
    if(U.sel!==key){o=null;}
   }
   if(o){snapshot();dragObj=o;U.sel=o.userData.dragKey;
@@ -434,7 +437,7 @@ el.addEventListener("pointerdown",(e)=>{
    U.auto=false;syncBtns();renderSelCard();}else{if(U.sel){clearSelection({restore:true});}}}
 });
 el.addEventListener("pointermove",(e)=>{
- if(_tapCand&&Math.hypot(e.clientX-_tapCand.x,e.clientY-_tapCand.y)>8){_tapCand=null;clearTimeout(_lpTimer);}
+ if(_tapCand&&Math.hypot(e.clientX-_tapCand.x,e.clientY-_tapCand.y)>_tapMovePx){_tapCand=null;clearTimeout(_lpTimer);}
  if(!ctrl.ptrs.has(e.pointerId))return;
  const prev=ctrl.ptrs.get(e.pointerId);ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);
  if(dragObj&&rotMode&&ctrl.ptrs.size===1){setRy(dragObj.userData.dragKey,rotStartRy+(e.clientX-rotStartX)*0.7);rebuild();return;}
@@ -458,14 +461,14 @@ el.addEventListener("pointermove",(e)=>{
     panBy(e.clientX-prev[0], e.clientY-prev[1]);
     U.auto=false;
    }else{ // 通常ドラッグ＝回転
-    ctrl.theta-=(e.clientX-prev[0])*.006;ctrl.phi=Math.min(1.52,Math.max(.12,ctrl.phi-(e.clientY-prev[1])*.004));U.auto=false;syncBtns();
+    {const rs=_coarsePointer?.00435:.006,ps=_coarsePointer?.00315:.004;ctrl.theta-=(e.clientX-prev[0])*rs;ctrl.phi=Math.min(1.52,Math.max(.12,ctrl.phi-(e.clientY-prev[1])*ps));}U.auto=false;syncBtns();
    }
  }
  else if(ctrl.ptrs.size===2){if(_selCamBase){_selCamBase=null;_selCamKey=null;}const p=[...ctrl.ptrs.values()];
    const d=Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]);
    const mid=[(p[0][0]+p[1][0])/2,(p[0][1]+p[1][1])/2];
    // ピンチでズーム
-   if(ctrl.pinch)ctrl.r=Math.min(800,Math.max(20,ctrl.r*(ctrl.pinch/d)));
+   if(ctrl.pinch){const ratio=ctrl.pinch/d;ctrl.r=Math.min(800,Math.max(20,ctrl.r*Math.pow(ratio,_coarsePointer?.72:1)));}
    // 2本指の中心移動でパン（注視点を平行移動）→「見たい場所を画面中央に」
    if(ctrl.panMid)panBy(-(mid[0]-ctrl.panMid[0]), -(mid[1]-ctrl.panMid[1]));   // 指の動きに画面が付いてくる向き
    ctrl.pinch=d; ctrl.panMid=mid; U.auto=false; syncBtns();
@@ -473,7 +476,7 @@ el.addEventListener("pointermove",(e)=>{
 });
 const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
  clearTimeout(_lpTimer);
- if(_tapCand&&Date.now()-_tapCand.t<550&&Math.hypot(e.clientX-_tapCand.x,e.clientY-_tapCand.y)<=8){const k=_tapCand.key;_tapCand=null;
+ if(_tapCand&&Date.now()-_tapCand.t<_longPressMs&&Math.hypot(e.clientX-_tapCand.x,e.clientY-_tapCand.y)<=_tapMovePx){const k=_tapCand.key;_tapCand=null;
   if(U.sel!==k){U.sel=k;dragObj=null;rebuild();focusSelectionCamera(k,{duration:260});renderPanel();renderMobile();toast("選択しました。ドラッグで移動、長押しでメニュー");return;}}
  _tapCand=null;
  if(dragObj&&!rotMode){const k=dragObj.userData.dragKey,x=dragObj.position.x,z=dragObj.position.z;
@@ -2220,7 +2223,43 @@ window.delB=(id)=>{snapshot();U.blocks=U.blocks.filter(b=>b.id!==id);if(U.sel&&U
 window.addB=()=>{snapshot();U.blocks.push({id:Date.now(),label:"ブロック",f1:1,f2:2,w:15,d:10,dx:0,dz:8});rebuild();renderPanel();};
 window.delN=(i)=>{snapshot();U.nbs.splice(i,1);rebuild();renderPanel();};
 window.addN=()=>{snapshot();U.nbs.push({x:25,z:15,w:10,d:10,h:12,ry:0});rebuild();renderPanel();};
-window.setMode=(m)=>{snapshot();U.tw.mode=m;rebuild();renderPanel();};
+const V4_PHASE_META={
+ demo:{no:"01",en:"DEMOLITION",ja:"既存解体"},
+ retain:{no:"02",en:"EXCAVATION",ja:"山留め・掘削"},
+ pile:{no:"03",en:"PILE WORK",ja:"杭工事"},
+ steel:{no:"04",en:"STEEL FRAME",ja:"鉄骨建て方"},
+ build:{no:"05",en:"STRUCTURE",ja:"躯体・仮設"},
+ plan:{no:"06",en:"COMPLETE",ja:"完成"}
+};
+let _phaseFxToken=0;
+function v4PhaseSceneTransition(next){
+ if(!V4_PHASE_META[next]||U.tw.mode===next)return;
+ const token=++_phaseFxToken,from=V4_PHASE_META[U.tw.mode]||{no:"--",en:"",ja:""},to=V4_PHASE_META[next];
+ const reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+ snapshot();
+ if(reduce){U.tw.mode=next;rebuild();renderPanel();if(typeof renderMobile==="function")renderMobile();return;}
+ let el=document.getElementById("v4-phase-scene");
+ if(!el){el=document.createElement("div");el.id="v4-phase-scene";document.body.appendChild(el);}
+ el.className="";
+ el.innerHTML=`<div class="v4ps-scan"></div><div class="v4ps-main">
+   <small>CONSTRUCTION SEQUENCE</small>
+   <div class="v4ps-route"><span>${from.no}</span><i>→</i><b>${to.no}</b></div>
+   <h2>${to.en}</h2><p>${to.ja}</p>
+  </div><div class="v4ps-line"><i></i></div>`;
+ document.body.classList.add("phase-switching");
+ requestAnimationFrame(()=>el.classList.add("show"));
+ const baseR=ctrl.r;
+ cameraTween({theta:ctrl.theta+.025,r:Math.min(800,baseR*1.025)},170);
+ setTimeout(()=>{
+  if(token!==_phaseFxToken)return;
+  U.tw.mode=next;rebuild();renderPanel();if(typeof renderMobile==="function")renderMobile();
+  el.classList.add("swap");cameraTween({theta:ctrl.theta-.025,r:baseR},300);
+ },145);
+ setTimeout(()=>{if(token===_phaseFxToken){el.classList.add("out");document.body.classList.remove("phase-switching");}},500);
+ setTimeout(()=>{if(token===_phaseFxToken){el.className="";el.innerHTML="";}},760);
+}
+window.v4PhaseSceneTransition=v4PhaseSceneTransition;
+window.setMode=(m)=>v4PhaseSceneTransition(m);
 window.addCO=(type)=>{snapshot();const t=COBJ_TYPES[type]||COBJ_TYPES.truck;const sz=t.sizes[0];const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);const nx0=numv(U.site.dx,0),nz0=sdz2+sd2/2+6;const hd=(U.snap!==false)?nearestRoadHeading(nx0,nz0):null;
  U.cobj.push({type,size:sz.key,x:nx0,z:nz0,w:sz.w,d:sz.d,h:sz.h,ry:hd!=null?hd:0});U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();};
 window.delCO=(i)=>{snapshot();U.cobj.splice(i,1);if(U.sel==="co:"+i)U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
@@ -3860,9 +3899,10 @@ function isTouchPhone(){return matchMedia("(pointer:coarse)").matches&&Math.min(
 function simplePreferred(){ try{localStorage.removeItem("bimgen_ui");}catch(e){} return isTouchPhone(); }   // 起動時は毎回「簡易」
 window.setSimpleUI=(on)=>{
  document.body.classList.toggle("simple",!!on);
+ document.body.classList.toggle("touch-full",!on&&isTouchPhone());
  if(on){U._mEdit=false;}
  closeSheet(); renderMobile(); renderBar(); renderPill(); setTimeout(resize,60);
- if(!on)toast("詳細編集（PC版UI）です。上の「簡易表示へ戻る」でいつでも戻れます");
+ if(!on)toast("詳細編集（PC版UI）です。右上パネルは整理し、左の編集パネルを優先表示します");
 };
 // 詳細版のときスマホ画面に常時出す「簡易表示へ戻る」ピル
 function renderPill(){
@@ -4039,7 +4079,7 @@ function renderMobile(){
   if(_dock==="phase"){
    const ps=[["demo","01","解体"],["retain","02","山留"],["pile","03","杭"],["steel","04","鉄骨"],["build","05","躯体"],["plan","06","完成"]];
    dh=`<div class="md-head"><span>PHASE</span><b>工程を切り替える</b><button onclick="closeMobileDock()">×</button></div>
-    <div class="md-scroll">${ps.map(([k,n,l])=>`<button class="md-cmd ${U.tw.mode===k?"on":""}" onclick="setMode('${k}');v4PhaseFlash('${k}','${({demo:"既存解体",retain:"山留め・掘削",pile:"杭工事",steel:"鉄骨建て方",build:"躯体・仮設",plan:"完成"})[k]}');renderMobile()"><small>${n}</small><b>${l}</b></button>`).join("")}
+    <div class="md-scroll">${ps.map(([k,n,l])=>`<button class="md-cmd ${U.tw.mode===k?"on":""}" onclick="setMode('${k}');renderMobile()"><small>${n}</small><b>${l}</b></button>`).join("")}
     ${(U.tw.mode==="build"||U.tw.mode==="steel")?`<div class="md-step"><small>STEP</small><button onclick="S('tw.step',Math.max(1,Math.round(numv(U.tw.step,1))-1));renderMobile()">−</button><b>${Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1)))}F</b><button onclick="S('tw.step',Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1))+1));renderMobile()">＋</button></div>`:""}</div>`;
   }else if(_dock==="temp"){
    const has=(t)=>_cobjIdx(t)>=0;
@@ -4078,7 +4118,7 @@ function renderMobile(){
  let h="",title="";
  if(_sheet==="phase"){title="工程フェーズ";
   const PHASES=[["demo","既存解体"],["retain","山留め・掘削"],["pile","杭工事"],["steel","鉄骨建て方"],["build","躯体・仮設"],["plan","完成"]];
-  h=`<div class="ms-grid">${PHASES.map(([k,l])=>`<button class="ms-btn ${U.tw.mode===k?"on":""}" onclick="setMode('${k}');closeSheet();v4PhaseFlash('${k}','${l}');renderMobile()">${l}</button>`).join("")}</div>
+  h=`<div class="ms-grid">${PHASES.map(([k,l])=>`<button class="ms-btn ${U.tw.mode===k?"on":""}" onclick="setMode('${k}');closeSheet();renderMobile()">${l}</button>`).join("")}</div>
    ${(U.tw.mode==="build"||U.tw.mode==="steel")?`<div class="ms-h">進捗（〜階）</div><div class="ms-row"><button class="ms-btn" onclick="S('tw.step',Math.max(1,Math.round(numv(U.tw.step,1))-1));renderMobile()">−</button><div class="ms-val">${Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1)))} 階</div><button class="ms-btn" onclick="S('tw.step',Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1))+1));renderMobile()">＋</button></div>`:""}
    <div class="ms-note">工程を変えると、山留め・杭・鉄骨・躯体・完成の状態に3Dが切り替わります。</div>`;
  }else if(_sheet==="temp"){title="仮設を触る";
@@ -4142,7 +4182,10 @@ window.renderMobile=renderMobile;
 // 起動時に判定して適用。判定・工程が変わったら再描画
 document.addEventListener("DOMContentLoaded",()=>{if(simplePreferred())document.body.classList.add("simple");U._mEdit=false;renderMobile();});
 if(document.readyState!=="loading"){if(simplePreferred())document.body.classList.add("simple");U._mEdit=false;renderMobile();}
-window.addEventListener("resize",()=>{if(document.body.classList.contains("simple")&&!_sheet)renderMobile();});
+window.addEventListener("resize",()=>{
+ document.body.classList.toggle("touch-full",!document.body.classList.contains("simple")&&isTouchPhone());
+ if(document.body.classList.contains("simple")&&!_sheet)renderMobile();
+});
 
 // ───── プレゼン表示（パネル・バーを隠して3Dを全面に。顧客・会議用）─────
 window.togglePresent=()=>{
