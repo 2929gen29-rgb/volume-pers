@@ -1451,9 +1451,10 @@ function rebuild(){
     if(!box3.isEmpty()){
      const helper=new THREE.Box3Helper(box3,0x4B82FF);
      helper.material.transparent=true;helper.material.opacity=.92;helper.material.depthTest=false;helper.renderOrder=90;g.add(helper);
-     if(!["site","road","roadwalk","roadside"].includes(mk)&&!mk.startsWith("rd:")){
+     if(mk==="crane"||mk==="ev"||mk.startsWith("co:")){
       const size=new THREE.Vector3(),center=new THREE.Vector3();box3.getSize(size);box3.getCenter(center);
-      const rr=Math.max(.9,Math.min(12,Math.max(size.x,size.z)*.62+.55));
+      let rr=Math.max(.9,Math.min(5.5,Math.max(size.x,size.z)*.62+.55));
+      if(mk==="crane"){const wp=new THREE.Vector3();target.getWorldPosition(wp);center.x=wp.x;center.z=wp.z;rr=1.7;}
       const ring=new THREE.Mesh(new THREE.RingGeometry(Math.max(.25,rr-.12),rr,48),new THREE.MeshBasicMaterial({color:0x4B82FF,transparent:true,opacity:.58,side:THREE.DoubleSide,depthTest:false,depthWrite:false}));
       ring.rotation.x=-Math.PI/2;ring.position.set(center.x,Math.max(.1,box3.min.y+.08),center.z);ring.renderOrder=89;g.add(ring);
      }
