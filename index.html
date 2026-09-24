@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16243D">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -102,12 +102,14 @@
     setTimeout(function(){ inp.focus(); }, 100);
   }
 
-  // スプラッシュを少し見せてから、認証状態に応じてゲート or 本体へ
+  // スプラッシュは短く見せる。認証済み端末はさらに短縮して待ち時間を減らす
+  var gateOK = alreadyOK();
+  var splashDelay = gateOK ? 650 : 1200;
   setTimeout(function(){
     if(splash){ splash.classList.add("hide"); setTimeout(function(){ if(splash&&splash.parentNode) splash.parentNode.removeChild(splash); }, 650); }
-    if(alreadyOK()){ showApp(); }   // 期限内：そのまま使える
+    if(gateOK){ showApp(); }        // 期限内：そのまま使える
     else { showGate(); }            // 未認証：コード入力
-  }, 5000);
+  }, splashDelay);
 })();
 </script>
 <script>
@@ -116,8 +118,10 @@
 //         これにより「Chrome/iPhoneで古い画面が出る→手動で強制リロード」を解消する。
 if ("serviceWorker" in navigator) {
   let refreshing = false;
-  // 新SWが操作権を取得した瞬間に1回だけリロード
+  // 初回SW登録時は入力中リロードを避ける。既にSW管理下のページだけ新版取得時に自動リロードする。
+  const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) return;
     if (refreshing) return;
     refreshing = true;
     window.location.reload();
