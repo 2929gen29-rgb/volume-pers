@@ -3849,7 +3849,7 @@ function tutorialRender(){
  if(REAL_TUTORIAL.step===2)action=`<button class="rt-primary" onclick="tutorialLoadPlan()">${s.action}<b>→</b></button>`;
  if(simple&&REAL_TUTORIAL.step===0)action=`<button class="rt-primary" onclick="U.tabGroup='2';U.tab='諸元';renderPanel();tutorialSetStep(1)">案件情報を開く <b>→</b></button>`;
  if(simple&&REAL_TUTORIAL.step===4)action=`<button class="rt-primary" onclick="tutorialPlaceCrane()">JCL015_H を設置 <b>→</b></button>`;
- el.innerHTML=`<button class="rt-skip" onclick="exitRealTutorial(true)">SKIP TUTORIAL</button><div class="rt-progress">${REAL_TUTORIAL_STEPS.map((_,i)=>`<i class="${i<REAL_TUTORIAL.step?"done":i===REAL_TUTORIAL.step?"on":""}"></i>`).join("")}</div><div class="rt-card"><small>GUIDED PROJECT / ${s.code}</small><h2>${s.title}</h2><p>${s.body}</p>${action||'<div class="rt-wait"><i></i><span>青く光っている場所だけ操作できます</span></div>'}</div>`;
+ el.innerHTML=`<button class="rt-skip" onclick="exitRealTutorial(true)">SKIP TUTORIAL <small>ESC</small></button><div class="rt-progress">${REAL_TUTORIAL_STEPS.map((_,i)=>`<i class="${i<REAL_TUTORIAL.step?"done":i===REAL_TUTORIAL.step?"on":""}"></i>`).join("")}</div><div class="rt-card"><small>GUIDED PROJECT / ${s.code}</small><h2>${s.title}</h2><p>${s.body}</p>${action||'<div class="rt-wait"><i></i><span>青く光っている場所だけ操作できます</span></div>'}</div>`;
  setTimeout(tutorialHighlight,30);
 }
 function tutorialHighlight(){
@@ -3886,6 +3886,12 @@ document.addEventListener("click",(e)=>{
  }
 },true);
 document.addEventListener("wheel",(e)=>{if(REAL_TUTORIAL.active){e.preventDefault();e.stopImmediatePropagation();}},{capture:true,passive:false});
+document.addEventListener("keydown",(e)=>{
+ if(!REAL_TUTORIAL.active)return;
+ if(e.key==="Escape"){e.preventDefault();e.stopImmediatePropagation();exitRealTutorial(true);return;}
+ e.preventDefault();e.stopImmediatePropagation();
+},true);
+
 window.addEventListener("resize",()=>{if(REAL_TUTORIAL.active&&REAL_TUTORIAL.step===3)setTimeout(renderTutorialTrace,30);});
 
 // ───── 初めての方向けガイド（ツアー）：デモ案件を開いて5ステップを順に案内 ─────
@@ -4008,8 +4014,8 @@ window.openStart=()=>{
    <button class="v4-entry real" onclick="openRealDemo()">
     <span class="v4-entry-no">01</span><span class="v4-entry-tag">REAL PROJECT</span>
     <b>実案件で<br>BimGenを体験する。</b>
-    <small>都内共同住宅 / RC12F<br>狭小地・地下鉄・仮設計画</small>
-    <i>EXPLORE PROJECT <strong>→</strong></i>
+    <small>GUIDED PROJECT / 5 STEP<br>案件情報 → 図面 → トレース → 仮設</small>
+    <i>START TUTORIAL <strong>→</strong></i>
    </button>
    <button class="v4-entry new" onclick="v4NewProject()">
     <span class="v4-entry-no">02</span><span class="v4-entry-tag">NEW PROJECT</span>
