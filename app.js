@@ -39,7 +39,7 @@ const U={
     units:"",                    // 戸数・室数
     note:"",                     // その他・備考
     aiIncludeAddr:false},         // AIプロンプトに住所を含めるか（既定オフ・外部送信配慮）
- site:{w:25,d:20,dx:0,dz:0,gl:0,h:[0,0,0,0],slopeDir:"flat",slopeDiff:0}, // 敷地面積≒500㎡
+ site:{active:true,w:25,d:20,dx:0,dz:0,gl:0,h:[0,0,0,0],slopeDir:"flat",slopeDiff:0}, // active=false で敷地なし（新規案件の初期状態で利用）
  blocks:[{id:1,label:"建物",f1:1,f2:3,w:20.0,d:10.0,dx:0,dz:0,ry:0}],
  road:{w:8,side:"none",dx:0,dz:0,ry:0,show:true,slope:0,
        walkDz:0,walkW:1.6,walkShow:false, // 前面歩道：前後位置・幅・表示（既定は道路のみ）
@@ -214,6 +214,7 @@ function primaryCraneHeight(spec,builtHeight){
 }
 // 敷地面積（多角形敷地があればシューレース、無ければ間口×奥行）
 function siteArea(){
+ if(U.site&&U.site.active===false)return 0;
  if(Array.isArray(U.site.poly)&&U.site.poly.length>=3){
   const p=U.site.poly;let a2=0;for(let i=0;i<p.length;i++){const a=p[i],b=p[(i+1)%p.length];a2+=a.x*b.z-b.x*a.z;}
   return Math.abs(a2)/2;
@@ -642,7 +643,7 @@ el.addEventListener("dblclick",(e)=>{
    U.polyInput.pts=d;}
   if(U.polyInput.target==="site"){
    // 敷地形状（不整形地）として確定
-   U.site.poly=U.polyInput.pts.slice();
+   U.site.active=true;U.site.poly=U.polyInput.pts.slice();
    U.polyInput.on=false; U.polyInput.pts=[]; U.polyInput.target=null;
    rebuild();renderPanel();renderBar();
   }else if(U.polyInput.target==="fence"){
@@ -695,7 +696,7 @@ function addVertexTools(parent,pts,keyPrefix,yAt,color,ryDeg,showLabels){
 }
 function vertexWorldList(excludeKey){
  const out=[]; const sdx=numv(U.site.dx,0), sdz=numv(U.site.dz,0);
- if(Array.isArray(U.site.poly))U.site.poly.forEach((p,i)=>{if("spt:"+i!==excludeKey)out.push({x:sdx+p.x,z:sdz+p.z});});
+ if(U.site.active!==false&&Array.isArray(U.site.poly))U.site.poly.forEach((p,i)=>{if("spt:"+i!==excludeKey)out.push({x:sdx+p.x,z:sdz+p.z});});
  (U.blocks||[]).forEach((b,bi)=>{if(b.shape==="poly"&&Array.isArray(b.poly)){const ox=sdx+numv(b.dx,0),oz=sdz+numv(b.dz,0);rotPts(b.poly,b.ry).forEach((p,i)=>{if(`bpt:${bi}:${i}`!==excludeKey)out.push({x:ox+p.x,z:oz+p.z});});}});
  if(U.tw.fenceShape==="poly"&&Array.isArray(U.tw.fencePts)){const ox=sdx+numv(U.tw.fenceDx,0),oz=sdz+numv(U.tw.fenceDz,0);rotPts(U.tw.fencePts,U.tw.fenceRy).forEach((p,i)=>{if("fpt:"+i!==excludeKey)out.push({x:ox+p.x,z:oz+p.z});});}
  (U.roads||[]).forEach((r,ri)=>{const ox=sdx+numv(r.dx,0),oz=sdz+numv(r.dz,0);rotPts(r.pts||[],r.ry).forEach((p,i)=>{if(`rpt:${ri}:${i}`!==excludeKey)out.push({x:ox+p.x,z:oz+p.z});});});
@@ -882,6 +883,7 @@ function rebuild(){
  const built=(PH==="build")?stepN:(PH_GROUND||PH_STEEL)?0:floorsAll;   // 0＝統計だけ計算して躯体は描かない
  const sw=posv(U.site.w,30), sd=posv(U.site.d,18), gl=numv(U.site.gl,0), hh=U.site.h.map(v=>numv(v,0));
  const sdx=numv(U.site.dx,0), sdz=numv(U.site.dz,0);
+ const siteActive=U.site.active!==false;
 
  // 地面・道路
  const gnd=new THREE.Mesh(new THREE.PlaneGeometry(1200,1200),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0xaeb7c2}));
@@ -889,6 +891,7 @@ function rebuild(){
  // ワールド座標(x,z)における地盤の高さ。敷地の外は0（元の地面）
  // 傾斜地に置いたオブジェクト（仮囲い・重機・車両・注記）を地面に接地させるために使う
  const groundY=(wx,wz)=>{
+  if(!siteActive)return 0;
   if(Array.isArray(U.site.poly))return 0;            // 多角形敷地は平坦扱い
   const lx=wx-sdx, lz=wz-sdz;                        // 敷地ローカル座標へ
   if(Math.abs(lx)>sw/2||Math.abs(lz)>sd/2)return 0;  // 敷地外は0
@@ -973,6 +976,7 @@ function rebuild(){
  }
 
  // 敷地（地形メッシュ・ドラッグ可）
+ if(siteActive){
  const siteG=new THREE.Group();siteG.userData.dragKey="site";siteG.position.set(sdx,0,sdz);
  if(Array.isArray(U.site.poly)&&U.site.poly.length>=3){
   // ── 不整形地（多角形敷地）──
@@ -1002,6 +1006,7 @@ function rebuild(){
   if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo,5),new THREE.LineBasicMaterial({color:0x8a94a8}));siteG.add(e);}
  }
  g.add(siteG);dragMap.site=siteG;
+ }
 
  // 下敷き（図面 / 周辺写真）
  const layer=(st,key,y)=>{ if(!st.show||!st.tex||L)return;
@@ -1822,13 +1827,13 @@ window.clearDXF=()=>{U.dxf.ents=null;U.dxf.layers={};rebuild();renderPanel();};
 // ───── 計画地住所 → 標高・地形・ハザードマップ検索 ─────
 async function fetchGeo(){
  const addr=(U.p.addr||"").trim();
- if(!addr){toast("計画地住所を入力してください","err");return;}
+ if(!addr){toast("計画地住所を入力してください","err");return false;}
  U.geo.status="検索中…"; renderPanel();
  try{
   // 1) 住所→緯度経度（国土地理院ジオコーディング・CORS可）
   const gres=await fetch("https://msearch.gsi.go.jp/address-search/AddressSearch?q="+encodeURIComponent(addr));
   const gjson=await gres.json();
-  if(!gjson||!gjson.length){U.geo.status="住所が見つかりませんでした。市区町村名から入れ直してください。";renderPanel();return;}
+  if(!gjson||!gjson.length){U.geo.status="住所が見つかりませんでした。市区町村名から入れ直してください。";renderPanel();return false;}
   const [lon,lat]=gjson[0].geometry.coordinates;
   U.geo.name=gjson[0].properties&&gjson[0].properties.title?gjson[0].properties.title:addr;
   U.geo.lat=lat; U.geo.lon=lon;  // 地図タイル表示に使う
@@ -1845,12 +1850,24 @@ async function fetchGeo(){
    landform = e<5?"低地（沖積平野の可能性。軟弱地盤・液状化に注意）":e<20?"台地〜低地の境界（要地盤調査）":e<60?"台地・段丘（比較的良好なことが多い）":"丘陵・山地（切盛造成は個別確認）";}
   U.geo.status=`緯度経度: ${lat.toFixed(5)}, ${lon.toFixed(5)}\n標高: ${elevTxt}\n地形目安: ${landform||"標高取得後に判定"}`;
   renderPanel();
+  return true;
  }catch(err){
   U.geo.status="取得失敗（ネットワーク制限／CORSの可能性）。下のリンクから手動でご確認ください。";
   renderPanel();
+  return false;
  }
 }
 window.fetchGeo=fetchGeo;
+async function fetchGeoAndMap(){
+ const ok=await fetchGeo();
+ if(!ok)return false;
+ U.tabGroup="2";U.tab="下敷き";renderPanel();
+ await loadGsiMap();
+ view("top",{instant:true});
+ toast("住所から国土地理院の地図を取得しました。次にプランPDFを読み込めます。","ok");
+ return true;
+}
+window.fetchGeoAndMap=fetchGeoAndMap;
 // 市区町村名をざっくり抽出（ハザード検索リンク用）
 function cityFromAddr(a){const m=(a||"").match(/(.+?[都道府県])?(.+?[市区町村])/);return m?((m[1]||"")+(m[2]||"")):a;}
 window.fetchGeo=fetchGeo;window.cityFromAddr=cityFromAddr;
@@ -2368,6 +2385,24 @@ function slopeInfo(){
    dirX:rightAvg>leftAvg?"右（東側）が高い":rightAvg<leftAvg?"左（西側）が高い":"左右は水平"};
 }
 window.slopeInfo=slopeInfo;
+function placementAnchor(extra=3){
+ const sdx=numv(U.site&&U.site.dx,0),sdz=numv(U.site&&U.site.dz,0);
+ if(!U.site||U.site.active!==false)return {x:sdx,z:sdz+posv(U.site.d,18)/2+extra};
+ const b=(U.blocks||[])[0];
+ if(b){
+  let depth=posv(b.d,10);
+  if(b.shape==="poly"&&Array.isArray(b.poly)&&b.poly.length){const zs=b.poly.map(p=>numv(p.z,0));depth=Math.max(2,Math.max(...zs)-Math.min(...zs));}
+  return {x:sdx+numv(b.dx,0),z:sdz+numv(b.dz,0)+Math.min(8,Math.max(3,depth/2+2))};
+ }
+ return {x:numv(ctrl&&ctrl.cx,0),z:numv(ctrl&&ctrl.cz,0)+Math.max(2,extra)};
+}
+window.placementAnchor=placementAnchor;
+window.clearSite=()=>{
+ snapshot();U.site.active=false;U.site.poly=null;if(U.sel==="site"||(U.sel||"").startsWith("spt:"))U.sel=null;
+ const a=placementAnchor(0);if(!U.tw.crane){U.tw.craneX=a.x;U.tw.craneZ=a.z;}
+ _selCamBase=null;_selCamKey=null;rebuild();renderPanel();toast("敷地を削除しました。重機・仮設物は建物または画面中央付近に追加されます。","ok");
+};
+window.restoreSite=()=>{snapshot();U.site.active=true;U.site.poly=null;rebuild();renderPanel();toast("矩形敷地を表示しました。寸法を入力するか、図面から多角形でなぞれます。","ok");};
 window.delB=(id)=>{snapshot();U.blocks=U.blocks.filter(b=>b.id!==id);if(U.sel&&U.sel.startsWith("blk:"))U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
 window.addB=()=>{snapshot();U.blocks.push({id:Date.now(),label:"ブロック",f1:1,f2:2,w:15,d:10,dx:0,dz:8});rebuild();renderPanel();};
 window.delN=(i)=>{snapshot();U.nbs.splice(i,1);rebuild();renderPanel();};
@@ -2417,11 +2452,12 @@ function v4PhaseSceneTransition(next){
 }
 window.v4PhaseSceneTransition=v4PhaseSceneTransition;
 window.setMode=(m)=>v4PhaseSceneTransition(m);
-window.addCO=(type)=>{if(U.tw.mode==="plan"&&type!=="obstacle"){toast("完成フェーズでは仮設物を配置しません。工程を施工中へ戻してください","err");return;}snapshot();const t=COBJ_TYPES[type]||COBJ_TYPES.truck;const sz=t.sizes[0];const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);const nx0=numv(U.site.dx,0),nz0=sdz2+sd2/2+6;const hd=(U.snap!==false)?nearestRoadHeading(nx0,nz0):null;
- U.cobj.push({type,size:sz.key,x:nx0,z:nz0,w:sz.w,d:sz.d,h:sz.h,ry:hd!=null?hd:0,phase:U.tw.mode});U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();};
+window.addCO=(type)=>{if(U.tw.mode==="plan"&&type!=="obstacle"){toast("完成フェーズでは仮設物を配置しません。工程を施工中へ戻してください","err");return;}snapshot();const t=COBJ_TYPES[type]||COBJ_TYPES.truck;const sz=t.sizes[0];const a=placementAnchor(5),nx0=a.x,nz0=a.z;const hd=(U.snap!==false)?nearestRoadHeading(nx0,nz0):null;
+ U.cobj.push({type,size:sz.key,x:nx0,z:nz0,w:sz.w,d:sz.d,h:sz.h,ry:hd!=null?hd:0,phase:U.tw.mode});U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();focusSelectionCamera(U.sel,{duration:220});};
 window.addTowerCrane=(model="JCL015")=>{snapshot();const t=COBJ_TYPES.towercrane,sz=t.sizes.find(s=>s.key===model)||t.sizes[0],spec=craneSpec(sz.key);
- const i=(U.cobj||[]).filter(c=>c.type==="towercrane").length;
- U.cobj.push({type:"towercrane",size:sz.key,x:numv(U.tw.craneX,0)+5+i*4,z:numv(U.tw.craneZ,0),w:sz.w,d:sz.d,h:spec.selfH||sz.h,ry:numv(U.tw.craneRot,0),phase:(U.tw.mode==="steel"?"steel":"build")});
+ const i=(U.cobj||[]).filter(c=>c.type==="towercrane").length,a=placementAnchor(2);
+ const bx=U.site.active===false?a.x:numv(U.tw.craneX,0),bz=U.site.active===false?a.z:numv(U.tw.craneZ,0);
+ U.cobj.push({type:"towercrane",size:sz.key,x:bx+i*4,z:bz,w:sz.w,d:sz.d,h:spec.selfH||sz.h,ry:numv(U.tw.craneRot,0),phase:(U.tw.mode==="steel"?"steel":"build")});
  U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();focusSelectionCamera(U.sel,{duration:240});if(typeof renderMobile==="function")renderMobile();
  toast("追加タワークレーンを配置しました。ドラッグで位置調整できます","ok");
 };
@@ -2469,41 +2505,35 @@ window.updateShoshiChips=updateShoshiChips;
 window.jumpTab=(group,tab)=>{U.tabGroup=group;U.tab=tab;renderPanel();};
 
 function renderPanel(){
- // 段階バー：作業の流れ順（① 下地を貼る → ② なぞる → ③ 仮設を計画 → ④ 検討・出力）
- // 内部のタブ名（U.tab）は従来どおり。表示名だけ流れに合わせる
- const TAB_LABEL={"下敷き":"図面・地図","敷地・地形":"敷地・道路","形状":"建物","諸元":"案件情報","近隣":"近隣","仮設":"工程・TC・仮囲い","施工/CAD":"配置・重機","検討":"判定・出力"};
+ // 実務フロー：①案件情報 → ②地図・PDF・トレース → ③仮設 → ④検討
+ // 「どの機能カテゴリか」ではなく「実務で何をする順か」で入口を固定する。
+ const TAB_LABEL={"下敷き":"地図・PDF","敷地・地形":"敷地・道路","形状":"建物","諸元":"案件情報","近隣":"近隣","仮設":"工程・TC・仮囲い","施工/CAD":"配置・重機","検討":"判定・出力"};
  const TAB_GROUPS=[
-   {key:"1", label:"下地を貼る", tabs:["下敷き"]},
-   {key:"2", label:"なぞる", tabs:["敷地・地形","形状","諸元","近隣"]},
-   {key:"3", label:"仮設を計画", tabs:["仮設","施工/CAD"]},
-   {key:"4", label:"検討・出力", tabs:["検討"]},
+   {key:"1", label:"案件", tabs:["諸元"]},
+   {key:"2", label:"図面・敷地", tabs:["下敷き","敷地・地形","形状","近隣"]},
+   {key:"3", label:"仮設", tabs:["仮設","施工/CAD"]},
+   {key:"4", label:"検討", tabs:["検討"]},
  ];
  // 旧グループ名からの読み替え（保存済み案件との互換）
  if(!U.tabGroup||!TAB_GROUPS.some(g=>g.key===U.tabGroup)){const g=TAB_GROUPS.find(g=>g.tabs.includes(U.tab));U.tabGroup=g?g.key:"2";}
  const curG=TAB_GROUPS.find(g=>g.key===U.tabGroup)||TAB_GROUPS[1];
  if(!curG.tabs.includes(U.tab))U.tab=curG.tabs[0];
- const GROUP_EN={"1":"BASE","2":"TRACE","3":"PLAN","4":"REVIEW"};
- const groupBar=TAB_GROUPS.map(g=>`<div class="tg step ${U.tabGroup===g.key?"on":""}" onclick="U.tabGroup='${g.key}';U.tab='${g.tabs[0]}';v4PanelStage('${g.key}','${g.label}');renderPanel()"><span class="step-n">${g.key}</span><span class="step-l">${g.label}</span><small class="step-e">${GROUP_EN[g.key]||""}</small></div>`).join("");
+ const GROUP_EN={"1":"PROJECT","2":"BASE","3":"PLAN","4":"REVIEW"};
+ const groupBar=TAB_GROUPS.map(g=>`<div data-group="${g.key}" class="tg step ${U.tabGroup===g.key?"on":""}" onclick="U.tabGroup='${g.key}';U.tab='${g.tabs[0]}';v4PanelStage('${g.key}','${g.label}');renderPanel()"><span class="step-n">${g.key}</span><span class="step-l">${g.label}</span><small class="step-e">${GROUP_EN[g.key]||""}</small></div>`).join("");
  const subBar=curG.tabs.length>1
    ? `<div id="subtabs">${curG.tabs.map(t=>`<div data-tab="${t}" class="${U.tab===t?"on":""}" onclick="U.tab='${t}';renderPanel()">${TAB_LABEL[t]||t}</div>`).join("")}</div>`
    : "";
  const FLOW_NAV=[
-   ["2","諸元","01","案件",!!(U.p.name&& !String(U.p.name).startsWith("新規案件") && posv(U.p.floors,0))],
-   ["1","下敷き","02","元図",!!(U.under&&U.under.tex)],
-   ["2","敷地・地形","03","敷地・道路",!!(siteArea()>0&&((U.roads||[]).length||U.road.show!==false))],
-   ["2","形状","04","建物",!!(U.blocks&&U.blocks.length)],
-   ["2","近隣","05","近隣（任意）",!!(U.nbs&&U.nbs.length)],
-   ["3","仮設","06","工程・仮設",!!(U.tw&&(U.tw.mode!=="plan"||U.tw.crane||U.tw.fence||U.tw.scaffold||(U.cobj&&U.cobj.length)))],
-   ["3","施工/CAD","07","配置・重機",!!(U.cobj&&U.cobj.length)],
-   ["4","検討","08","判定・出力",false]
+   ["1","諸元","01","案件",!!(U.p.name&& !String(U.p.name).startsWith("新規案件") && posv(U.p.floors,0))],
+   ["2","下敷き","02","地図",!!(U.under&&U.under.gsiStatus&&String(U.under.gsiStatus).startsWith("✓"))],
+   ["2","下敷き","03","PDF",!!(U.under&&U.under.raw)],
+   ["2","敷地・地形","04","敷地",siteArea()>0],
+   ["2","形状","05","建物",!!(U.blocks&&U.blocks.length)],
+   ["3","仮設","06","仮設",!!(U.tw&&(U.tw.mode!=="plan"||U.tw.crane||U.tw.fence||U.tw.scaffold||(U.cobj&&U.cobj.length)))]
  ];
- const _desc=TAB_DESC[U.tab]||["この画面で設定","必要な項目だけ入力します。"],_quick=TAB_QUICK[U.tab]||[];
- const _flowOpen=!!window.__bimgenFlowOpen;
- const commandBar=`<div id="project-command">
-   <div class="pc-now"><small>NOW / ${TAB_SYS[U.tab]||"PROJECT"}</small><b>${_desc[0]}</b><span>${_desc[1]}</span></div>
-   <div class="pc-quick">${_quick.slice(0,3).map((q,i)=>`<span><i>${i+1}</i>${q}</span>`).join("")}</div>
-   <button class="pc-flow-toggle" onclick="window.__bimgenFlowOpen=!window.__bimgenFlowOpen;renderPanel()"><span>PROJECT FLOW / 全体の流れ</span><b>${_flowOpen?"−":"＋"}</b></button>
-   ${_flowOpen?`<div class="pc-flow">${FLOW_NAV.map(([g,t,n,l,done])=>`<button class="${U.tab===t?"on":""} ${done?"done":""}" onclick="jumpTab('${g}','${t}')"><i>${done?"✓":n}</i><b>${l}</b></button>`).join("")}</div>`:""}
+ const commandBar=`<div id="project-command" class="compact">
+   <span class="pc-flow-label">PJ FLOW</span>
+   <div class="pc-flow pc-flow-inline">${FLOW_NAV.map(([g,t,n,l,done])=>`<button class="${U.tab===t?"on":""} ${done?"done":""}" onclick="jumpTab('${g}','${t}')"><i>${done?"✓":n}</i><b>${l}</b></button>`).join("")}</div>
   </div>`;
  $("#tabs").innerHTML=`<div id="tabgroups">${groupBar}</div>${subBar}${commandBar}`;
  let h="";
@@ -2528,7 +2558,8 @@ function renderPanel(){
   const autoBox = `<div id="shoshi-auto" style="display:flex;flex-wrap:wrap;gap:5px;margin:8px 0">${auto}</div>`;
 
   const secBasic=`<label class="f"><span>物件名</span><input type="text" value="${(U.p.name||"").replace(/"/g,"&quot;")}" oninput="S('p.name',this.value,false);renderTitle()"></label>
-  <label class="f"><span>建物住所</span><input type="text" placeholder="例：愛知県名古屋市中区…" value="${(U.p.addr||"").replace(/"/g,"&quot;")}" oninput="S('p.addr',this.value,false);renderTitle()"></label>
+  <label class="f"><span>計画地住所</span><input type="text" placeholder="例：東京都文京区白山1丁目…" value="${(U.p.addr||"").replace(/"/g,"&quot;")}" oninput="S('p.addr',this.value,false);U.geo.lat=null;U.geo.lon=null;U.geo.name='';U.geo.status='';renderTitle()"></label>
+  <div class="project-map-action"><button class="addbtn project-map-btn" onclick="fetchGeoAndMap()">🗺 住所から国土地理院地図を取得 →</button><small>住所検索 → 標高取得 → 地図表示まで自動で進みます</small></div>
   <label class="f"><span>用途（ファサード連動）</span><select onchange="S('p.use',this.value)">${USES.map(o=>`<option ${U.p.use===o?"selected":""}>${o}</option>`).join("")}</select></label>
   <div class="grid2">
    <label class="f"><span>地上階数</span><input type="number" value="${U.p.floors}" oninput="S('p.floors',this.value)"></label>
@@ -2589,8 +2620,8 @@ function renderPanel(){
   const city=cityFromAddr(U.p.addr||"");
   const ge=encodeURIComponent;
   // ① 計画地住所・公共データ照会
-  let secGeo=`<input type="text" value="${(U.p.addr||"").replace(/"/g,"&quot;")}" placeholder="例：東京都北区上十条3丁目" oninput="S('p.addr',this.value,false)" style="margin-bottom:6px">
-  <button class="addbtn" style="margin-bottom:6px" onclick="fetchGeo()">📍 地盤・標高情報を取得</button>`;
+  let secGeo=`<div class="project-address-ref"><small>案件情報の計画地住所</small><b>${_esc(U.p.addr||"未入力")}</b></div>
+  ${U.p.addr?`<div class="grid2" style="margin-bottom:6px"><button class="btn" onclick="fetchGeo()">📍 標高を更新</button><button class="btn primary" onclick="fetchGeoAndMap()">🗺 地図を取得</button></div>`:`<button class="addbtn" onclick="jumpTab('1','諸元')">→ まず案件情報で住所を入力</button>`}`;
   if(U.geo.status){secGeo+=`<div style="background:#EEF3FA;border-radius:7px;padding:7px 9px;font-size:11px;line-height:1.7;color:#1E3A5F;white-space:pre-wrap;margin-bottom:6px">${U.geo.name?("📍 "+U.geo.name+"\n"):""}${U.geo.status}</div>`;}
   if(U.p.addr){secGeo+=`<div style="font-size:10.5px;color:var(--mut);margin-bottom:3px">▼ ${city||"計画地"}の公開情報を検索（別タブ）</div>
    <div style="display:flex;flex-direction:column;gap:4px">
@@ -2600,7 +2631,9 @@ function renderPanel(){
     <a href="https://www.google.com/search?q=${ge(city+" 地盤 ボーリング 柱状図")}" target="_blank" rel="noopener" style="font-size:11.5px;color:#2552A0">🔎 周辺の地盤・ボーリングデータ</a>
    </div>`;}
   // ② 敷地寸法・形状
-  let secSite=`<div class="grid2">
+  let secSite=`<div class="site-state-row">${U.site.active===false?`<button class="btn primary" onclick="restoreSite()">＋ 矩形敷地を作る</button><span>現在：敷地なし</span>`:`<button class="btn btn-danger" onclick="clearSite()">敷地を削除</button><span>不要なら消してOK</span>`}</div>
+  ${U.site.active===false?`<div class="hint site-empty-hint">敷地を削除しても建物・PDF・仮設は残ります。重機や仮設物の追加位置も、存在しない初期敷地ではなく建物／画面中央を基準にします。</div>`:""}
+  <div class="grid2">
    <label class="f"><span>敷地 間口 m</span><input type="number" value="${U.site.w}" oninput="S('site.w',this.value)"></label>
    <label class="f"><span>敷地 奥行 m</span><input type="number" value="${U.site.d}" oninput="S('site.d',this.value)"></label>
   </div>
@@ -2609,7 +2642,7 @@ function renderPanel(){
     ? `<div style="background:#EEF6EF;border:1.5px solid #2E7D5B;border-radius:8px;padding:7px 10px;font-size:11.5px;line-height:1.6">多角形敷地（${U.site.poly.length}頂点）で表示中。<br><button class="btn" style="margin-top:5px;color:#B0433A" onclick="U.site.poly=null;rebuild();renderPanel()">矩形敷地に戻す</button></div>`
     : (U.polyInput.on&&U.polyInput.target==="site"
        ? `<div style="background:#FFF3DD;border:1.5px dashed var(--amber);border-radius:8px;padding:8px 10px;font-size:11.5px;line-height:1.7"><b>敷地形状の入力モード中</b><br>下絵・地面をクリックして敷地外周の頂点を打ち、<b>ダブルクリックで閉じる</b>と敷地になります。<br>現在 ${U.polyInput.pts.length} 点<br><button class="btn" style="margin-top:6px" onclick="U.polyInput.pts.pop();rebuild();renderPanel()">1つ戻す</button> <button class="btn" style="margin-top:6px;color:#B0433A" onclick="U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar()">中止</button></div>`
-       : `${Array.isArray(U.site.poly)?`<div class="hint" style="margin:0 0 6px">敷地をクリックで選択すると<b>青い頂点</b>が出ます。ドラッグで修正、辺の長さも表示。<button class="btn" style="font-size:11px;margin-left:6px" onclick="U.sel='site';rebuild();renderPanel()">頂点を表示</button></div>`:""}<button class="addbtn" onclick="U.polyInput.on=true;U.polyInput.target='site';U.polyInput.pts=[];renderPanel();renderBar()">✏️ 敷地を多角形で描く</button><div class="hint">配置図PDFを下敷きにして敷地境界をなぞると、不整形地も正確に再現できます。</div>`)}`;
+       : `${Array.isArray(U.site.poly)?`<div class="hint" style="margin:0 0 6px">敷地をクリックで選択すると<b>青い頂点</b>が出ます。ドラッグで修正、辺の長さも表示。<button class="btn" style="font-size:11px;margin-left:6px" onclick="U.sel='site';rebuild();renderPanel()">頂点を表示</button></div>`:""}<button class="addbtn" onclick="U.site.active=true;U.polyInput.on=true;U.polyInput.target='site';U.polyInput.pts=[];renderPanel();renderBar()">✏️ 敷地を多角形で描く</button><div class="hint">配置図PDFを下敷きにして敷地境界をなぞると、不整形地も正確に再現できます。</div>`)}`;
   // ③ 位置・地盤（GL・高低差）
   let secPos=`${SL("敷地位置 左右",U.site.dx,"(v)=>S('site.dx',v)",-80,80,0.5)}
   ${SL("敷地位置 前後",U.site.dz,"(v)=>S('site.dz',v)",-80,80,0.5)}
@@ -2756,8 +2789,8 @@ function renderPanel(){
          <label class="f"><span>詳しさ(14-18)</span><input type="number" min="14" max="18" value="${U.under.gsiZoom||17}" oninput="setGsiZoom(this.value)"></label>
         </div>
         <button class="btn primary" style="width:100%;font-size:12px" onclick="loadGsiMap()">この地点の地図を取得して敷く</button>`
-     : `<div style="font-size:10.5px;color:var(--mut);line-height:1.7;margin-bottom:6px">まず「敷地・地形」タブで<b>住所を検索</b>すると、その地点の地図をここで自動取得できます。</div>
-        <button class="btn" style="width:100%;font-size:11.5px" onclick="U.tabGroup='敷地・環境';U.tab='敷地・地形';renderBar();renderPanel()">→ 敷地・地形タブへ（住所検索）</button>`}
+     : `<div style="font-size:10.5px;color:var(--mut);line-height:1.7;margin-bottom:6px">まず①「案件」で<b>計画地住所</b>を入力してください。住所から標高・地図まで一度に取得できます。</div>
+        <button class="btn" style="width:100%;font-size:11.5px" onclick="jumpTab('1','諸元')">→ ① 案件情報へ</button>`}
    ${U.under.gsiStatus?`<div style="font-size:10px;color:#2552A0;white-space:pre-line;margin-top:6px;line-height:1.6">${U.under.gsiStatus}</div>`:""}
    <div style="font-size:9.5px;color:var(--mut);margin-top:6px;border-top:1px solid rgba(46,111,190,.15);padding-top:5px">出典：国土地理院（<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener" style="color:#2552A0">地理院タイル一覧</a>）。地図を含む資料には出典明記が必要です。手動で範囲を選びたい場合は <a href="#" onclick="openGsiMap();return false" style="color:#2552A0">地図を別タブで開く</a>。</div>
   </div>
@@ -3746,10 +3779,10 @@ function resetToDefault(){
 function deepMerge(t,s){for(const k in s){if(s[k]&&typeof s[k]==="object"&&!Array.isArray(s[k])&&t[k]&&typeof t[k]==="object"){deepMerge(t[k],s[k]);}else t[k]=s[k];}return t;}
 window.newBlank=()=>{
  resetToDefault();
- U.p.name="新規案件（図面から）"; U.blocks=[]; U.road.show=false; U.road.walkShow=false; U.tw.person=false; U.tw.fence=false; U.tw.crane=false; U.tw.scaffold=false; U.tw.ev=false; U.tw.mixer=false; U.tw.poles=false; U.nbs=[];
- U.tab="下敷き"; U.tabGroup="敷地・環境";
- closeStart(); rebuild();renderPanel();renderBar();view("top");
- toast("白紙で開始。まず下敷きタブで図面・地図を敷き、敷地→建物→道路の順になぞってください","ok");
+ U.p.name="新規案件（図面から）"; U.blocks=[]; U.site.active=false;U.site.poly=null; U.road.show=false; U.road.walkShow=false; U.tw.person=false; U.tw.fence=false; U.tw.crane=false; U.tw.scaffold=false; U.tw.ev=false; U.tw.mixer=false; U.tw.poles=false; U.nbs=[];
+ U.tab="諸元"; U.tabGroup="1";
+ closeStart(); rebuild();renderPanel();renderBar();view("bird");
+ toast("新規案件を開始しました。まず案件情報と住所を入力してください。住所から地図をそのまま取得できます。","ok");
 };
 window.newFromTemplate=(key)=>{
  const tp=TEMPLATES.find(t=>t.key===key); if(!tp)return;
@@ -3824,8 +3857,8 @@ window.tutorialTraceHit=(i)=>{
 };
 function tutorialPrepareStep(n){
  REAL_TUTORIAL.allow=null;REAL_TUTORIAL.target=null;clearTutorialTrace();
- if(n===0){U.tabGroup="2";U.tab="形状";U.layers.under=false;renderPanel();rebuild();view("bird",{instant:true});REAL_TUTORIAL.target='[data-tab="諸元"]';REAL_TUTORIAL.allow='[data-tab="諸元"]';}
- if(n===1){U.tabGroup="2";U.tab="諸元";renderPanel();view("bird",{instant:true});}
+ if(n===0){U.tabGroup="1";U.tab="諸元";U.layers.under=false;renderPanel();rebuild();view("bird",{instant:true});}
+ if(n===1){U.tabGroup="1";U.tab="諸元";renderPanel();view("bird",{instant:true});}
  if(n===2){U.tabGroup="1";U.tab="下敷き";renderPanel();U.layers.site=false;rebuild();view("top",{instant:true});}
  if(n===3){U.tabGroup="2";U.tab="形状";U.polyInput.on=true;U.polyInput.target=null;U.polyInput.pts=[];renderPanel();U.layers.under=true;U.layers.site=false;rebuild();view("top",{instant:true});REAL_TUTORIAL.traceI=0;setTimeout(renderTutorialTrace,80);}
  if(n===4){
@@ -3854,8 +3887,9 @@ function tutorialRender(){
  let action="";
  if(REAL_TUTORIAL.step===1)action=`<button class="rt-primary" onclick="tutorialSetStep(2)">${s.action}<b>→</b></button>`;
  if(REAL_TUTORIAL.step===2)action=`<button class="rt-primary" onclick="tutorialLoadPlan()" ${REAL_TUTORIAL.loading?"disabled":""}>${REAL_TUTORIAL.loading?"PDFを読み込み中…":s.action}<b>→</b></button>`;
- if(simple&&REAL_TUTORIAL.step===0)action=`<button class="rt-primary" onclick="U.tabGroup='2';U.tab='諸元';renderPanel();tutorialSetStep(1)">案件情報を開く <b>→</b></button>`;
- if(simple&&REAL_TUTORIAL.step===4)action=`<button class="rt-primary" onclick="tutorialSelectCrane()">タワークレーンを選択 <b>→</b></button>`;
+ if(REAL_TUTORIAL.step===0)action=`<button class="rt-primary" onclick="tutorialSetStep(1)">案件情報を確認する <b>→</b></button>`;
+ if(REAL_TUTORIAL.step===4)action=`<button class="rt-primary" onclick="tutorialSelectCrane()">タワークレーンを選択 <b>→</b></button>`;
+ if(REAL_TUTORIAL.step===5)action=`<button class="rt-primary" onclick="tutorialPlaceCrane()">この位置にタワークレーンを配置 <b>→</b></button>`;
  el.innerHTML=`<button class="rt-skip" onclick="exitRealTutorial(true)">チュートリアルをスキップ <small>ESC</small></button><div class="rt-progress" aria-label="${REAL_TUTORIAL.step+1} / ${REAL_TUTORIAL_STEPS.length}">${REAL_TUTORIAL_STEPS.map((_,i)=>`<i class="${i<REAL_TUTORIAL.step?"done":i===REAL_TUTORIAL.step?"on":""}"></i>`).join("")}</div><div class="rt-card"><small>${REAL_TUTORIAL.step+1} / ${REAL_TUTORIAL_STEPS.length} · GUIDED PROJECT / ${s.code}</small><h2>${s.title}</h2><p>${s.body}</p>${action||'<div class="rt-wait"><i></i><span>青く光っている場所だけ操作できます</span></div>'}</div>`;
  setTimeout(tutorialHighlight,30);
 }
@@ -3882,7 +3916,7 @@ window.exitRealTutorial=(skipped)=>{
 };
 document.addEventListener("pointerdown",(e)=>{
  if(!REAL_TUTORIAL.active)return;
- if(e.target.closest("#real-tutorial")||e.target.closest(".rt-trace-dot.current"))return;
+ if(e.target.closest("#real-tutorial")||e.target.closest(".rt-trace-dot.current")||e.target.closest(".tutorial-target"))return;
  const allow=REAL_TUTORIAL.allow&&e.target.closest(REAL_TUTORIAL.allow);
  if(allow)return;
  e.preventDefault();e.stopImmediatePropagation();
@@ -3993,7 +4027,7 @@ window.v4NewProject=()=>{
  const go=()=>{
   closeStart();
   if(document.body.classList.contains("simple")){openSheet("edit");}
-  else{newBlank();U.tabGroup="2";U.tab="諸元";renderPanel();view("bird",{intro:true,duration:720});}
+  else{newBlank();U.tabGroup="1";U.tab="諸元";renderPanel();view("bird",{intro:true,duration:720});}
  };
  let el=document.getElementById("v4-new-enter");
  if(!el){el=document.createElement("div");el.id="v4-new-enter";document.body.appendChild(el);}
@@ -4023,7 +4057,7 @@ window.openStart=()=>{
    <button class="v4-entry real" onclick="openRealDemo()">
     <span class="v4-entry-no">01</span><span class="v4-entry-tag">REAL PROJECT</span>
     <b>実案件で<br>BimGenを体験する。</b>
-    <small>GUIDED PROJECT / 6 STEP<br>案件情報 → 図面 → トレース → 仮設</small>
+    <small>GUIDED PROJECT / 6 STEP<br>案件情報 → PDF → 敷地・建物 → 仮設</small>
     <i>START TUTORIAL <strong>→</strong></i>
    </button>
    <button class="v4-entry new" onclick="v4NewProject()">
@@ -4148,7 +4182,7 @@ function startDraw(target){
  // target: site / block / road / fence
  if(U.polyInput.on&&U.polyInput.target===target){U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar();return;}
  U.polyInput.on=true;U.polyInput.pts=[];U.polyInput.target=(target==="block"?null:target);
- if(target==="site"){U.tabGroup="2";U.tab="敷地・地形";}
+ if(target==="site"){U.site.active=true;U.tabGroup="2";U.tab="敷地・地形";}
  if(target==="block"){U.tabGroup="2";U.tab="形状";}
  if(target==="road"){U.tabGroup="2";U.tab="敷地・地形";}
  if(target==="fence"){U.tabGroup="3";U.tab="仮設";U.tw.fence=true;}
