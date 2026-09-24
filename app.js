@@ -392,8 +392,7 @@ function setRy(k,deg){const r=objRyKey(k);if(!r)return;deg=((deg%360)+360)%360;
  else if(r[0]==="an"){if(U.annot[r[1]])U.annot[r[1]].ry=+deg.toFixed(0);}
  else if(r[0]==="rd"){if(U.roads[r[1]])U.roads[r[1]].ry=+deg.toFixed(0);}}
 el.addEventListener("pointerdown",(e)=>{
- _camTween=null; // 手で触れた瞬間は演出よりユーザー操作を優先
- if(_selCamBase){_selCamBase=null;_selCamKey=null;}
+ _camTween=null; // 手で触れた瞬間は進行中の演出を止める（フォーカス復帰点はまだ保持）
  ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);el.setPointerCapture(e.pointerId);
  // 多角形入力モード：地面クリックで頂点追加
  if(U.polyInput.on&&ctrl.ptrs.size===1){const gp=groundPoint(e);
@@ -454,6 +453,7 @@ el.addEventListener("pointermove",(e)=>{
   }else{dragObj.position.x=gp.x+dragOff.x;dragObj.position.z=gp.z+dragOff.z;}
   return;}
  if(ctrl.ptrs.size===1){
+   if(_selCamBase){_selCamBase=null;_selCamKey=null;} // カメラを手で動かしたら、その視点を新しい基準にする
    if(e.shiftKey){ // Shift+ドラッグ＝パン（注視点を平行移動）
     panBy(e.clientX-prev[0], e.clientY-prev[1]);
     U.auto=false;
@@ -461,7 +461,7 @@ el.addEventListener("pointermove",(e)=>{
     ctrl.theta-=(e.clientX-prev[0])*.006;ctrl.phi=Math.min(1.52,Math.max(.12,ctrl.phi-(e.clientY-prev[1])*.004));U.auto=false;syncBtns();
    }
  }
- else if(ctrl.ptrs.size===2){const p=[...ctrl.ptrs.values()];
+ else if(ctrl.ptrs.size===2){if(_selCamBase){_selCamBase=null;_selCamKey=null;}const p=[...ctrl.ptrs.values()];
    const d=Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]);
    const mid=[(p[0][0]+p[1][0])/2,(p[0][1]+p[1][1])/2];
    // ピンチでズーム
