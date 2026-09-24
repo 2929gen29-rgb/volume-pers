@@ -204,21 +204,27 @@ const mount=$("#view");
 const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+// UI v4 Stage 3：模型・デジタルツイン寄りの落ち着いた色管理
+if(THREE.sRGBEncoding!==undefined)renderer.outputEncoding=THREE.sRGBEncoding;
+if(THREE.ACESFilmicToneMapping!==undefined)renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.06;
 mount.appendChild(renderer.domElement);
 const scene=new THREE.Scene();
 // 空のグラデーション（上：淡い青 → 地平：白っぽい）。テクスチャなのでPNG・検討シートにも写る
 let _skyTex=null;
 function skyTexture(){ if(_skyTex)return _skyTex;
  const cv=document.createElement("canvas");cv.width=4;cv.height=256;const c=cv.getContext("2d");
- const gr=c.createLinearGradient(0,0,0,256);gr.addColorStop(0,"#9cc2ea");gr.addColorStop(0.55,"#d6e6f5");gr.addColorStop(1,"#f2f5f8");
+ const gr=c.createLinearGradient(0,0,0,256);gr.addColorStop(0,"#a9b8c9");gr.addColorStop(0.52,"#dfe5eb");gr.addColorStop(1,"#f6f7f9");
  c.fillStyle=gr;c.fillRect(0,0,4,256);_skyTex=new THREE.CanvasTexture(cv);_skyTex.minFilter=THREE.LinearFilter;return _skyTex;}
 const camera=new THREE.PerspectiveCamera(40,1,0.5,5000);
-scene.add(new THREE.HemisphereLight(0xffffff,0x9aa0a8,.75));
-const sun=new THREE.DirectionalLight(0xfff4e0,1.0);
+scene.add(new THREE.HemisphereLight(0xf8fbff,0x7f8996,.88));
+const sun=new THREE.DirectionalLight(0xfff1dd,.96);
+const fill=new THREE.DirectionalLight(0x9ebcff,.20);fill.position.set(-90,72,-80);scene.add(fill);
 // 影の解像度：モバイルや低解像度端末では軽く、PCでは高精細に
 const _isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)||Math.min(screen.width,screen.height)<768;
 const _shadowRes=_isMobile?1024:2048;
 sun.position.set(80,120,60);sun.castShadow=true;sun.shadow.mapSize.set(_shadowRes,_shadowRes);
+sun.shadow.bias=-0.00012;sun.shadow.normalBias=0.025;
 Object.assign(sun.shadow.camera,{left:-140,right:140,top:140,bottom:-140,far:600});
 scene.add(sun);
 const ctrl={theta:Math.PI/4+.3,phi:1.05,r:150,ty:18,cx:0,cz:0,ptrs:new Map(),pinch:0,panMid:null};
@@ -670,8 +676,8 @@ function rebuild(){
  dragMap={};
  const g=new THREE.Group(); const L=U.line; const DET=true;  // 詳細表現に一本化（概算モードは廃止）
  if(L){scene.background=new THREE.Color(0xffffff);scene.fog=null;}
- else if(U.sky!==false){scene.background=skyTexture();scene.fog=new THREE.Fog(0xe4ecf4,320,1000);}
- else{scene.background=new THREE.Color(0xdce6f0);scene.fog=new THREE.Fog(0xdce6f0,400,1100);}
+ else if(U.sky!==false){scene.background=skyTexture();scene.fog=new THREE.Fog(0xe7ebf0,270,900);}
+ else{scene.background=new THREE.Color(0xe3e7ec);scene.fog=new THREE.Fog(0xe3e7ec,330,980);}
   sun.castShadow=!L;
  {const az=numv(U.sun.az,135)*Math.PI/180, alt=Math.max(8,numv(U.sun.alt,55))*Math.PI/180, R=180;
   sun.position.set(R*Math.cos(alt)*Math.sin(az),R*Math.sin(alt),R*Math.cos(alt)*Math.cos(az));}
@@ -691,7 +697,7 @@ function rebuild(){
  const sdx=numv(U.site.dx,0), sdz=numv(U.site.dz,0);
 
  // 地面・道路
- const gnd=new THREE.Mesh(new THREE.PlaneGeometry(1200,1200),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0xb9bec7}));
+ const gnd=new THREE.Mesh(new THREE.PlaneGeometry(1200,1200),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0xd6dce3}));
  gnd.rotation.x=-Math.PI/2;gnd.position.y=-0.07;gnd.receiveShadow=!L;g.add(gnd);
  // ワールド座標(x,z)における地盤の高さ。敷地の外は0（元の地面）
  // 傾斜地に置いたオブジェクト（仮囲い・重機・車両・注記）を地面に接地させるために使う
@@ -711,8 +717,8 @@ function rebuild(){
   const w=Math.min(20,Math.max(3,numv(r.w,6))); const rg=new THREE.Group(); rg.userData.dragKey="rd:"+ri;
   const ox=sdx+numv(r.dx,0), oz=sdz+numv(r.dz,0); rg.position.set(ox,0,oz); rg.rotation.y=numv(r.ry,0)*Math.PI/180;
   const hasUnder=!!(U.under&&U.under.tex&&U.under.show!==false);
-  const rmat=L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.sel==="rd:"+ri||(U.sel||"").startsWith("rpt:"+ri+":"))?0x7f8896:0x8d929b,transparent:hasUnder,opacity:hasUnder?0.72:1});
-  const wmat=L?rmat:new THREE.MeshLambertMaterial({color:0xe8eaee,transparent:hasUnder,opacity:hasUnder?0.72:1});
+  const rmat=L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.sel==="rd:"+ri||(U.sel||"").startsWith("rpt:"+ri+":"))?0x5f83b8:0x505864,transparent:hasUnder,opacity:hasUnder?0.66:1});
+  const wmat=L?rmat:new THREE.MeshLambertMaterial({color:0xd9dee5,transparent:hasUnder,opacity:hasUnder?0.72:1});
   const wl=Math.max(0,numv(r.walkL,0)), wr=Math.max(0,numv(r.walkR,0));
   for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1];const len=Math.hypot(b.x-a.x,b.z-a.z);if(len<0.05)continue;
    const m=new THREE.Mesh(new THREE.BoxGeometry(len,0.1,w),rmat);const mx=(a.x+b.x)/2,mz=(a.z+b.z)/2;
@@ -740,7 +746,7 @@ function rebuild(){
   const roadLen=sw+60;
   roadG.rotation.z=Math.atan2(roadSlope,roadLen);  // 長手方向に傾ける
  }
- {const rm=new THREE.Mesh(new THREE.BoxGeometry(sw+60,0.1,rw),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0x8d929b}));rm.position.y=0.05;rm.receiveShadow=!L;roadG.add(rm);}
+ {const rm=new THREE.Mesh(new THREE.BoxGeometry(sw+60,0.1,rw),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0x505864}));rm.position.y=0.05;rm.receiveShadow=!L;roadG.add(rm);}
  if(!L && rw>=6){const cl=new THREE.Mesh(new THREE.BoxGeometry(sw+60,0.02,0.25),new THREE.MeshLambertMaterial({color:0xf2f4f6}));cl.position.y=0.07;roadG.add(cl);}
  g.add(roadG); dragMap.road=roadG;
  // ── 前面歩道グループ（dragKey=roadwalk：独立して前後移動可）※既定は非表示 ──
@@ -750,7 +756,7 @@ function rebuild(){
   const walkZ=walkZbase+numv(U.road.walkDz,0);
   const walkG=new THREE.Group(); walkG.userData.dragKey="roadwalk";
   walkG.position.set(sdx+roadDx,0,walkZ); walkG.rotation.y=roadRy;
-  const wm=new THREE.Mesh(new THREE.BoxGeometry(sw+60,0.12,walkW),new THREE.MeshLambertMaterial({color:0xe8eaee}));wm.position.y=0.07;walkG.add(wm);
+  const wm=new THREE.Mesh(new THREE.BoxGeometry(sw+60,0.12,walkW),new THREE.MeshLambertMaterial({color:0xd9dee5}));wm.position.y=0.07;walkG.add(wm);
   g.add(walkG); dragMap.roadwalk=walkG;
  }
  // ── 側道グループ（dragKey=roadside）──
@@ -758,9 +764,9 @@ function rebuild(){
   const sgn=(U.road.side==="left"?-1:1);
   const sideG=new THREE.Group(); sideG.userData.dragKey="roadside";
   sideG.position.set(sdx+numv(U.road.sideDx,0),0,sdz+numv(U.road.sideDz,0)); sideG.rotation.y=roadRy;
-  const sm=new THREE.Mesh(new THREE.BoxGeometry(rw,0.1,sd+rw+24),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0x8d929b}));
+  const sm=new THREE.Mesh(new THREE.BoxGeometry(rw,0.1,sd+rw+24),L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:0x505864}));
   sm.position.set(sgn*(sw/2+1.6+rw/2),0.05,rw/2);sm.receiveShadow=!L;sideG.add(sm);
-  if(!L&&U.road.walkShow){const sw2=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.12,sd),new THREE.MeshLambertMaterial({color:0xe8eaee}));sw2.position.set(sgn*(sw/2+0.8),0.07,0);sideG.add(sw2);}
+  if(!L&&U.road.walkShow){const sw2=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.12,sd),new THREE.MeshLambertMaterial({color:0xd9dee5}));sw2.position.set(sgn*(sw/2+0.8),0.07,0);sideG.add(sw2);}
   g.add(sideG); dragMap.roadside=sideG;
  }
  }
@@ -792,19 +798,19 @@ function rebuild(){
   geo.rotateX(-Math.PI/2);            // XY平面 → 地面(XZ)へ
   geo.translate(0,0.12,0);
   if(!U._exporting&&!L&&(U.sel==="site"||(U.sel||"").startsWith("spt:")))addVertexTools(siteG,sp,"spt:",()=>0.9,0x2E6FBE,0,true);
-  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0xb8b2a6:0xc8ccd2,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND,side:THREE.DoubleSide}));
+  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0xc2c7ce:0xd5dbe2,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND,side:THREE.DoubleSide}));
   sm.receiveShadow=!L;siteG.add(sm);
   // 外周ライン
   const lp=[]; sp.forEach(p=>lp.push(p.x,0.14,-p.z)); lp.push(sp[0].x,0.14,-sp[0].z);
   const lg=new THREE.BufferGeometry();lg.setAttribute("position",new THREE.BufferAttribute(new Float32Array(lp),3));
-  siteG.add(new THREE.Line(lg,new THREE.LineBasicMaterial({color:L?0x8a94a8:0x6b7686})));
+  siteG.add(new THREE.Line(lg,new THREE.LineBasicMaterial({color:L?0x8a94a8:0x8290a3})));
  }else{
   // ── 矩形敷地（従来：四隅高さで傾斜）──
   const seg=12,vts=[],idx=[];
   for(let j=0;j<=seg;j++)for(let i=0;i<=seg;i++){const x=-sw/2+sw*i/seg,z=-sd/2+sd*j/seg;vts.push(x,terrainH(x,z,sw,sd,hh)+0.12,z);}
   for(let j=0;j<seg;j++)for(let i=0;i<seg;i++){const a=j*(seg+1)+i;idx.push(a,a+seg+1,a+1,a+1,a+seg+1,a+seg+2);}
   const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.BufferAttribute(new Float32Array(vts),3));geo.setIndex(idx);geo.computeVertexNormals();
-  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0xb8b2a6:0xc8ccd2,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND}));
+  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0xc2c7ce:0xd5dbe2,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND}));
   sm.receiveShadow=!L;siteG.add(sm);
   if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo,5),new THREE.LineBasicMaterial({color:0x8a94a8}));siteG.add(e);}
  }
@@ -821,7 +827,7 @@ function rebuild(){
 
  // 近隣建物
  U.nbs.forEach((n,i)=>{
-  const m=box(g,posv(n.w,10),posv(n.h,12),posv(n.d,10),0xdadde2,numv(n.x,20),posv(n.h,12)/2,numv(n.z,20));
+  const m=box(g,posv(n.w,10),posv(n.h,12),posv(n.d,10),0xd3d8df,numv(n.x,20),posv(n.h,12)/2,numv(n.z,20));
   m.rotation.y=numv(n.ry,0)*Math.PI/180;
   m.userData.dragKey="nb:"+i;dragMap["nb:"+i]=m;
  });
@@ -852,12 +858,12 @@ function rebuild(){
    // ── 用途別マテリアル（矩形ブロックと外観を統一）──
    let polyMat;
    if(L){polyMat=new THREE.MeshBasicMaterial({color:0xffffff});}
-   else if(isApt){polyMat=new THREE.MeshLambertMaterial({color:0xcfd3d9});}                                  // 共同住宅：コンクリート調
+   else if(isApt){polyMat=new THREE.MeshLambertMaterial({color:0xe1e5ea});}                                  // 共同住宅：コンクリート調
    else if(isOff){polyMat=new THREE.MeshLambertMaterial({color:0x3a587a,transparent:true,opacity:0.62});}    // 事務所/店舗：ガラス調
    else if(U.p.use==="ホテル"){polyMat=new THREE.MeshLambertMaterial({color:0xd8d2c4});}                      // ホテル：温かいベージュ
    else if(U.p.use==="倉庫・物流"){polyMat=new THREE.MeshLambertMaterial({color:0xc2c7cd});}                  // 倉庫：金属サイディング調
    else if(U.p.use==="病院・医療"){polyMat=new THREE.MeshLambertMaterial({color:0xe6e9ec});}                  // 病院：清潔感の白
-   else{polyMat=new THREE.MeshLambertMaterial({color:0xcfd3d9});}
+   else{polyMat=new THREE.MeshLambertMaterial({color:0xe1e5ea});}
    const pm=new THREE.Mesh(eg, polyMat);
    pm.position.set(ox,y0+0.12,oz); pm.castShadow=!L; pm.receiveShadow=!L;
    pm.userData.dragKey="blk:"+bi; g.add(pm); dragMap["blk:"+bi]=pm;
@@ -914,7 +920,7 @@ function rebuild(){
   const lbox=(w,h,d,c,lx,ly,lz,o={})=>{const geo=new THREE.BoxGeometry(w,h,d);const m=new THREE.Mesh(geo,o.mat||mat(c,o));m.position.set(lx,ly,lz);m.castShadow=!L&&o.shadow!==false;m.receiveShadow=!L;bg.add(m);if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo,12),new THREE.LineBasicMaterial({color:0x16243d}));e.position.set(lx,ly,lz);bg.add(e);}return m;};
   lbox(W,1.2,D,0xb4b8be,0,gl-0.55,0); // 基礎スカート
   // 躯体色：用途連動（多角形と統一）
-  const bodyCol = isOff?0x3a587a : (U.p.use==="ホテル")?0xd8d2c4 : (U.p.use==="倉庫・物流")?0xc2c7cd : (U.p.use==="病院・医療")?0xe6e9ec : 0xcfd3d9;
+  const bodyCol = isOff?0x3a587a : (U.p.use==="ホテル")?0xd8d2c4 : (U.p.use==="倉庫・物流")?0xc2c7cd : (U.p.use==="病院・医療")?0xe6e9ec : 0xe1e5ea;
   const bodyOpt = isOff?{mat:new THREE.MeshLambertMaterial({color:0x3a587a,transparent:true,opacity:0.62})}:{};
   lbox(W,bh,D,bodyCol,0,y0+bh/2+0.12,0,bodyOpt);
   if(bTo===f2&&U.tw.mode==="plan"){lbox(W+0.5,0.9,D+0.5,bodyCol===0x3a587a?0x33425a:bodyCol,0,y0+bh+0.55,0);
@@ -1059,7 +1065,7 @@ function rebuild(){
   const spec=craneSpec(U.tw.craneModel);
   const mh=builtH+16, jib=spec.jib, work=spec.work;
   const cg=new THREE.Group();cg.userData.dragKey="crane";
-  const cm=mat(spec.mast==="mini"?0x2f6fbe:0xe8731a);
+  const cm=mat(spec.mast==="mini"?0x4B82FF:0xF2A33C);
   const a=(geo,x,y,z)=>{const m=new THREE.Mesh(geo,cm);m.position.set(x,y,z);m.castShadow=!L;cg.add(m);if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:0x16243d}));e.position.set(x,y,z);cg.add(e);}};
   if(spec.mast==="tube"){ // 円筒マスト・高自立：小さなベース＋丸マスト＋短い尾部（カタログ形状）
    const mhT=Math.min(mh,(spec.selfH||26.5)+4);
@@ -1429,6 +1435,32 @@ function rebuild(){
  scene.add(g);model=g;
  ctrl.ty=Math.max(builtH,H*.6)*.45;
  applyLayers(g);
+
+ // UI v4 Stage 3：選択対象を3D側でも一目で分かるように、軽量な青アウトライン＋接地リングを表示
+ if(!L&&!U._exporting&&U.sel){
+  let sk=String(U.sel),mk=sk;
+  if(sk.startsWith("bpt:"))mk="blk:"+sk.split(":")[1];
+  else if(sk.startsWith("rpt:"))mk="rd:"+sk.split(":")[1];
+  else if(sk.startsWith("fpt:"))mk="fence";
+  else if(sk.startsWith("spt:"))mk="site";
+  const target=dragMap[mk];
+  if(target&&target.visible!==false){
+   try{
+    target.updateWorldMatrix&&target.updateWorldMatrix(true,true);
+    const box3=new THREE.Box3().setFromObject(target);
+    if(!box3.isEmpty()){
+     const helper=new THREE.Box3Helper(box3,0x4B82FF);
+     helper.material.transparent=true;helper.material.opacity=.92;helper.material.depthTest=false;helper.renderOrder=90;g.add(helper);
+     if(!["site","road","roadwalk","roadside"].includes(mk)&&!mk.startsWith("rd:")){
+      const size=new THREE.Vector3(),center=new THREE.Vector3();box3.getSize(size);box3.getCenter(center);
+      const rr=Math.max(.9,Math.min(12,Math.max(size.x,size.z)*.62+.55));
+      const ring=new THREE.Mesh(new THREE.RingGeometry(Math.max(.25,rr-.12),rr,48),new THREE.MeshBasicMaterial({color:0x4B82FF,transparent:true,opacity:.58,side:THREE.DoubleSide,depthTest:false,depthWrite:false}));
+      ring.rotation.x=-Math.PI/2;ring.position.set(center.x,Math.max(.1,box3.min.y+.08),center.z);ring.renderOrder=89;g.add(ring);
+     }
+    }
+   }catch(e){}
+  }
+ }
  renderTitle();
  if(typeof scheduleDraft==="function")scheduleDraft();
 }
