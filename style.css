@@ -1089,3 +1089,20 @@ body.simple #msheet[data-sheet="edit"]>.ms-row{color:#A7B4C5}
 @media (prefers-reduced-motion:reduce){
  #v4-new-enter.show,#v4-new-enter.out,#v4-new-enter i{animation:none!important}
 }
+
+
+/* ============================================================
+   BimGen UI v4 / Stage 3.2 — selection focus & release
+   ============================================================ */
+#v4-selection-cue{position:fixed;z-index:64;left:50%;top:84px;transform:translate(-50%,-7px);display:flex;align-items:baseline;gap:8px;
+  padding:7px 10px;border:1px solid rgba(255,255,255,.11);border-radius:8px;background:rgba(8,14,24,.74);color:#fff;
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);opacity:0;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+#v4-selection-cue small{font-family:var(--mono);font-size:6px;font-weight:800;letter-spacing:.16em;color:#7D99C2}
+#v4-selection-cue b{max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:9px;letter-spacing:.02em}
+#v4-selection-cue.lock{border-color:rgba(75,130,255,.28);box-shadow:0 8px 24px rgba(0,0,0,.16),inset 2px 0 0 #4B82FF}
+#v4-selection-cue.release small{color:#728197}#v4-selection-cue.release b{color:#AAB6C5}
+#v4-selection-cue.show{animation:v4SelCue 560ms var(--v4-ease) both}
+@keyframes v4SelCue{0%{opacity:0;transform:translate(-50%,-7px)}20%,72%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-4px)}}
+body.simple #v4-selection-cue{top:calc(58px + max(env(safe-area-inset-top),0px));max-width:76vw}
+body.simple #v4-selection-cue b{max-width:48vw}
+@media (prefers-reduced-motion:reduce){#v4-selection-cue.show{animation:none!important;opacity:1;transform:translate(-50%,0)}}
