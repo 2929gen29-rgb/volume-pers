@@ -44,7 +44,7 @@ const U={
            permitPolice:"",permitRoad:"",permitOffice:""}, // 道路使用条件メモ（警察/道路局/建設事務所）
  subsurface:[],  // 地下の支障物（経路帯・範囲マーカー）{kind,x,z,w,d,ry}
  ojt:{},         // OJT検討項目の✓状態 {key:true}
- layers:{building:true,nbs:true,fence:true,crane:true,cobj:true,annot:true,sub:true,roads:true,under:true},  // 表示レイヤー
+ layers:{site:true,building:true,nbs:true,fence:true,scaffold:true,crane:true,vehicles:true,tempobj:true,safety:true,obstacles:true,cobj:true,annot:true,sub:true,roads:true,under:true},  // 表示レイヤー
  roads:[],       // 自分で引く道路 {pts:[{x,z}...](敷地原点基準), w:幅員, dx,dz}
  annot:[],       // 注記（地面貼り付け）{type:"zone"|"text", x,z,w,d,ry,color,text,fsize}
  poles:{n:3,pitch:18,far:true,dx:0,dz:0,ry:0},
@@ -419,10 +419,12 @@ function panBy(dxp,dyp){
  ctrl.cx += (-rx*dxp + fx*dyp)*k;
  ctrl.cz += (-rz*dxp + fz*dyp)*k;
 }
-function dragCandidates(){const small=["crane","ev","mixer","rough","poles","demo","road","roadwalk","roadside","fence"];const out=[];
+function _tempDragKey(k){return ["crane","ev","mixer","rough","fence"].includes(k)||k.startsWith("fpt:")||k.startsWith("co:");}
+function dragCandidates(){const small=["crane","ev","mixer","rough","poles","demo","road","roadwalk","roadside","fence"];const out=[],tempOnly=(UI_PREF.editScope==="temp");
  for(const[k,o]of Object.entries(dragMap)){
+  if(tempOnly&&!_tempDragKey(k))continue;
   if(small.includes(k)||k.startsWith("nb:")||k.startsWith("blk:")||k.startsWith("co:")||k.startsWith("sub:")||k.startsWith("an:")||k.startsWith("fpt:")||k.startsWith("spt:")||k.startsWith("bpt:")||k.startsWith("rd:")||k.startsWith("rpt:"))out.push(o);
-  else if((k==="site"||k==="under"||k==="photo"||k==="dxf")&&U.moveLayers)out.push(o);}
+  else if(!tempOnly&&(k==="site"||k==="under"||k==="photo"||k==="dxf")&&U.moveLayers)out.push(o);}
  return out;}
 function pickDrag(e){
  const r=renderer.domElement.getBoundingClientRect();
@@ -1080,8 +1082,8 @@ function rebuild(){
     const bcx=(bb.min.x+bb.max.x)/2, bcz=(bb.min.z+bb.max.z)/2;
     const sg2=new THREE.BoxGeometry(pw,bh+1.5,pd);
     const sm2=new THREE.Mesh(sg2,new THREE.MeshLambertMaterial({color:0xf4f6f8,transparent:true,opacity:.3,depthWrite:false}));
-    sm2.position.set(ox+bcx,y0+(bh+1.5)/2+.1,oz+bcz);g.add(sm2);
-    const ee2=new THREE.LineSegments(new THREE.EdgesGeometry(sg2),new THREE.LineBasicMaterial({color:0xaab2bf}));ee2.position.copy(sm2.position);g.add(ee2);
+    sm2.position.set(ox+bcx,y0+(bh+1.5)/2+.1,oz+bcz);sm2.userData.layerKey="scaffold";g.add(sm2);
+    const ee2=new THREE.LineSegments(new THREE.EdgesGeometry(sg2),new THREE.LineBasicMaterial({color:0xaab2bf}));ee2.position.copy(sm2.position);ee2.userData.layerKey="scaffold";g.add(ee2);
    }
    return;
   }
@@ -1140,7 +1142,7 @@ function rebuild(){
   if(U.tw.scaffold&&U.tw.mode==="build"&&!L){
    const sg2=new THREE.BoxGeometry(W+1.8,bh+1.5,D+1.8);
    const sm2=new THREE.Mesh(sg2,new THREE.MeshLambertMaterial({color:0xf4f6f8,transparent:true,opacity:.3,depthWrite:false}));
-   sm2.position.set(0,y0+(bh+1.5)/2+.1,0);bg.add(sm2);
+   sm2.position.set(0,y0+(bh+1.5)/2+.1,0);sm2.userData.layerKey="scaffold";bg.add(sm2);
    const ee=new THREE.LineSegments(new THREE.EdgesGeometry(sg2),new THREE.LineBasicMaterial({color:0xaab2bf}));ee.position.copy(sm2.position);bg.add(ee);}
   bg.position.set(dx,0,dz); bg.rotation.y=ry; g.add(bg); dragMap["blk:"+bi]=bg;
  });
@@ -1353,7 +1355,7 @@ function rebuild(){
    const wb={x0:walkZone.x-walkZone.w/2,x1:walkZone.x+walkZone.w/2,z0:walkZone.z-walkZone.d/2,z1:walkZone.z+walkZone.d/2};
    if(c.type!=="walkzone"&&c.type!=="safepath"&&overlap(cb,wb))warn=true;}
   c._warn=warn;
-  const cg=new THREE.Group(); cg.userData.dragKey="co:"+i;
+  const cg=new THREE.Group(); cg.userData.dragKey="co:"+i; cg.userData.cobjType=c.type;
   const seld=(U.sel==="co:"+i);
   const col=warn?0xD64545:(seld?0x4B82FF:t.color);
   const baseMat=L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:col});
@@ -1746,7 +1748,7 @@ function loadProjectJSON(file){
    if(!Array.isArray(U.subsurface))U.subsurface=[];
    if(!Array.isArray(U.annot))U.annot=[];
    if(!Array.isArray(U.roads))U.roads=[];
-   if(!U.layers||typeof U.layers!=="object")U.layers={building:true,nbs:true,fence:true,crane:true,cobj:true,annot:true,sub:true,roads:true,under:true};
+   if(!U.layers||typeof U.layers!=="object")U.layers={}; if(typeof ensureLayers==="function")ensureLayers();
    if(!U.ojt||typeof U.ojt!=="object")U.ojt={};
    if(U.road.sideDx==null)U.road.sideDx=0; if(U.road.sideDz==null)U.road.sideDz=0;
    if(!U.poles)U.poles={n:3,pitch:18,far:true,dx:0,dz:0,ry:0};
@@ -3928,36 +3930,80 @@ window.openStart=()=>{
  requestAnimationFrame(()=>s.classList.add("ready"));
 };
 
-// ───── レイヤー（表示の絞り込み）：dragKey で対象を判定して非表示にする ─────
+// ───── レイヤー / 表示・編集スコープ ─────
+const LAYER_DEFAULTS={site:true,building:true,nbs:true,fence:true,scaffold:true,crane:true,vehicles:true,tempobj:true,safety:true,obstacles:true,annot:true,sub:true,roads:true,under:true,cobj:true};
+const _VEHICLE_TYPES=new Set(["mixer","pump","truck","rough","backhoe","found"]);
+const _TEMP_TYPES=new Set(["stage","lsev","komalift","temp"]);
+const _SAFETY_TYPES=new Set(["guard","walkzone","safepath"]);
 const LAYER_DEF=[
- ["site","敷地",k=>k==="site"],
- ["building","建物",k=>k.startsWith("blk:")],
- ["nbs","近隣建物・既存",k=>k.startsWith("nb:")||k==="demo"],
- ["fence","仮囲い",k=>k==="fence"],
- ["crane","クレーン・LSEV",k=>k==="crane"||k==="ev"],
- ["cobj","重機・車両",k=>k.startsWith("co:")||k==="mixer"||k==="rough"],
- ["annot","注記",k=>k.startsWith("an:")],
- ["sub","地下支障物",k=>k.startsWith("sub:")],
- ["roads","道路",k=>k.startsWith("rd:")||k==="road"||k==="roadwalk"||k==="roadside"],
- ["under","下敷き・写真",k=>k==="under"||k==="photo"],
+ ["site","敷地", (k,o)=>k==="site"],
+ ["building","建物", (k,o)=>k.startsWith("blk:")],
+ ["roads","道路・歩道", (k,o)=>k.startsWith("rd:")||k==="road"||k==="roadwalk"||k==="roadside"],
+ ["nbs","近隣建物・既存", (k,o)=>k.startsWith("nb:")||k==="demo"],
+ ["fence","仮囲い", (k,o)=>k==="fence"],
+ ["scaffold","足場・養生", (k,o)=>o&&o.userData&&o.userData.layerKey==="scaffold"],
+ ["crane","タワークレーン", (k,o)=>k==="crane"||(k.startsWith("co:")&&o&&o.userData&&o.userData.cobjType==="towercrane")],
+ ["vehicles","重機・車両", (k,o)=>k==="mixer"||k==="rough"||(k.startsWith("co:")&&o&&o.userData&&_VEHICLE_TYPES.has(o.userData.cobjType))],
+ ["tempobj","仮設設備", (k,o)=>k==="ev"||(k.startsWith("co:")&&o&&o.userData&&_TEMP_TYPES.has(o.userData.cobjType))],
+ ["safety","安全通路・警備", (k,o)=>k.startsWith("co:")&&o&&o.userData&&_SAFETY_TYPES.has(o.userData.cobjType)],
+ ["obstacles","地上支障物", (k,o)=>k.startsWith("co:")&&o&&o.userData&&o.userData.cobjType==="obstacle"],
+ ["annot","注記", (k,o)=>k.startsWith("an:")],
+ ["sub","地下支障物", (k,o)=>k.startsWith("sub:")],
+ ["under","下敷き・写真", (k,o)=>k==="under"||k==="photo"],
 ];
-function applyLayers(root){
- const L=U.layers||{}; const off=LAYER_DEF.filter(d=>L[d[0]]===false);
- if(!off.length)return;
- root.traverse(o=>{const k=o.userData&&o.userData.dragKey;if(!k)return;if(off.some(d=>d[2](k)))o.visible=false;});
+function ensureLayers(){
+ if(!U.layers||typeof U.layers!=="object")U.layers={};
+ Object.keys(LAYER_DEFAULTS).forEach(k=>{if(U.layers[k]==null)U.layers[k]=LAYER_DEFAULTS[k];});
 }
-window.toggleLayer=(key,v)=>{if(!U.layers)U.layers={};U.layers[key]=v;rebuild();renderLayers();};
+function applyLayers(root){
+ ensureLayers();
+ const L=U.layers||{},off=LAYER_DEF.filter(d=>L[d[0]]===false),legacyCobjOff=L.cobj===false;
+ root.traverse(o=>{
+  const ud=o.userData||{},k=ud.dragKey||"";
+  if(legacyCobjOff&&k.startsWith("co:")){o.visible=false;return;}
+  if(ud.layerKey&&L[ud.layerKey]===false){o.visible=false;return;}
+  if(k&&off.some(d=>d[2](k,o)))o.visible=false;
+ });
+}
+window.toggleLayer=(key,v)=>{ensureLayers();U.layers[key]=v;rebuild();renderLayers();if(typeof renderMobile==="function")renderMobile();};
+window.setLayerPreset=(name)=>{
+ ensureLayers();
+ const on=(keys)=>{LAYER_DEF.forEach(d=>U.layers[d[0]]=keys.includes(d[0]));U.layers.cobj=true;};
+ if(name==="all")LAYER_DEF.forEach(d=>U.layers[d[0]]=true);
+ else if(name==="model")on(["site","building","roads"]);
+ else if(name==="temp")on(["site","building","roads","fence","scaffold","crane","vehicles","tempobj","safety"]);
+ else if(name==="context")on(["site","building","roads","nbs","obstacles","annot","sub","under"]);
+ U.layers.cobj=true;rebuild();renderLayers();if(typeof renderMobile==="function")renderMobile();
+};
 window.renderLayers=()=>{
  let el=document.getElementById("layers"); if(!el){el=document.createElement("div");el.id="layers";document.body.appendChild(el);}
  if(!U._layersOpen){el.style.display="none";return;}
- el.style.display="";
- const L=U.layers||{};
- el.innerHTML=`<div class="sc-h"><span>レイヤー</span><span class="sc-x" onclick="U._layersOpen=false;renderLayers()">✕</span></div><div class="sc-b">
-  ${LAYER_DEF.map(d=>`<label class="chk" style="margin-bottom:5px"><input type="checkbox" ${L[d[0]]!==false?"checked":""} onchange="toggleLayer('${d[0]}',this.checked)">${d[1]}</label>`).join("")}
-  <div class="grid2" style="margin-top:6px"><button class="btn" style="font-size:11px" onclick="LAYER_DEF.forEach(d=>U.layers[d[0]]=true);rebuild();renderLayers()">全部表示</button><button class="btn" style="font-size:11px" onclick="LAYER_DEF.forEach(d=>U.layers[d[0]]=false);U.layers.building=true;U.layers.under=true;U.layers.site=true;rebuild();renderLayers()">建物と下敷きだけ</button></div>
-  <div class="hint" style="margin-top:6px">打合せで「今はクレーンの話」に絞るときに。PNG・検討シートにも反映されます。</div></div>`;
+ ensureLayers();el.style.display="";
+ const L=U.layers||{},scope=UI_PREF.editScope||"all";
+ const group=(title,keys)=>`<div class="ly-group"><small>${title}</small>${LAYER_DEF.filter(d=>keys.includes(d[0])).map(d=>`<label class="ly-row"><input type="checkbox" ${L[d[0]]!==false?"checked":""} onchange="toggleLayer('${d[0]}',this.checked)"><span>${d[1]}</span></label>`).join("")}</div>`;
+ el.innerHTML=`<div class="ly-head"><div><small>DISPLAY / EDIT CONTROL</small><b>レイヤー</b></div><button onclick="U._layersOpen=false;renderLayers()">×</button></div>
+  <div class="ly-presets"><button onclick="setLayerPreset('all')">ALL<small>全部</small></button><button onclick="setLayerPreset('model')">MODEL<small>建物</small></button><button onclick="setLayerPreset('temp')">PLAN<small>施工</small></button><button onclick="setLayerPreset('context')">SITE<small>周辺</small></button></div>
+  <div class="ly-lock"><span><small>EDIT LOCK</small><b>動かせる物</b></span><button class="${scope==="all"?"on":""}" onclick="setEditScope('all')">すべて</button><button class="${scope==="temp"?"on":""}" onclick="setEditScope('temp')">仮設物だけ</button></div>
+  <div class="ly-body">${group("MODEL",["site","building","roads","nbs"])}${group("TEMPORARY WORKS",["fence","scaffold","crane","vehicles","tempobj","safety"])}${group("CONTEXT",["obstacles","annot","sub","under"])}</div>`;
 };
 window.toggleLayers=()=>{U._layersOpen=!U._layersOpen;renderLayers();};
+window.closeSettings=()=>{const e=document.getElementById("settings");if(e)e.classList.remove("open");};
+window.renderSettings=()=>{
+ const el=document.getElementById("settings");if(!el||!el.classList.contains("open"))return;
+ const fs=Math.round(numv(UI_PREF.fontScale,100)),ls=Math.round(numv(UI_PREF.labelScale,100)),scope=UI_PREF.editScope||"all";
+ el.innerHTML=`<div class="set-card"><div class="set-top"><div><small>SYSTEM SETTINGS / DISPLAY</small><b>表示と操作</b><span>説明書を読まなくても見やすい画面に調整</span></div><button onclick="closeSettings()">×</button></div>
+  <div class="set-grid">
+   <section><em>01 / TEXT</em><h3>画面の文字サイズ</h3><p>左パネル・上部操作・設定カードの表示倍率。</p><div class="set-range"><input type="range" min="85" max="130" step="5" value="${fs}" oninput="setUIFontScale(this.value)"><b>${fs}%</b></div><div class="set-presets"><button onclick="setUIFontScale(90)">小</button><button onclick="setUIFontScale(100)">標準</button><button onclick="setUIFontScale(115)">大</button><button onclick="setUIFontScale(130)">特大</button></div></section>
+   <section><em>02 / 3D LABEL</em><h3>3D寸法・ラベル</h3><p>寸法値・道路幅・起算点など3D上の文字だけ変更。</p><div class="set-range"><input type="range" min="75" max="160" step="5" value="${ls}" oninput="setLabelScale(this.value)"><b>${ls}%</b></div><div class="set-presets"><button onclick="setLabelScale(85)">小</button><button onclick="setLabelScale(100)">標準</button><button onclick="setLabelScale(125)">大</button><button onclick="setLabelScale(150)">特大</button></div></section>
+   <section class="wide"><em>03 / EDIT LOCK</em><h3>誤操作を防ぐ</h3><p>仮設計画中に建物や敷地をうっかり動かさないためのロック。</p><div class="set-mode"><button class="${scope==="all"?"on":""}" onclick="setEditScope('all')"><small>ALL OBJECTS</small><b>すべて動かす</b></button><button class="${scope==="temp"?"on":""}" onclick="setEditScope('temp')"><small>TEMP ONLY</small><b>仮設物だけ動かす</b></button></div></section>
+  </div>
+  <div class="set-foot"><button onclick="UI_PREF.fontScale=100;UI_PREF.labelScale=100;UI_PREF.editScope='all';saveUIPref();applyUIPref();rebuild();renderSettings();renderBar()">RESET / 標準に戻す</button><span>設定はこの端末に保存されます</span></div></div>`;
+};
+window.openSettings=()=>{
+ let el=document.getElementById("settings");if(!el){el=document.createElement("div");el.id="settings";document.body.appendChild(el);el.addEventListener("pointerdown",e=>{if(e.target===el)closeSettings();});}
+ el.classList.add("open");renderSettings();
+};
+
 
 // ───── キャンバス上の描く道具（どのタブにいても使える） ─────
 function startDraw(target){
@@ -4228,7 +4274,7 @@ function renderMobile(){
  const PH={demo:"既存解体",retain:"山留め・掘削",pile:"杭工事",steel:"鉄骨建て方",build:"躯体・仮設",plan:"完成"};
  const si=_selInfo();
  const mode=`<span class="mmode ${si?"edit":""}" title="物はタップで選択。選択中だけ操作できます"><small>${si?"EDIT MODE":"VIEW MODE"}</small>${si?si.label:"LOCKED"}</span>`;
- top.innerHTML=`<button class="mt-btn" onclick="openStart()" title="案件を開く">≡</button><div class="mt-title"><b>${(U.p.name||"BimGen").slice(0,20)}</b><span>${PH[U.tw.mode]||""}</span></div>${mode}${badge}`;
+ top.innerHTML=`<button class="mt-btn" onclick="openStart()" title="案件を開く">≡</button><div class="mt-title"><b>${(U.p.name||"BimGen").slice(0,20)}</b><span>${PH[U.tw.mode]||""}</span></div>${mode}${badge}<button class="mt-gear" onclick="openSettings()" aria-label="設定">⚙</button>`;
  const tabs=[["phase","工程","01"],["temp","仮設","02"],["view","表示","03"],["edit","編集","04"]];
  bar.innerHTML=tabs.map(t=>`<button class="mbtn ${((_dock===t[0])||(_sheet===t[0]))?"on":""}" onclick="${t[0]==="edit"?"openSheet('edit')":"openMobileDock('"+t[0]+"')"}"><span>${t[2]}</span>${t[1]}</button>`).join("");
  let ab=document.getElementById("mact");if(!ab){ab=document.createElement("div");ab.id="mact";document.body.appendChild(ab);}
@@ -4408,12 +4454,14 @@ function renderBar(){
   <button class="btn btn-secondary" onclick="openStart()" title="テンプレート／デモ／ファイルから案件を開く">＋ 新規</button>
   <button class="btn" id="undo-btn" onclick="undo()" title="1つ前の状態に戻す（Ctrl+Z）" ${_hist.length?"":"disabled"}>↶ 戻す</button>
   <button class="btn" onclick="togglePresent()" title="パネルを隠して3Dを全画面に（顧客・会議用）">プレゼン</button>
+  <button class="btn btn-gear" onclick="openSettings()" title="文字サイズ・操作ロックなどの設定">⚙</button>
   ${mn("視点",[
     {label:"鳥瞰",fn:"view('bird')"},{label:"正面",fn:"view('front')"},{label:"アイレベル",fn:"view('eye')"},{label:"真上（配置）",fn:"view('top')"},null,
     {label:"自動回転",fn:"U.auto=!U.auto;renderBar()",on:U.auto}])}
   ${mn("表示",[
     {label:"グリッド",fn:"U.grid.show=!U.grid.show;rebuild();renderBar()",on:U.grid.show},
     {label:"敷地/下敷き移動モード",fn:"U.moveLayers=!U.moveLayers;renderBar()",on:U.moveLayers},
+    {label:"仮設物だけ動かす",fn:"setEditScope(UI_PREF.editScope==='temp'?'all':'temp')",on:UI_PREF.editScope==="temp"},
     {label:"線画（AI下絵）",fn:"U.line=!U.line;rebuild();renderBar()",on:U.line},null,
     {label:"吸着（頂点・道路・15°回転）",fn:"U.snap=!U.snap;renderBar();renderPanel()",on:U.snap!==false},null,
     {label:"レイヤー（表示の絞り込み）",fn:"toggleLayers()",on:!!U._layersOpen},null,
