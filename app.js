@@ -355,6 +355,37 @@ function groundPoint(e){
  const t=-ray.ray.origin.y/ray.ray.direction.y;
  return ray.ray.origin.clone().add(ray.ray.direction.clone().multiplyScalar(t));
 }
+function dimBasePoint(kind){
+ const sdx=numv(U.site.dx,0),sdz=numv(U.site.dz,0);
+ if(kind==="site")return {x:sdx,z:sdz,label:"敷地中心"};
+ if(kind==="building"){
+  const b=(U.blocks||[])[0];if(!b)return {x:sdx,z:sdz,label:"建物中心"};
+  return {x:sdx+numv(b.dx,0),z:sdz+numv(b.dz,0),label:"建物中心"};
+ }
+ if(kind==="road"){
+  const r=(U.roads||[])[0];
+  if(r&&Array.isArray(r.pts)&&r.pts.length>=2){
+   const pts=rotPts(r.pts,numv(r.ry,0)),a=pts[0],b=pts[pts.length-1];
+   return {x:sdx+numv(r.dx,0)+(a.x+b.x)/2,z:sdz+numv(r.dz,0)+(a.z+b.z)/2,label:"道路中心"};
+  }
+  const rw=Math.min(20,Math.max(4,numv(U.road.w,8)));
+  return {x:sdx+numv(U.road.dx,0),z:sdz+posv(U.site.d,18)/2+1.6+rw/2+numv(U.road.dz,0),label:"道路中心"};
+ }
+ return null;
+}
+window.setDimBase=(kind)=>{
+ if(!U.dim)U.dim={on:true,a:null,b:null,base:"free"};
+ U.dim.on=true;U.dim.base=kind||"free";U.dim.b=null;
+ const p=dimBasePoint(U.dim.base);U.dim.a=p?{x:+p.x.toFixed(2),z:+p.z.toFixed(2)}:null;
+ rebuild();renderPanel();renderBar();
+ toast(p?p.label+"を起算点にしました":"自由2点：1点目をクリックしてください","ok");
+};
+function refDistanceText(x,z){
+ const kinds=["site","building","road"],parts=[];
+ for(const k of kinds){const p=dimBasePoint(k);if(p)parts.push(p.label.replace("中心","")+" "+Math.hypot(x-p.x,z-p.z).toFixed(1)+"m");}
+ return parts.join(" / ");
+}
+
 // 画面のドラッグ量(px)から注視点を平行移動（カメラ方位に正しく追従）
 function panBy(dxp,dyp){
  const th=ctrl.theta, ph=ctrl.phi;
@@ -444,11 +475,14 @@ el.addEventListener("pointerdown",(e)=>{
   else {U.calib.a={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};U.calib.b=null;}
   rebuild();renderPanel();return;}
  // 寸法線ツール：地面の2点を順にクリック
- if(U.dim.on&&ctrl.ptrs.size===1){const gp=groundPoint(e);
-  if(!U.dim.a){U.dim.a={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};U.dim.b=null;}
+ if(U.dim.on&&ctrl.ptrs.size===1){const gp=groundPoint(e),base=U.dim.base||"free";
+  if(base!=="free"){
+   const p=dimBasePoint(base);if(p)U.dim.a={x:+p.x.toFixed(2),z:+p.z.toFixed(2)};
+   U.dim.b={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};
+  }else if(!U.dim.a){U.dim.a={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};U.dim.b=null;}
   else if(!U.dim.b){U.dim.b={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};}
   else {U.dim.a={x:+gp.x.toFixed(2),z:+gp.z.toFixed(2)};U.dim.b=null;}
-  rebuild();renderBar();return;}
+  rebuild();renderBar();renderPanel();return;}
  if(ctrl.ptrs.size===1 && !e.shiftKey){const _simple=document.body.classList.contains("simple");
   let o=pickDrag(e);
   if(_simple&&o){
@@ -1583,6 +1617,7 @@ function rebuild(){
   const A=U.dim.a, B=U.dim.b;
   const dot=(p,c)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.4,10,10),new THREE.MeshBasicMaterial({color:c}));m.position.set(p.x,0.4,p.z);g.add(m);};
   dot(A,0xF2A33C);
+  if((U.dim.base||"free")!=="free"){const bp=dimBasePoint(U.dim.base);if(bp){const bs=edgeLabelSprite(bp.label);bs.position.set(A.x,1.05,A.z);bs.scale.set(4.2,1.15,1);g.add(bs);}}
   if(B){dot(B,0xF2A33C);
    const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.BufferAttribute(new Float32Array([A.x,0.4,A.z,B.x,0.4,B.z]),3));
    g.add(new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xF2A33C})));
@@ -2818,15 +2853,16 @@ function renderPanel(){
     ${opts}
     ${(c.type==="temp"&&c.size==="asagao")?`<div onclick="event.stopPropagation()">${SL("設置高さ m",numv(c.mountH,4),"(v)=>{U.cobj["+i+"].mountH=v;rebuild()}",2,40,0.5)}</div>`:""}
     ${c.type==="towercrane"?`<div onclick="event.stopPropagation()">${SL("設置高さ m",numv(c.h,craneSpec(c.size).selfH),"(v)=>setCOHeight("+i+",v)",craneSpec(c.size).selfH,craneSpec(c.size).maxInstallH||51,0.5)}</div>`:""}
-    <div class="co-meta-line"><span>工程 ${({"demo":"既存解体","retain":"山留・掘削","pile":"杭","steel":"鉄骨","build":"躯体・仮設","plan":"完成"})[c.phase||U.tw.mode]||"施工"}</span><span>基準 X=${numv(c.x,0).toFixed(1)}m / Z=${numv(c.z,0).toFixed(1)}m / ${numv(c.ry,0)}°</span></div>
+    <div class="co-meta-line"><span>工程 ${({"demo":"既存解体","retain":"山留・掘削","pile":"杭","steel":"鉄骨","build":"躯体・仮設","plan":"完成"})[c.phase||U.tw.mode]||"施工"}</span><span>基準 X=${numv(c.x,0).toFixed(1)}m / Z=${numv(c.z,0).toFixed(1)}m / ${numv(c.ry,0)}°</span><small>起算距離：${refDistanceText(numv(c.x,0),numv(c.z,0))}</small></div>
     ${guide.length?`<div style="font-size:10px;color:#2552A0;margin-top:2px">ガイド: ${guide.join(" / ")}${seld?"（表示中）":"（選択で表示）"}</div>`:""}
    </div>`;}).join("");}
   else h+=`<div class="hint">ボタンで重機・車両・仮設材を配置。<b>クリックで選択</b>すると干渉ガイド（張出・旋回・作業半径）が表示され、サイズも変更できます。ドラッグ＝移動／Ctrl＋ドラッグ＝回転。歩行帯に重機が重なると赤警告します。</div>`;
   h+=`<div style="margin-top:6px">${CK("スナップ（道路・敷鉄板に吸着／15°刻み回転）",U.snap,"(v)=>S('snap',v,false)")}</div>`;
   // 補助ツール（寸法線・グリッド・道路条件・DXF）を折りたたみに集約
-  let secTools=`<div style="font-size:10.5px;font-weight:600;color:var(--mut);margin-bottom:3px">寸法線</div>
-   ${CK("寸法計測モード（地面を2点クリック）",U.dim.on,"(v)=>{S('dim.on',v,false);if(!v){U.dim.a=null;U.dim.b=null;}rebuild();renderBar();}")}
-   ${U._dimDist!=null?`<div style="font-family:ui-monospace;font-size:14px;font-weight:700;color:var(--navy)">距離 = ${U._dimDist.toFixed(2)} m</div>`:(U.dim.on?`<div class="hint">1点目→2点目の順にクリックしてください。</div>`:"")}
+  let secTools=`<div style="font-size:10.5px;font-weight:600;color:var(--mut);margin-bottom:3px">寸法・起算距離</div>
+   ${CK("寸法計測モード",U.dim.on,"(v)=>{S('dim.on',v,false);if(!v){U.dim.a=null;U.dim.b=null;}rebuild();renderBar();}")}
+   <div class="dim-origin"><button class="${(U.dim.base||"free")==="free"?"on":""}" onclick="setDimBase('free')">自由2点</button><button class="${U.dim.base==="site"?"on":""}" onclick="setDimBase('site')">敷地中心から</button><button class="${U.dim.base==="building"?"on":""}" onclick="setDimBase('building')">建物中心から</button><button class="${U.dim.base==="road"?"on":""}" onclick="setDimBase('road')">道路中心から</button></div>
+   ${U._dimDist!=null?`<div class="dim-result"><small>MEASURED DISTANCE</small><b>${U._dimDist.toFixed(2)} m</b></div>`:(U.dim.on?`<div class="hint">${(U.dim.base||"free")==="free"?"1点目→2点目の順にクリック":"起算点は固定済み。測りたい位置をクリックしてください。"}</div>`:"")}
    <div style="border-top:1px solid var(--hair);margin:8px 0 6px"></div>
    <div style="font-size:10.5px;font-weight:600;color:var(--mut);margin-bottom:3px">グリッド</div>
    ${CK("グリッド表示",U.grid.show,"(v)=>S('grid.show',v)")}
@@ -3437,21 +3473,23 @@ function exportSheet(){
  const d=new Date(); const ymd=`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}`;
  const lvLabel={ok:"OK",warn:"注意",ng:"要検討",na:"—"};
  const crane=CRANE_SPECS[U.tw.craneModel]||null;
- const cobjRows=(U.cobj||[]).map(c=>{const t=COBJ_TYPES[c.type];const sz=cobjSize(c.type,c.size)||{};return `<tr><td>${_esc(t?t.label:c.type)}</td><td>${_esc(sz.label||c.size||"")}</td><td class="n">${numv(c.x,0).toFixed(1)}, ${numv(c.z,0).toFixed(1)}</td><td>${c._warn?'<span class="ng">歩行帯と干渉</span>':"—"}</td></tr>`;}).join("");
+ const visibleCobj=(U.cobj||[]).filter(c=>cobjVisibleInPhase(c,U.tw.mode));
+ const cobjRows=visibleCobj.map(c=>{const t=COBJ_TYPES[c.type];const sz=cobjSize(c.type,c.size)||{};return `<tr><td>${_esc(t?t.label:c.type)}</td><td>${_esc(sz.label||c.size||"")}</td><td class="n">${numv(c.x,0).toFixed(1)}, ${numv(c.z,0).toFixed(1)}</td><td>${c._warn?'<span class="ng">歩行帯と干渉</span>':"—"}</td></tr>`;}).join("");
  const annotRows=(U.annot||[]).map(a=>`<tr><td>${a.type==="zone"?"範囲":"文字"}</td><td>${_esc((ANNOT_COLORS.find(c=>c.key===a.color)||{}).label||a.color)}</td><td>${_esc(a.type==="text"?a.text:`${posv(a.w,6)}m × ${posv(a.d,6)}m`)}</td><td class="n">${numv(a.x,0).toFixed(1)}, ${numv(a.z,0).toFixed(1)}</td></tr>`).join("");
  const subRows=(U.subsurface||[]).map(s=>`<tr><td>${_esc((SUBSURFACE_TYPES[s.kind]||{}).label||s.kind)}</td><td class="n">${posv(s.w,3)}m × ${posv(s.d,14)}m</td><td class="n">${numv(s.x,0).toFixed(1)}, ${numv(s.z,0).toFixed(1)}</td></tr>`).join("");
  const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>検討シート ${_esc(U.p.name)}</title>
 <style>
 @page{size:A4 landscape;margin:12mm}
-body{font-family:-apple-system,"Hiragino Sans","Yu Gothic UI",Meiryo,sans-serif;color:#1A2740;margin:0;padding:18px;font-size:11px;background:#fff}
-h1{font-size:18px;margin:0;color:#16243D;letter-spacing:.02em}
-.hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #F2A33C;padding-bottom:6px;margin-bottom:10px}
-.meta{font-size:10px;color:#6A7385;text-align:right;line-height:1.5}
+body{font-family:-apple-system,"Hiragino Sans","Yu Gothic UI",Meiryo,sans-serif;color:#172236;margin:0;padding:14px;font-size:10.5px;background:#F3F6FA}
+h1{font-size:19px;margin:2px 0 0;color:#fff;letter-spacing:.01em}
+.hd{display:flex;justify-content:space-between;align-items:flex-end;background:linear-gradient(135deg,#111B2C,#1E304B);color:#fff;border-radius:9px;padding:10px 12px;margin-bottom:9px;border-left:4px solid #F2A33C}
+.meta{font-size:9.5px;color:#B9C6D8;text-align:right;line-height:1.5}
 .grid{display:grid;grid-template-columns:1.15fr 1fr;gap:12px}
 .imgs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
-.imgs img{width:100%;max-height:255px;object-fit:cover;border:1px solid #DDE2EA;border-radius:6px;display:block}
-.imgs small{display:block;font-size:9px;color:#6A7385;margin-top:2px}
-h2{font-size:11.5px;margin:10px 0 4px;color:#16243D;border-left:3px solid #F2A33C;padding-left:6px}
+.imgs>div{background:#fff;border:1px solid #DCE3EC;border-radius:8px;padding:4px;box-shadow:0 3px 10px rgba(24,39,63,.05)}
+.imgs img{width:100%;max-height:248px;object-fit:cover;border-radius:5px;display:block}
+.imgs small{display:block;font-size:8.5px;color:#66758A;margin:3px 2px 0;font-weight:600}
+h2{font-size:11px;margin:9px 0 4px;color:#16243D;border-left:3px solid #F2A33C;padding-left:6px;letter-spacing:.01em}
 table{border-collapse:collapse;width:100%;font-size:10.5px}
 th,td{border:1px solid #DDE2EA;padding:3px 6px;text-align:left;vertical-align:top}
 th{background:#EEF2F8;font-weight:600;color:#2E4057;font-size:10px}
@@ -3469,7 +3507,7 @@ td.n{font-family:ui-monospace,Consolas,monospace;white-space:nowrap}
 @media print{.bar{display:none}body{padding:0}}
 </style></head><body>
 <button class="bar" onclick="window.print()">🖨 印刷 / PDF保存</button>
-<div class="hd"><div><div style="font-size:9.5px;color:#6A7385;letter-spacing:.1em">BimGen 検討シート</div><h1>${_esc(U.p.name||"（案件名未入力）")}</h1></div>
+<div class="hd"><div><div style="font-size:8px;color:#7FA4DD;letter-spacing:.16em;font-weight:700">BimGen / PROJECT REVIEW SHEET</div><h1>${_esc(U.p.name||"（案件名未入力）")}</h1></div>
 <div class="meta">作成日 ${ymd}　／　作成者 ＿＿＿＿＿＿<br>${_esc(U.p.addr||"")}</div></div>
 <div class="imgs"><div><img src="${imgBird}"><small>鳥瞰（仮設計画イメージ）</small></div><div><img src="${imgTop}"><small>配置（真上）</small></div></div>
 <div class="grid"><div>
@@ -3486,7 +3524,7 @@ ${rc?`<h2>道路使用検討（生コン車＋ポンプ車）</h2><table class="
 <tr><td>残車道幅</td><td class="n">${rc.remain} m → <span class="${rc.emgOK?"ok":(rc.passOK?"warn":"ng")}">${rc.emgOK?"緊急車両4m確保":(rc.passOK?"すれ違い可・緊急車両4m未満":"3m未満・片側交互通行")}</span></td></tr>
 ${(U.roadwork.permitPolice||U.roadwork.permitRoad||U.roadwork.permitOffice)?`<tr><td>許可条件メモ</td><td>${_esc([U.roadwork.permitPolice&&"警察："+U.roadwork.permitPolice,U.roadwork.permitRoad&&"道路管理者："+U.roadwork.permitRoad,U.roadwork.permitOffice&&"建設事務所："+U.roadwork.permitOffice].filter(Boolean).join(" ／ "))}</td></tr>`:""}
 </table>`:""}
-<h2>配置した施工オブジェクト（${(U.cobj||[]).length}）</h2>
+<h2>この工程で表示中の施工オブジェクト（${visibleCobj.length}）</h2>
 ${cobjRows?`<table><tr><th>種別</th><th>サイズ</th><th>位置 X,Z (m)</th><th>備考</th></tr>${cobjRows}</table>`:`<div style="color:#6A7385">なし</div>`}
 </div><div>
 <h2>諸元</h2><table class="kv">
