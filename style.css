@@ -1585,3 +1585,13 @@ body.tutorial-mode #settings-fixed{opacity:.32;filter:saturate(.35)}
 }
 
 .rt-skip small{margin-left:5px;font-family:var(--mono);font-size:6px;color:#71839B}
+
+/* Tutorial legibility and a clearly disabled loading state */
+.rt-card>small{font-size:10px;letter-spacing:.08em;color:#B7D1FF}
+.rt-card p{font-size:13px;color:#E0E7F1}
+.rt-wait{font-size:11px;color:#C8D5E7}
+.rt-skip{font-size:11px;letter-spacing:.02em;color:#FFF}
+.rt-progress i{width:32px;height:5px}
+.rt-primary:disabled{opacity:.6;cursor:wait}
+#settings-fixed small{font-size:9px;color:#C7D7EC}
+@media(max-width:820px){.rt-card p{font-size:12px}.rt-skip{font-size:10px}}
