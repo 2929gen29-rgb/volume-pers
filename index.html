@@ -78,7 +78,14 @@
   function remember(){
     try{ localStorage.setItem(KEY, JSON.stringify({h:PW_HASH, exp:Date.now()+REMEMBER_DAYS*864e5})); }catch(_){}
   }
-  function showApp(){ if(gate){gate.style.display="none";} }
+  function showApp(){
+    if(gate){gate.style.display="none";}
+    // UI v4: 起動直後はスタートメニューを開き、初見でも入口を迷わせない
+    if(!window.__bimgenStartShown){
+      window.__bimgenStartShown=true;
+      setTimeout(function(){ if(window.openStart) window.openStart(); },120);
+    }
+  }
   function showGate(){
     if(!gate)return;
     gate.style.display="flex";
