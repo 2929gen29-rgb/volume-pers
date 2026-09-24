@@ -657,7 +657,8 @@ function roadClearance(){
   const pts=rotPts(r.pts||[],r.ry); const W=Math.min(20,Math.max(3,numv(r.w,6))); const ox=sdx+numv(r.dx,0), oz=sdz+numv(r.dz,0);
   const bands=[], vehs=[];
   (U.cobj||[]).forEach((c,ci)=>{
-   if(ROADCLEAR_SKIP.has(c.type))return;
+   if(!cobjVisibleInPhase(c,U.tw.mode))return;
+   if(ROADCLEAR_SKIP.has(c.type)||c.type==="towercrane"||c.type==="safepath")return;
    const sz=cobjSize(c.type,c.size)||{w:2.5,d:7}; const vw=posv(c.w,sz.w), vd=posv(c.d,sz.d);
    const cx=numv(c.x,0), cz=numv(c.z,0), ry=numv(c.ry,0)*Math.PI/180;
    const xax=[Math.cos(ry),-Math.sin(ry)], zax=[Math.sin(ry),Math.cos(ry)];   // three.js rotation.y の軸
@@ -1287,6 +1288,7 @@ function rebuild(){
  }
  function overlap(A,B){return A.x0<B.x1&&A.x1>B.x0&&A.z0<B.z1&&A.z1>B.z0;}
  U.cobj.forEach((c,i)=>{
+  if(!cobjVisibleInPhase(c,U.tw.mode))return;
   const t=COBJ_TYPES[c.type]||COBJ_TYPES.truck;
   const sz=cobjSize(c.type,c.size)||t.sizes[0];
   const w=posv(c.w,sz.w), d=posv(c.d,sz.d), hgt=posv(c.h,sz.h);
@@ -1301,7 +1303,41 @@ function rebuild(){
   const seld=(U.sel==="co:"+i);
   const col=warn?0xD64545:(seld?0x4B82FF:t.color);
   const baseMat=L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:col});
-  if(c.type==="guard"){
+  if(c.type==="towercrane"){
+   const spec=craneSpec(c.size), mastH=Math.max(spec.selfH||8,Math.min(spec.maxInstallH||63,hgt));
+   const cm=L?baseMat:new THREE.MeshLambertMaterial({color:seld?0x4B82FF:0xF2A33C});
+   const addTC=(geo,x,y,z)=>{const m=new THREE.Mesh(geo,cm);m.position.set(x,y,z);m.castShadow=!L;cg.add(m);return m;};
+   const bw=Math.max(1.5,Math.min(3.2,posv(sz.w,spec.base||2.4)));
+   if(spec.mast==="tube"){
+    addTC(new THREE.BoxGeometry(bw,.35,bw),0,.18,0);
+    addTC(new THREE.CylinderGeometry(.30,.30,mastH,18),0,mastH/2,0);
+   }else{
+    const leg=.16,off=bw*.38;
+    [[-off,-off],[-off,off],[off,-off],[off,off]].forEach(([x,z])=>addTC(new THREE.BoxGeometry(leg,mastH,leg),x,mastH/2,z));
+    for(let y=1.5;y<mastH;y+=2.2){addTC(new THREE.BoxGeometry(bw*.8,.08,.08),0,y,off);addTC(new THREE.BoxGeometry(bw*.8,.08,.08),0,y,-off);addTC(new THREE.BoxGeometry(.08,.08,bw*.8),off,y,0);addTC(new THREE.BoxGeometry(.08,.08,bw*.8),-off,y,0);}
+   }
+   addTC(new THREE.BoxGeometry(1.4,1.2,1.4),0,mastH+.6,0);
+   addTC(new THREE.BoxGeometry(spec.jib,.38,.55),spec.jib/2-.5,mastH+1.5,0);
+   addTC(new THREE.BoxGeometry(spec.tail+.8,.34,.65),-(spec.tail+.8)/2+.15,mastH+1.5,0);
+   addTC(new THREE.BoxGeometry(.2,2.4,.2),0,mastH+2.8,0);
+   const hookX=spec.jib*.72,drop=Math.max(3,Math.min(12,mastH*.28));
+   addTC(new THREE.BoxGeometry(.05,drop,.05),hookX,mastH+1.3-drop/2,0);
+   addTC(new THREE.BoxGeometry(.55,.45,.55),hookX,mastH+1.3-drop,0);
+   if(!L&&!U._exporting&&seld){
+    const ring=new THREE.Mesh(new THREE.RingGeometry(Math.max(.2,spec.work-.35),spec.work,64),new THREE.MeshBasicMaterial({color:0x4B82FF,transparent:true,opacity:.30,side:THREE.DoubleSide,depthTest:false,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.07;ring.renderOrder=5;cg.add(ring);
+    const tr=new THREE.Mesh(new THREE.RingGeometry(Math.max(.1,spec.tail-.18),spec.tail,40),new THREE.MeshBasicMaterial({color:0xD64545,transparent:true,opacity:.42,side:THREE.DoubleSide,depthTest:false,depthWrite:false}));tr.rotation.x=-Math.PI/2;tr.position.y=.08;tr.renderOrder=5;cg.add(tr);
+   }
+  }else if(c.type==="safepath"){
+   const lane=new THREE.Mesh(new THREE.BoxGeometry(w,.035,d),L?baseMat:new THREE.MeshLambertMaterial({color:0xEADFB9,transparent:true,opacity:.46}));lane.position.y=.025;cg.add(lane);
+   const edgeMat=L?baseMat:new THREE.MeshLambertMaterial({color:0xF28C28});
+   const barMat=L?baseMat:new THREE.MeshLambertMaterial({color:0xF5F7FA});
+   const n=Math.max(2,Math.ceil(d/1.8)+1), dz=d/(n-1);
+   for(let j=0;j<n;j++){const z=-d/2+j*dz;
+    [-1,1].forEach(sx=>{const cone=new THREE.Mesh(new THREE.ConeGeometry(.15,.48,10),edgeMat);cone.position.set(sx*w/2,.24,z);cg.add(cone);});
+    if(j<n-1){[-1,1].forEach(sx=>{const bar=new THREE.Mesh(new THREE.BoxGeometry(.07,.07,dz),barMat);bar.position.set(sx*w/2,.68,z+dz/2);cg.add(bar);});}
+   }
+   if(!L){const center=new THREE.Mesh(new THREE.BoxGeometry(.06,.04,d*.94),new THREE.MeshBasicMaterial({color:0xF2A33C,transparent:true,opacity:.75}));center.position.y=.055;cg.add(center);}
+  }else if(c.type==="guard"){
    const body=new THREE.Mesh(new THREE.CylinderGeometry(.22,.26,1.5,8),baseMat);body.position.y=.75;body.castShadow=!L;cg.add(body);
    const head=new THREE.Mesh(new THREE.SphereGeometry(.22,8,8),baseMat);head.position.y=1.6;cg.add(head);
    const vest=new THREE.Mesh(new THREE.CylinderGeometry(.27,.27,.5,8),new THREE.MeshLambertMaterial({color:warn?0xD64545:0xF2C14E}));vest.position.y=1.0;cg.add(vest);
@@ -1421,7 +1457,7 @@ function rebuild(){
     const mx=(mid.x+nxt.x)/2, mz=(mid.z+nxt.z)/2; const wx=sdx+numv(r.dx,0)+mx, wz=sdz+numv(r.dz,0)+mz;
     const sp=edgeLabelSprite(`道路${rc.ri+1}：幅${rc.W}m／残り${rc.remain}m`);sp.position.set(wx,groundY(wx,wz)+2.2,wz);sp.scale.multiplyScalar(1.25);
     sp.material.color.setHex(rc.lv==="ok"?0xBFE3D0:rc.lv==="warn"?0xFFE2B0:0xFFC4BC);g.add(sp);});
-   U.cobj.forEach((c,i)=>{const rr=c._roadRemain;if(!rr)return;const sz=cobjSize(c.type,c.size)||{h:3};
+   U.cobj.forEach((c,i)=>{if(!cobjVisibleInPhase(c,U.tw.mode))return;const rr=c._roadRemain;if(!rr)return;const sz=cobjSize(c.type,c.size)||{h:3};
    const sp=edgeLabelSprite(`残り ${rr.remain}m`);const cx=numv(c.x,0),cz=numv(c.z,0);sp.position.set(cx,groundY(cx,cz)+posv(c.h,sz.h)+1.4,cz);sp.scale.multiplyScalar(1.15);
    sp.material.color.setHex(rr.lv==="ok"?0xBFE3D0:rr.lv==="warn"?0xFFE2B0:0xFFC4BC); g.add(sp);});}
  }else{U._roadClear=[];}
@@ -1664,11 +1700,11 @@ function loadProjectJSON(file){
    if(!U.grid)U.grid={show:false,size:1};
    if(!U.roadcond)U.roadcond={lane:6,walk:2.5,side:"front"};
    if(!U.cobj)U.cobj=[];
-   if(!U.dim)U.dim={on:false,a:null,b:null};
+   if(!U.dim)U.dim={on:false,a:null,b:null,base:"free"}; else if(U.dim.base==null)U.dim.base="free";
    if(!U.polyInput)U.polyInput={on:false,pts:[],target:null};
    if(!U.calib)U.calib={on:false,a:null,b:null};
    if(U.tw&&!U.tw.craneModel)U.tw.craneModel="JCL022";
-   if(U.tw){if(U.tw.fenceH==null)U.tw.fenceH=3; if(U.tw.fenceGate==null)U.tw.fenceGate="front"; if(U.tw.fenceAll==null)U.tw.fenceAll=false;
+   if(U.tw){if(U.tw.craneHeight==null)U.tw.craneHeight=0;if(U.tw.fenceH==null)U.tw.fenceH=3; if(U.tw.fenceGate==null)U.tw.fenceGate="front"; if(U.tw.fenceAll==null)U.tw.fenceAll=false;
      if(U.tw.fenceDx==null)U.tw.fenceDx=0; if(U.tw.fenceDz==null)U.tw.fenceDz=0; if(U.tw.fenceRy==null)U.tw.fenceRy=0; if(U.tw.fenceW==null)U.tw.fenceW=0; if(U.tw.fenceD==null)U.tw.fenceD=0;}
    if(!U.dxf)U.dxf={ents:null,layers:{},scale:0.001,dx:0,dz:0,raw:null};
    if(U.cost)delete U.cost;  // 旧バージョンの概算単価データを破棄
@@ -2781,7 +2817,8 @@ function renderPanel(){
      <button class="del" onclick="event.stopPropagation();delCO(${i})">削除</button></div>
     ${opts}
     ${(c.type==="temp"&&c.size==="asagao")?`<div onclick="event.stopPropagation()">${SL("設置高さ m",numv(c.mountH,4),"(v)=>{U.cobj["+i+"].mountH=v;rebuild()}",2,40,0.5)}</div>`:""}
-    <div style="font-size:10px;color:var(--mut);font-family:ui-monospace">基準点 X=${numv(c.x,0).toFixed(1)}m Z=${numv(c.z,0).toFixed(1)}m ${numv(c.ry,0)}°</div>
+    ${c.type==="towercrane"?`<div onclick="event.stopPropagation()">${SL("設置高さ m",numv(c.h,craneSpec(c.size).selfH),"(v)=>setCOHeight("+i+",v)",craneSpec(c.size).selfH,craneSpec(c.size).maxInstallH||51,0.5)}</div>`:""}
+    <div class="co-meta-line"><span>工程 ${({"demo":"既存解体","retain":"山留・掘削","pile":"杭","steel":"鉄骨","build":"躯体・仮設","plan":"完成"})[c.phase||U.tw.mode]||"施工"}</span><span>基準 X=${numv(c.x,0).toFixed(1)}m / Z=${numv(c.z,0).toFixed(1)}m / ${numv(c.ry,0)}°</span></div>
     ${guide.length?`<div style="font-size:10px;color:#2552A0;margin-top:2px">ガイド: ${guide.join(" / ")}${seld?"（表示中）":"（選択で表示）"}</div>`:""}
    </div>`;}).join("");}
   else h+=`<div class="hint">ボタンで重機・車両・仮設材を配置。<b>クリックで選択</b>すると干渉ガイド（張出・旋回・作業半径）が表示され、サイズも変更できます。ドラッグ＝移動／Ctrl＋ドラッグ＝回転。歩行帯に重機が重なると赤警告します。</div>`;
@@ -4030,6 +4067,8 @@ window.mDockEV=(power)=>{
  U.sel="ev";U._mEdit=true;rebuild();focusSelectionCamera("ev",{duration:240});renderPanel();renderMobile();
 };
 window.mDockScaffold=()=>{S("tw.scaffold",!U.tw.scaffold);renderMobile();};
+window.mDockAddTower=()=>{addTowerCrane("JCL015");U._mEdit=true;renderMobile();};
+window.mDockAddSafety=()=>{addCO("safepath");const i=U.cobj.length-1;U._mEdit=true;if(i>=0){U.sel="co:"+i;focusSelectionCamera(U.sel,{duration:220});}renderMobile();};
 
 window.mMoveCO=(type,dx,dz)=>{const i=_cobjIdx(type);if(i<0)return;snapshot("mco."+type);U.cobj[i].x=+(numv(U.cobj[i].x,0)+dx).toFixed(1);U.cobj[i].z=+(numv(U.cobj[i].z,0)+dz).toFixed(1);U.sel="co:"+i;rebuildThrottled();};
 window.mRotCO=(type,d)=>{const i=_cobjIdx(type);if(i<0)return;snapshot("mcor."+type);U.cobj[i].ry=((numv(U.cobj[i].ry,0)+d)%360+360)%360;U.sel="co:"+i;rebuildThrottled();};
@@ -4151,6 +4190,8 @@ function renderMobile(){
      ${item("PP","ポンプ",has("pump")?"ON":"OFF",has("pump"),"mDockSelectCO('pump','m4t')","mDockPowerCO('pump','m4t')")}
      ${item("EV","LSEV",U.tw.ev?"ON":"OFF",!!U.tw.ev,"mDockEV()","mDockEV("+(!U.tw.ev)+")")}
      ${item("RF","ラフター",has("rough")?"25t":"OFF",has("rough"),"mDockSelectCO('rough','25t')","mDockPowerCO('rough','25t')")}
+     <div class="md-item"><button class="md-main" onclick="mDockAddTower()"><small>TC+</small><b>TC追加</b><span>JCL015</span></button></div>
+     <div class="md-item"><button class="md-main" onclick="mDockAddSafety()"><small>SP</small><b>安全通路</b><span>コーン＋バー</span></button></div>
     </div>`;
   }else if(_dock==="view"){
    const vb=(key,label,fn,on)=>`<button class="md-cmd ${on?"on":""}" onclick="${fn}"><small>${key}</small><b>${label}</b></button>`;
@@ -4210,7 +4251,9 @@ function renderMobile(){
   else{
    h=`<div class="ms-h">動かす・回す</div><div class="ms-line"><button class="ms-sq" onclick="mSelMove(-1,0)">←</button><button class="ms-sq" onclick="mSelMove(1,0)">→</button><button class="ms-sq" onclick="mSelMove(0,-1)">↑</button><button class="ms-sq" onclick="mSelMove(0,1)">↓</button><button class="ms-sq" onclick="mSelRot(15)">↻</button><button class="ms-sq" onclick="mSelRot(-15)">↺</button></div>`;
    if(s.kind==="co"){
+    const co=U.cobj[s.i];
     h+=`<div class="ms-h">サイズ</div><div class="ms-wrap">${s.sizes.map(z=>`<button class="ms-chip ${s.cur===z.key?"on":""}" onclick="mSelSize('${z.key}')">${z.label}</button>`).join("")}</div>
+     ${co.type==="towercrane"?`<div class="ms-h">設置高さ</div><div class="ms-row"><input class="ms-height" type="number" step="0.5" min="${craneSpec(co.size).selfH||1}" max="${craneSpec(co.size).maxInstallH||51}" value="${numv(co.h,craneSpec(co.size).selfH||10)}" onchange="setCOHeight(${s.i},this.value)"> <span class="ms-unit">m</span></div>`:""}
      <div class="ms-h">種類を変える</div><div class="ms-wrap">${Object.keys(COBJ_TYPES).filter(t=>!["walkzone","guard","obstacle"].includes(t)).map(t=>`<button class="ms-chip ${U.cobj[s.i].type===t?"on":""}" onclick="mSelType('${t}')">${COBJ_TYPES[t].label}</button>`).join("")}</div>`;
    }
    if(s.kind==="crane"){h+=`<div class="ms-h">機種</div><div class="ms-wrap">${Object.keys(CRANE_SPECS).map(m=>`<button class="ms-chip ${U.tw.craneModel===m?"on":""}" onclick="S('tw.craneModel','${m}');renderMobile()">${m}<small>半径${CRANE_SPECS[m].work}m</small></button>`).join("")}</div>`;}
