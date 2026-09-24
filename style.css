@@ -983,3 +983,63 @@ body:not(.simple) #view canvas{outline:none}
 @media (prefers-reduced-motion:reduce){
  #v4-panel-stage.show,body:not(.simple) #selcard{animation:none!important}
 }
+
+
+/* ============================================================
+   BimGen UI v4 / Stage 2.1 — Panel clarity + demo transition
+   ============================================================ */
+@media (min-width:821px){
+ body:not(.simple) #body{counter-reset:v4sec}
+ body:not(.simple) .tab-desc.v4-brief{
+  display:block;margin:0 0 11px;padding:11px 12px;border:1px solid #D8E4F6;border-radius:10px;
+  background:linear-gradient(135deg,#F4F8FF 0%,#FAFCFF 100%);color:#253044
+ }
+ body:not(.simple) .v4-brief .td-head{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
+ body:not(.simple) .v4-brief .td-head small{font-family:var(--mono);font-size:7px;font-weight:800;letter-spacing:.15em;color:#6A87B6}
+ body:not(.simple) .v4-brief .td-head b{font-size:15px;line-height:1.2;color:#14233A;letter-spacing:-.02em}
+ body:not(.simple) .v4-brief .td-copy{display:block;font-size:10.5px;line-height:1.55;color:#69768A}
+ body:not(.simple) .v4-brief .td-flow{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:9px}
+ body:not(.simple) .v4-brief .td-flow span{display:flex;flex-direction:column;gap:2px;min-width:0;padding:6px 7px;border:1px solid #E2E8F1;border-radius:7px;background:#fff;font-size:9px;font-weight:700;color:#435067;line-height:1.25}
+ body:not(.simple) .v4-brief .td-flow i{font-family:var(--mono);font-style:normal;font-size:7px;color:#4B82FF;letter-spacing:.08em}
+
+ body:not(.simple) #body>.sec{counter-increment:v4sec;border-radius:9px;margin-bottom:7px;border-color:#D9E0E9}
+ body:not(.simple) #body>.sec>.sec-h{position:relative;padding:9px 10px 9px 42px;background:#F4F6F9;color:#263348;font-size:11.5px}
+ body:not(.simple) #body>.sec>.sec-h:before{
+  content:counter(v4sec,decimal-leading-zero);position:absolute;left:10px;top:50%;transform:translateY(-50%);
+  font-family:var(--mono);font-size:8px;font-weight:800;letter-spacing:.08em;color:#6B7C93
+ }
+ body:not(.simple) #body>.sec.open>.sec-h{background:#EEF4FE;border-bottom-color:#D8E3F3;color:#172944}
+ body:not(.simple) #body>.sec.open>.sec-h:before{color:#4B82FF}
+ body:not(.simple) #body>.sec>.sec-b{padding:10px 11px}
+}
+
+/* REAL PROJECT entry cinematic */
+#v4-demo-enter{position:fixed;inset:0;z-index:95;display:none;overflow:hidden;background:#09101B;color:#fff;pointer-events:none}
+#v4-demo-enter.show{display:block;animation:v4deIn 180ms var(--v4-ease) both}
+#v4-demo-enter.out{display:block;animation:v4deOut 330ms var(--v4-ease) both}
+.v4de-grid{position:absolute;inset:-20%;opacity:.16;background-image:linear-gradient(rgba(103,142,201,.18) 1px,transparent 1px),linear-gradient(90deg,rgba(103,142,201,.18) 1px,transparent 1px);background-size:42px 42px;transform:perspective(760px) rotateX(62deg) translateY(24%);transform-origin:center bottom;animation:v4deGrid 6s linear infinite}
+.v4de-inner{position:absolute;left:clamp(24px,7vw,96px);bottom:clamp(54px,12vh,120px);width:min(620px,78vw)}
+.v4de-code{font-family:var(--mono);font-size:9px;font-weight:800;letter-spacing:.22em;color:#7298D4;opacity:0;animation:v4deRise 360ms var(--v4-ease) 70ms forwards}
+.v4de-line{width:54px;height:2px;margin:14px 0 16px;background:#4B82FF;box-shadow:0 0 16px rgba(75,130,255,.55);transform-origin:left;animation:v4deLine 420ms var(--v4-ease) 120ms both}
+.v4de-inner h2{margin:0;font-size:clamp(42px,7vw,82px);line-height:.88;letter-spacing:-.055em;font-weight:900;opacity:0;animation:v4deRise 430ms var(--v4-ease) 150ms forwards}
+.v4de-inner h2 span{color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.72)}
+.v4de-inner p{margin:18px 0 0;font-size:12px;font-weight:700;letter-spacing:.03em;color:#B5C0CF;opacity:0;animation:v4deRise 360ms var(--v4-ease) 240ms forwards}
+.v4de-meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:18px;opacity:0;animation:v4deRise 360ms var(--v4-ease) 300ms forwards}
+.v4de-meta span{padding:5px 8px;border:1px solid rgba(255,255,255,.11);border-radius:5px;background:rgba(255,255,255,.035);font-family:var(--mono);font-size:7px;letter-spacing:.11em;color:#7E90A8}
+.v4de-load{width:min(360px,70vw);height:2px;margin-top:24px;background:rgba(255,255,255,.09);overflow:hidden}
+.v4de-load i{display:block;width:100%;height:100%;background:#4B82FF;transform-origin:left;animation:v4deLoad 900ms cubic-bezier(.2,.8,.2,1) 80ms both;box-shadow:0 0 12px rgba(75,130,255,.55)}
+@keyframes v4deIn{from{opacity:0}to{opacity:1}}
+@keyframes v4deOut{from{opacity:1}to{opacity:0}}
+@keyframes v4deRise{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:none}}
+@keyframes v4deLine{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes v4deLoad{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes v4deGrid{to{background-position:42px 42px,42px 42px}}
+@media (max-width:720px){
+ .v4de-inner{left:22px;bottom:110px;width:calc(100vw - 44px)}
+ .v4de-inner h2{font-size:clamp(40px,13vw,64px)}
+ .v4de-inner p{font-size:11px}.v4de-meta span{font-size:6px}
+}
+@media (prefers-reduced-motion:reduce){
+ #v4-demo-enter.show,#v4-demo-enter.out,.v4de-grid,.v4de-code,.v4de-line,.v4de-inner h2,.v4de-inner p,.v4de-meta,.v4de-load i{animation:none!important}
+ #v4-demo-enter.show{display:block;opacity:1}.v4de-code,.v4de-inner h2,.v4de-inner p,.v4de-meta{opacity:1}.v4de-line,.v4de-load i{transform:none}
+}
