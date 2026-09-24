@@ -2004,7 +2004,26 @@ const TAB_DESC={
  "施工/CAD":["重機・車両・注記","重機や車両を置いて干渉を確認。注記で『なぜこの配置か』を残せます（OJT・申し送り用）。"],
  "検討":["判定・OJT・出力","判定の内訳と対処、OJT検討項目の進捗、検討シート・画像・BIMの出力をここから。"],
 };
-function tabDesc(tab){const d=TAB_DESC[tab];return d?`<div class="tab-desc"><b>${d[0]}</b><span>${d[1]}</span></div>`:"";}
+const TAB_QUICK={
+ "下敷き":["図面・地図を読込","縮尺を合わせる","真上で位置確認"],
+ "敷地・地形":["敷地を定義","道路・高低差を合わせる","道路使用を確認"],
+ "形状":["建物を追加","階数・寸法を入力","位置・回転を調整"],
+ "諸元":["案件名・用途","面積・階数","自動指標を確認"],
+ "近隣":["周辺建物を配置","高さ・離隔を調整","3Dで圧迫感確認"],
+ "仮設":["工程を選択","クレーン・仮囲い","3Dで配置調整"],
+ "施工/CAD":["重機・車両を配置","道路・歩行帯干渉","注記を残す"],
+ "検討":["注意・要検討を確認","OJT項目を確認","シート・BIM出力"],
+};
+const TAB_SYS={"下敷き":"BASE","敷地・地形":"TRACE","形状":"TRACE","諸元":"DATA","近隣":"CONTEXT","仮設":"PLAN","施工/CAD":"PLAN","検討":"REVIEW"};
+function tabDesc(tab){
+ const d=TAB_DESC[tab];if(!d)return "";
+ const q=TAB_QUICK[tab]||[];
+ return `<div class="tab-desc v4-brief">
+   <div class="td-head"><small>${TAB_SYS[tab]||"WORK"} / CURRENT TASK</small><b>${d[0]}</b></div>
+   <span class="td-copy">${d[1]}</span>
+   <div class="td-flow">${q.map((x,i)=>`<span><i>${String(i+1).padStart(2,"0")}</i>${x}</span>`).join("")}</div>
+  </div>`;
+}
 function ojtSection(tab){
  const items=OJT_CHECKS[tab]; if(!items)return "";
  if(!U.ojt)U.ojt={};
@@ -3340,13 +3359,16 @@ const REAL_DEMO={
  ojt:{s1:true,s3:true,s5:true,t1:true,t5:true,t6:true},
 };
 window.openRealDemo=()=>{
- resetToDefault();
- deepMerge(U,{p:REAL_DEMO.p,site:REAL_DEMO.site,road:REAL_DEMO.road,roadwork:REAL_DEMO.roadwork,tw:REAL_DEMO.tw});
- ["blocks","roads","cobj","subsurface","annot","nbs"].forEach(k=>{U[k]=JSON.parse(JSON.stringify(REAL_DEMO[k]));});
- U.site.poly=JSON.parse(JSON.stringify(REAL_DEMO.site.poly));U.site.h=[0,0,0,0];U.tw.fencePts=JSON.parse(JSON.stringify(REAL_DEMO.tw.fencePts));U.ojt=Object.assign({},REAL_DEMO.ojt);
- U.road.walkShow=false;U.tw.person=false;U.tw.poles=false;U.tab="仮設";U.tabGroup="3";
- closeStart();rebuild();renderPanel();renderBar();view("bird");
- toast(document.body.classList.contains("simple")?"実案件ベースのデモです。画面を回して、下の「工程」「仮設」を触ってみてください":"実案件ベースのデモを開きました（形状・階数・道路幅のみ実案件）","ok");
+ const loadDemo=()=>{
+  resetToDefault();
+  deepMerge(U,{p:REAL_DEMO.p,site:REAL_DEMO.site,road:REAL_DEMO.road,roadwork:REAL_DEMO.roadwork,tw:REAL_DEMO.tw});
+  ["blocks","roads","cobj","subsurface","annot","nbs"].forEach(k=>{U[k]=JSON.parse(JSON.stringify(REAL_DEMO[k]));});
+  U.site.poly=JSON.parse(JSON.stringify(REAL_DEMO.site.poly));U.site.h=[0,0,0,0];U.tw.fencePts=JSON.parse(JSON.stringify(REAL_DEMO.tw.fencePts));U.ojt=Object.assign({},REAL_DEMO.ojt);
+  U.road.walkShow=false;U.tw.person=false;U.tw.poles=false;U.tab="仮設";U.tabGroup="3";
+  closeStart();rebuild();renderPanel();renderBar();view("bird");
+  toast(document.body.classList.contains("simple")?"実案件ベースのデモです。画面を回して、下の「工程」「仮設」を触ってみてください":"実案件ベースのデモを開きました（形状・階数・道路幅のみ実案件）","ok");
+ };
+ if(typeof window.v4DemoEnter==="function")window.v4DemoEnter(loadDemo);else loadDemo();
 };
 function resetToDefault(){
  // U を初期状態に戻す（テクスチャ等は破棄）
@@ -3437,6 +3459,23 @@ window.v4PhaseFlash=(key,label)=>{
  el.innerHTML=`<span>PHASE ${V4_PHASE_NO[key]||"--"}</span><b>${label||""}</b><small>CONSTRUCTION SEQUENCE</small>`;
  requestAnimationFrame(()=>el.classList.add("show"));
  _v4FxTimer=setTimeout(()=>el.classList.remove("show"),720);
+};
+window.v4DemoEnter=(run)=>{
+ let el=document.getElementById("v4-demo-enter");
+ if(!el){el=document.createElement("div");el.id="v4-demo-enter";document.body.appendChild(el);}
+ el.className="";
+ el.innerHTML=`<div class="v4de-grid"></div><div class="v4de-inner">
+   <div class="v4de-code">REAL PROJECT / 01</div>
+   <div class="v4de-line"></div>
+   <h2>CONSTRUCTION<br><span>PLAN ONLINE</span></h2>
+   <p>都内共同住宅 / RC12F</p>
+   <div class="v4de-meta"><span>3D MODEL</span><span>TEMP WORKS</span><span>PROJECT CHECK</span></div>
+   <div class="v4de-load"><i></i></div>
+  </div>`;
+ requestAnimationFrame(()=>el.classList.add("show"));
+ setTimeout(()=>{try{run&&run();}catch(e){console.error(e);}},260);
+ setTimeout(()=>el.classList.add("out"),1050);
+ setTimeout(()=>{el.className="";el.innerHTML="";},1380);
 };
 window.v4PanelStage=(key,label)=>{
  if(document.body.classList.contains("simple"))return;
