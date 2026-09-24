@@ -245,6 +245,77 @@ function updateCameraTween(now){
  if(t>=1)_camTween=null;
 }
 window.cameraTween=cameraTween;
+
+let _selCamBase=null,_selCamKey=null,_selCueTimer=null;
+function _selectionModelKey(key){
+ const k=String(key||"");
+ if(k.startsWith("bpt:"))return "blk:"+k.split(":")[1];
+ if(k.startsWith("rpt:"))return "rd:"+k.split(":")[1];
+ if(k.startsWith("fpt:"))return "fence";
+ if(k.startsWith("spt:"))return "site";
+ return k;
+}
+function _selectionLabel(key){
+ const k=String(key||"");
+ if(k==="crane")return "TOWER CRANE";
+ if(k==="ev")return "LONG SPAN EV";
+ if(k==="fence"||k.startsWith("fpt:"))return "TEMPORARY FENCE";
+ if(k.startsWith("co:")){const c=U.cobj[+k.slice(3)],t=c&&COBJ_TYPES[c.type];return t?(t.label||"CONSTRUCTION OBJECT"):"CONSTRUCTION OBJECT";}
+ if(k.startsWith("blk:")||k.startsWith("bpt:")){const i=+(k.startsWith("blk:")?k.slice(4):k.slice(4).split(":")[0]);return ((U.blocks[i]||{}).label||"BUILDING").toUpperCase();}
+ if(k.startsWith("nb:"))return "NEIGHBOR BUILDING";
+ if(k.startsWith("rd:")||k.startsWith("rpt:"))return "ROAD";
+ if(k==="site"||k.startsWith("spt:"))return "SITE";
+ return "OBJECT";
+}
+function v4SelectionCue(key,release){
+ let el=document.getElementById("v4-selection-cue");
+ if(!el){el=document.createElement("div");el.id="v4-selection-cue";document.body.appendChild(el);}
+ clearTimeout(_selCueTimer);
+ el.className="";
+ el.innerHTML=release?`<small>VIEW</small><b>RELEASED</b>`:`<small>OBJECT LOCKED</small><b>${_selectionLabel(key)}</b>`;
+ requestAnimationFrame(()=>el.classList.add("show",release?"release":"lock"));
+ _selCueTimer=setTimeout(()=>{el.className="";},560);
+}
+function focusSelectionCamera(key,opt){
+ const o=opt||{},mk=_selectionModelKey(key);
+ if(!mk||["site","road","roadwalk","roadside"].includes(mk)||mk.startsWith("rd:"))return;
+ const target=dragMap&&dragMap[mk];if(!target||target.visible===false)return;
+ try{
+  target.updateWorldMatrix&&target.updateWorldMatrix(true,true);
+  const b3=new THREE.Box3().setFromObject(target);if(b3.isEmpty())return;
+  const center=new THREE.Vector3(),size=new THREE.Vector3();b3.getCenter(center);b3.getSize(size);
+  if(!_selCamBase)_selCamBase={theta:ctrl.theta,phi:ctrl.phi,r:ctrl.r,ty:ctrl.ty,cx:ctrl.cx,cz:ctrl.cz};
+  _selCamKey=String(key);
+  const simple=document.body.classList.contains("simple"),strength=simple?.24:.34,zoom=simple?.95:.90;
+  const span=Math.max(size.x,size.y*.75,size.z,1);
+  const minR=Math.max(30,Math.min(105,span*1.55));
+  const to={
+   theta:ctrl.theta,
+   phi:Math.min(1.42,Math.max(.3,ctrl.phi)),
+   r:Math.max(minR,ctrl.r*zoom),
+   cx:ctrl.cx+(center.x-ctrl.cx)*strength,
+   cz:ctrl.cz+(center.z-ctrl.cz)*strength,
+   ty:ctrl.ty+(Math.max(.6,center.y)-ctrl.ty)*(simple?.14:.20)
+  };
+  cameraTween(to,o.duration||280);
+  if(o.cue!==false)v4SelectionCue(key,false);
+ }catch(e){}
+}
+function releaseSelectionCamera(opt){
+ const o=opt||{},base=_selCamBase;
+ _selCamBase=null;_selCamKey=null;
+ if(base&&o.restore!==false)cameraTween(base,o.duration||300);
+ if(o.cue!==false)v4SelectionCue("",true);
+}
+function clearSelection(opt){
+ const o=opt||{};U.sel=null;renderSelCard();rebuild();
+ releaseSelectionCamera({restore:o.restore!==false,cue:o.cue!==false,duration:o.duration||300});
+ if(typeof renderMobile==="function")renderMobile();
+}
+window.focusSelectionCamera=focusSelectionCamera;
+window.releaseSelectionCamera=releaseSelectionCamera;
+window.clearSelection=clearSelection;
+
 let model=null, dragMap={}, dragObj=null, dragOff=new THREE.Vector3(), dragStart=null, _tapCand=null, _lpTimer=null;
 const ray=new THREE.Raycaster();
 
@@ -321,7 +392,7 @@ function setRy(k,deg){const r=objRyKey(k);if(!r)return;deg=((deg%360)+360)%360;
  else if(r[0]==="an"){if(U.annot[r[1]])U.annot[r[1]].ry=+deg.toFixed(0);}
  else if(r[0]==="rd"){if(U.roads[r[1]])U.roads[r[1]].ry=+deg.toFixed(0);}}
 el.addEventListener("pointerdown",(e)=>{
- _camTween=null; // 手で触れた瞬間は演出よりユーザー操作を優先
+ _camTween=null; // 手で触れた瞬間は進行中の演出を止める（フォーカス復帰点はまだ保持）
  ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);el.setPointerCapture(e.pointerId);
  // 多角形入力モード：地面クリックで頂点追加
  if(U.polyInput.on&&ctrl.ptrs.size===1){const gp=groundPoint(e);
@@ -360,7 +431,7 @@ el.addEventListener("pointerdown",(e)=>{
   if(o){snapshot();dragObj=o;U.sel=o.userData.dragKey;
    if(e.ctrlKey||e.metaKey){rotMode=true;rotStartX=e.clientX;rotStartRy=getRy(o.userData.dragKey);}
    else{rotMode=false;const gp=groundPoint(e);dragOff.set(o.position.x-gp.x,0,o.position.z-gp.z);dragStart={lx:o.position.x,lz:o.position.z,gx:gp.x,gz:gp.z};}
-   U.auto=false;syncBtns();renderSelCard();}else{if(U.sel){U.sel=null;renderSelCard();rebuild();}}}
+   U.auto=false;syncBtns();renderSelCard();}else{if(U.sel){clearSelection({restore:true});}}}
 });
 el.addEventListener("pointermove",(e)=>{
  if(_tapCand&&Math.hypot(e.clientX-_tapCand.x,e.clientY-_tapCand.y)>8){_tapCand=null;clearTimeout(_lpTimer);}
@@ -382,6 +453,7 @@ el.addEventListener("pointermove",(e)=>{
   }else{dragObj.position.x=gp.x+dragOff.x;dragObj.position.z=gp.z+dragOff.z;}
   return;}
  if(ctrl.ptrs.size===1){
+   if(_selCamBase){_selCamBase=null;_selCamKey=null;} // カメラを手で動かしたら、その視点を新しい基準にする
    if(e.shiftKey){ // Shift+ドラッグ＝パン（注視点を平行移動）
     panBy(e.clientX-prev[0], e.clientY-prev[1]);
     U.auto=false;
@@ -389,7 +461,7 @@ el.addEventListener("pointermove",(e)=>{
     ctrl.theta-=(e.clientX-prev[0])*.006;ctrl.phi=Math.min(1.52,Math.max(.12,ctrl.phi-(e.clientY-prev[1])*.004));U.auto=false;syncBtns();
    }
  }
- else if(ctrl.ptrs.size===2){const p=[...ctrl.ptrs.values()];
+ else if(ctrl.ptrs.size===2){if(_selCamBase){_selCamBase=null;_selCamKey=null;}const p=[...ctrl.ptrs.values()];
    const d=Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]);
    const mid=[(p[0][0]+p[1][0])/2,(p[0][1]+p[1][1])/2];
    // ピンチでズーム
@@ -402,9 +474,10 @@ el.addEventListener("pointermove",(e)=>{
 const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
  clearTimeout(_lpTimer);
  if(_tapCand&&Date.now()-_tapCand.t<550&&Math.hypot(e.clientX-_tapCand.x,e.clientY-_tapCand.y)<=8){const k=_tapCand.key;_tapCand=null;
-  if(U.sel!==k){U.sel=k;dragObj=null;rebuild();renderPanel();renderMobile();toast("選択しました。ドラッグで移動、長押しでメニュー");return;}}
+  if(U.sel!==k){U.sel=k;dragObj=null;rebuild();focusSelectionCamera(k,{duration:260});renderPanel();renderMobile();toast("選択しました。ドラッグで移動、長押しでメニュー");return;}}
  _tapCand=null;
  if(dragObj&&!rotMode){const k=dragObj.userData.dragKey,x=dragObj.position.x,z=dragObj.position.z;
+  const _clickLike=!!(dragStart&&Math.hypot(x-dragStart.lx,z-dragStart.lz)<0.12);
   if(k==="crane"){U.tw.craneX=+x.toFixed(1);U.tw.craneZ=+z.toFixed(1);}
   if(k==="ev"){U.tw.evX=+x.toFixed(1);U.tw.evZ=+z.toFixed(1);}
   if(k==="mixer"){U.tw.mixX=+x.toFixed(1);U.tw.mixZ=+z.toFixed(1);}
@@ -450,13 +523,13 @@ const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
   if(k.startsWith("rd:")){const r=U.roads[+k.slice(3)];if(r){r.dx=+(x-numv(U.site.dx,0)).toFixed(1);r.dz=+(z-numv(U.site.dz,0)).toFixed(1);}}
   if(k.startsWith("rpt:")){const [ri,vi]=k.slice(4).split(":").map(Number);const r=U.roads[ri];const p=r&&r.pts&&r.pts[vi];if(p){p.x=+x.toFixed(2);p.z=+z.toFixed(2);}}
   if(k.startsWith("bpt:")){const [bi,vi]=k.slice(4).split(":").map(Number);const b=U.blocks[bi];const p=b&&b.poly&&b.poly[vi];if(p){p.x=+x.toFixed(2);p.z=+z.toFixed(2);}}
-  dragObj=null;rebuild();renderPanel();}
+  dragObj=null;dragStart=null;rebuild();if(_clickLike)focusSelectionCamera(k,{duration:280});renderPanel();}
  else if(dragObj&&rotMode){
    if(U.snap){const k=dragObj.userData.dragKey;const cur=getRy(k);setRy(k,Math.round(cur/15)*15);rebuild();}
    dragObj=null;rotMode=false;renderPanel();}
 };
 el.addEventListener("pointerup",endPtr);el.addEventListener("pointercancel",endPtr);
-el.addEventListener("wheel",(e)=>{e.preventDefault(); _camTween=null; if((e.ctrlKey||e.metaKey)&&dragObj){setRy(dragObj.userData.dragKey,getRy(dragObj.userData.dragKey)+(e.deltaY>0?5:-5));rebuild();return;}
+el.addEventListener("wheel",(e)=>{e.preventDefault(); _camTween=null;if(_selCamBase){_selCamBase=null;_selCamKey=null;} if((e.ctrlKey||e.metaKey)&&dragObj){setRy(dragObj.userData.dragKey,getRy(dragObj.userData.dragKey)+(e.deltaY>0?5:-5));rebuild();return;}
  ctrl.r=Math.min(800,Math.max(20,ctrl.r*(1+e.deltaY*.001)));},{passive:false});
 function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
 el.addEventListener("dblclick",(e)=>{
@@ -1946,7 +2019,7 @@ document.addEventListener("keydown",(e)=>{
  }
  if(e.key==="Escape"&&typeof _sheet!=="undefined"&&_sheet&&!inField){closeSheet();return;}
  if(e.key==="Escape"&&U.under&&U.under._crop&&!inField){U.under._crop=null;renderPanel();toast("切り取りを中止しました");return;}
- if(e.key==="Escape"&&U.sel&&!inField){U.sel=null;renderSelCard();rebuild();return;}
+ if(e.key==="Escape"&&U.sel&&!inField){clearSelection({restore:true});return;}
  if((e.key==="Delete"||e.key==="Backspace")&&U.sel&&!inField&&!(U.polyInput&&U.polyInput.on)){e.preventDefault();deleteSel();return;}
  if((e.ctrlKey||e.metaKey)&&(e.key==="d"||e.key==="D")&&U.sel&&!inField){e.preventDefault();duplicateSel();return;}
  if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&(e.key==="z"||e.key==="Z")){
@@ -2143,14 +2216,14 @@ function slopeInfo(){
    dirX:rightAvg>leftAvg?"右（東側）が高い":rightAvg<leftAvg?"左（西側）が高い":"左右は水平"};
 }
 window.slopeInfo=slopeInfo;
-window.delB=(id)=>{snapshot();U.blocks=U.blocks.filter(b=>b.id!==id);if(U.sel&&U.sel.startsWith("blk:"))U.sel=null;rebuild();renderPanel();};
+window.delB=(id)=>{snapshot();U.blocks=U.blocks.filter(b=>b.id!==id);if(U.sel&&U.sel.startsWith("blk:"))U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
 window.addB=()=>{snapshot();U.blocks.push({id:Date.now(),label:"ブロック",f1:1,f2:2,w:15,d:10,dx:0,dz:8});rebuild();renderPanel();};
 window.delN=(i)=>{snapshot();U.nbs.splice(i,1);rebuild();renderPanel();};
 window.addN=()=>{snapshot();U.nbs.push({x:25,z:15,w:10,d:10,h:12,ry:0});rebuild();renderPanel();};
 window.setMode=(m)=>{snapshot();U.tw.mode=m;rebuild();renderPanel();};
 window.addCO=(type)=>{snapshot();const t=COBJ_TYPES[type]||COBJ_TYPES.truck;const sz=t.sizes[0];const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);const nx0=numv(U.site.dx,0),nz0=sdz2+sd2/2+6;const hd=(U.snap!==false)?nearestRoadHeading(nx0,nz0):null;
  U.cobj.push({type,size:sz.key,x:nx0,z:nz0,w:sz.w,d:sz.d,h:sz.h,ry:hd!=null?hd:0});U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();};
-window.delCO=(i)=>{snapshot();U.cobj.splice(i,1);if(U.sel==="co:"+i)U.sel=null;rebuild();renderPanel();};
+window.delCO=(i)=>{snapshot();U.cobj.splice(i,1);if(U.sel==="co:"+i)U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
 window.addSub=(kind)=>{
  snapshot();
  const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);
@@ -2161,12 +2234,12 @@ window.addSub=(kind)=>{
  U.subsurface.push({kind,x:roadX,z:roadZ,w:Math.min(rw*0.7,3),d:Math.max(sd2,20),ry:numv(U.road.ry,0)});
  U.sel="sub:"+(U.subsurface.length-1);rebuild();renderPanel();
 };
-window.delSub=(i)=>{snapshot();U.subsurface.splice(i,1);if(U.sel==="sub:"+i)U.sel=null;rebuild();renderPanel();};
+window.delSub=(i)=>{snapshot();U.subsurface.splice(i,1);if(U.sel==="sub:"+i)U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
 // ───── 注記（地面貼り付け）─────
 window.addAnnotZone=()=>{snapshot();const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);U.annot.push({type:"zone",x:numv(U.site.dx,0),z:sdz2,w:8,d:6,ry:0,color:"red"});U.sel="an:"+(U.annot.length-1);rebuild();renderPanel();};
 window.addAnnotText=()=>{const t=prompt("注記の文字を入力（40文字まで）","注意");if(t==null)return;snapshot();const sdz2=numv(U.site.dz,0);U.annot.push({type:"text",x:numv(U.site.dx,0),z:sdz2,ry:0,color:"red",text:t.slice(0,40),fsize:2.5});U.sel="an:"+(U.annot.length-1);rebuild();renderPanel();};
 window.editAnnotText=(i)=>{const a=U.annot[i];if(!a)return;const t=prompt("注記の文字を編集",a.text||"");if(t==null)return;snapshot();a.text=t.slice(0,40);rebuild();renderPanel();};
-window.delAnnot=(i)=>{snapshot();U.annot.splice(i,1);if(U.sel==="an:"+i)U.sel=null;rebuild();renderPanel();};
+window.delAnnot=(i)=>{snapshot();U.annot.splice(i,1);if(U.sel==="an:"+i)U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
 window.setCOSize=(i,key)=>{const c=U.cobj[i];if(!c)return;const sz=cobjSize(c.type,key);if(sz){snapshot();c.size=key;c.w=sz.w;c.d=sz.d;c.h=sz.h;}rebuild();renderPanel();};
 window.selCO=(i)=>{U.sel="co:"+i;rebuild();renderPanel();};
 window.setPage=async(v)=>{U.under.page=v;await renderPdfPage();};
@@ -3756,7 +3829,7 @@ function renderSelCard(force){
  else {el.style.display="none";return;}
  el.style.display="";
  const dupOK=/^(co:|an:|sub:|nb:|rd:|rpt:|blk:|bpt:)/.test(k);
- el.innerHTML=`<div class="sc-h"><div class="sc-title"><small>OBJECT SELECTED</small><span>${title}</span></div><span class="sc-x" onclick="U.sel=null;rebuild();renderPanel()">✕</span></div><div class="sc-b">${body}<div class="sc-actions">${dupOK?`<button class="btn btn-secondary" onclick="duplicateSel()">複製</button>`:""}${del?`<button class="btn btn-danger" onclick="${del}">削除</button>`:""}</div><div class="hint">Delete＝削除　Ctrl+D＝複製　Esc＝選択解除　↶で戻せます</div></div>`;
+ el.innerHTML=`<div class="sc-h"><div class="sc-title"><small>OBJECT SELECTED</small><span>${title}</span></div><span class="sc-x" onclick="clearSelection({restore:true})">✕</span></div><div class="sc-b">${body}<div class="sc-actions">${dupOK?`<button class="btn btn-secondary" onclick="duplicateSel()">複製</button>`:""}${del?`<button class="btn btn-danger" onclick="${del}">削除</button>`:""}</div><div class="hint">Delete＝削除　Ctrl+D＝複製　Esc＝選択解除　↶で戻せます</div></div>`;
 }
 window.renderSelCard=renderSelCard;
 // 選択中の物を複製（少しずらして配置）／削除
@@ -3779,7 +3852,7 @@ window.deleteSel=()=>{const k=U.sel;if(!k)return;snapshot();
  else if(k.startsWith("rd:")||k.startsWith("rpt:"))U.roads.splice(+(k.startsWith("rd:")?k.slice(3):k.slice(4).split(":")[0]),1);
  else if(k.startsWith("blk:")||k.startsWith("bpt:")){const i=+(k.startsWith("blk:")?k.slice(4):k.slice(4).split(":")[0]);U.blocks.splice(i,1);}
  else{toast("この物はここから削除できません");return;}
- U.sel=null;rebuild();renderPanel();toast("削除しました（↶で戻せます）");};
+ U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();toast("削除しました（↶で戻せます）");};
 
 // ───── スマホ簡易モード（見る→回す→工程→判定→検討シート）：表示の差し替えのみ ─────
 //  条件：タッチ端末 かつ 画面幅 ≤ 820px。localStorage bimgen_ui="full" で PC版UIに固定可
@@ -3829,24 +3902,24 @@ window.openSheet=(k)=>{
 };
 // 仮設シート用：指定タイプの車両を1台だけON/OFF、移動・回転
 function _cobjIdx(type){let last=-1;(U.cobj||[]).forEach((c,i)=>{if(c.type===type)last=i;});return last;}
-window.mToggleCO=(type,size)=>{const i=_cobjIdx(type);if(i>=0){snapshot();U.cobj.splice(i,1);U.sel=null;rebuild();renderPanel();}else{addCO(type);const k=U.cobj.length-1;if(size&&U.cobj[k]){const sz=cobjSize(type,size);if(sz){U.cobj[k].size=size;U.cobj[k].w=sz.w;U.cobj[k].d=sz.d;U.cobj[k].h=sz.h;}}rebuild();}renderMobile();};
+window.mToggleCO=(type,size)=>{const i=_cobjIdx(type);if(i>=0){snapshot();U.cobj.splice(i,1);U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();}else{addCO(type);const k=U.cobj.length-1;if(size&&U.cobj[k]){const sz=cobjSize(type,size);if(sz){U.cobj[k].size=size;U.cobj[k].w=sz.w;U.cobj[k].d=sz.d;U.cobj[k].h=sz.h;}}rebuild();}renderMobile();};
 window.mDockSelectCO=(type,size)=>{
  let i=_cobjIdx(type);
  if(i<0){
   addCO(type);i=U.cobj.length-1;
   if(size&&U.cobj[i]){const sz=cobjSize(type,size);if(sz){U.cobj[i].size=size;U.cobj[i].w=sz.w;U.cobj[i].d=sz.d;U.cobj[i].h=sz.h;}}
  }
- if(i>=0){U.sel="co:"+i;U._mEdit=true;rebuild();renderPanel();renderMobile();}
+ if(i>=0){U.sel="co:"+i;U._mEdit=true;rebuild();focusSelectionCamera("co:"+i,{duration:240});renderPanel();renderMobile();}
 };
 window.mDockPowerCO=(type,size)=>{
  const i=_cobjIdx(type);
- if(i>=0){snapshot();U.cobj.splice(i,1);if(U.sel==="co:"+i||String(U.sel||"").startsWith("co:"))U.sel=null;rebuild();renderPanel();renderMobile();return;}
+ if(i>=0){snapshot();U.cobj.splice(i,1);if(U.sel==="co:"+i||String(U.sel||"").startsWith("co:"))U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();renderMobile();return;}
  mDockSelectCO(type,size);
 };
 window.mDockCrane=(power)=>{
  if(power===false){if(U.tw.crane){S("tw.crane",false);}if(U.sel==="crane")U.sel=null;renderMobile();return;}
  if(!U.tw.crane)S("tw.crane",true);
- U.sel="crane";U._mEdit=true;rebuild();renderPanel();renderMobile();
+ U.sel="crane";U._mEdit=true;rebuild();focusSelectionCamera("crane",{duration:240});renderPanel();renderMobile();
 };
 window.mDockFence=(power)=>{
  if(power===false){if(U.tw.fence)S("tw.fence",false);if(String(U.sel||"").startsWith("fence")||String(U.sel||"").startsWith("fpt:"))U.sel=null;renderMobile();return;}
@@ -3856,7 +3929,7 @@ window.mDockFence=(power)=>{
 window.mDockEV=(power)=>{
  if(power===false){if(U.tw.ev)S("tw.ev",false);if(U.sel==="ev")U.sel=null;renderMobile();return;}
  if(!U.tw.ev)S("tw.ev",true);
- U.sel="ev";U._mEdit=true;rebuild();renderPanel();renderMobile();
+ U.sel="ev";U._mEdit=true;rebuild();focusSelectionCamera("ev",{duration:240});renderPanel();renderMobile();
 };
 window.mDockScaffold=()=>{S("tw.scaffold",!U.tw.scaffold);renderMobile();};
 
@@ -3901,7 +3974,7 @@ window.mSelMove=(dx,dz)=>{const s=_selInfo();if(!s)return;snapshot("msel");
 window.mSelRot=(d)=>{const k=U.sel;if(!k)return;if(!objRyKey(k)){toast("この物は回転できません");return;}snapshot("mselr");setRy(k,((getRy(k)+d)%360+360)%360);rebuildThrottled();};
 window.mSelSize=(key)=>{const s=_selInfo();if(!s||s.kind!=="co")return;setCOSize(s.i,key);renderMobile();};
 window.mSelType=(type)=>{const s=_selInfo();if(!s||s.kind!=="co")return;snapshot();const c=U.cobj[s.i];const t=COBJ_TYPES[type];if(!t)return;const sz=t.sizes[0];c.type=type;c.size=sz.key;c.w=sz.w;c.d=sz.d;c.h=sz.h;rebuild();renderPanel();renderMobile();};
-window.openObjMenu=(key)=>{U.sel=key;_sheet="obj";rebuild();renderPanel();renderMobile();};
+window.openObjMenu=(key)=>{U.sel=key;_sheet="obj";rebuild();focusSelectionCamera(key,{duration:260});renderPanel();renderMobile();};
 function renderMobile(){
  const on=document.body.classList.contains("simple");
  let top=document.getElementById("mtop"),bar=document.getElementById("mbar"),sheet=document.getElementById("msheet"),back=document.getElementById("mback"),dock=document.getElementById("mdock");
@@ -3933,7 +4006,7 @@ function renderMobile(){
    ab.dataset.controlKey=controlKey;
    const sub=(si.kind==="crane")?(U.tw.craneModel+" · R "+((CRANE_SPECS[U.tw.craneModel]||{}).work||"-")+"m"):(si.kind==="co"&&U.cobj[si.i]?((COBJ_TYPES[U.cobj[si.i].type]||{}).label||"OBJECT"):"MOVE / ROTATE");
    ab.innerHTML=`<div class="oc-shell">
-    <div class="oc-head"><div><span>OBJECT CONTROL</span><b>${si.label}</b><small>${sub}</small></div><button class="oc-close" onclick="U.sel=null;rebuild();renderMobile()" aria-label="操作を終了">×</button></div>
+    <div class="oc-head"><div><span>OBJECT CONTROL</span><b>${si.label}</b><small>${sub}</small></div><button class="oc-close" onclick="clearSelection({restore:true})" aria-label="操作を終了">×</button></div>
     <div class="oc-body">
      <div class="oc-dpad">
       <button class="oc-key oc-up" onclick="mSelMove(0,-1);v4Nudge('Z −1.0m')" aria-label="上へ">↑</button>
