@@ -616,12 +616,12 @@ body.simple #mback{z-index:50}
 /* 長押しでの文字選択・コピー吹き出しを無効化（入力欄は除く） */
 #view,#view canvas{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 body.simple,body.simple *:not(input):not(textarea):not(select){-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-@media (pointer:coarse){#bar,#tools,#panel,#selcard,#layers,#br-stack,#msheet,#mbar,#mtop,#mact,#mpeek{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}}
+@media (pointer:coarse){#bar,#tools,#panel,#selcard,#layers,#br-stack,#msheet,#mbar,#mtop,#mact,#mpeek,#mdock{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}}
 
 /* 長押し・タップ時の青いハイライトを消す（iOS） */
 *{-webkit-tap-highlight-color:transparent}
 /* PC・詳細版では簡易モード用の要素を完全に出さない（画面外の白い帯の原因） */
-body:not(.simple) #mtop,body:not(.simple) #mbar,body:not(.simple) #msheet,body:not(.simple) #mback,body:not(.simple) #mact,body:not(.simple) #mpeek{display:none!important}
+body:not(.simple) #mtop,body:not(.simple) #mbar,body:not(.simple) #msheet,body:not(.simple) #mback,body:not(.simple) #mact,body:not(.simple) #mpeek,body:not(.simple) #mdock{display:none!important}
 /* 初回オンボーディング（1画面）とコーチ表示 */
 #onb{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(22,36,61,.72)}
 .onb-card{width:min(520px,94vw);background:var(--surface);border-radius:14px;padding:22px 20px 16px;box-shadow:var(--sh-lg)}
@@ -790,3 +790,44 @@ body.simple #msheet[data-sheet="phase"] .ms-btn{min-height:42px;padding:5px 6px;
 body.simple #msheet[data-sheet="phase"] .ms-note{display:none}
 body.simple #msheet[data-sheet="phase"] .ms-row{margin:4px 0}
 body.simple #msheet[data-sheet="phase"] .ms-val{font-size:15px;min-width:64px}
+
+
+/* ============================================================
+   BimGen UI v4 / Floating 3D Docks
+   工程・仮設・表示は3Dを隠すシートを使わず、下部の薄い操作ドックで扱う
+   ============================================================ */
+#mdock{position:fixed;left:8px;right:8px;bottom:calc(70px + max(env(safe-area-inset-bottom),20px));z-index:57;display:none;
+  color:#fff;border:1px solid rgba(255,255,255,.11);border-radius:14px;background:rgba(9,15,25,.76);
+  -webkit-backdrop-filter:blur(16px) saturate(125%);backdrop-filter:blur(16px) saturate(125%);
+  box-shadow:0 10px 30px rgba(0,0,0,.24);overflow:hidden;animation:v4DockIn 180ms var(--v4-ease)}
+body.simple #mdock.open{display:block}
+@media (display-mode:standalone){#mdock{bottom:calc(70px + max(env(safe-area-inset-bottom),34px))}}
+.md-head{height:29px;display:flex;align-items:center;gap:8px;padding:0 8px 0 11px;border-bottom:1px solid rgba(255,255,255,.07)}
+.md-head span{font-family:var(--mono);font-size:7px;font-weight:800;letter-spacing:.15em;color:#7E9BC2}
+.md-head b{font-size:9px;font-weight:600;color:#B9C4D2}.md-head button{margin-left:auto;width:27px;height:24px;border:0;border-radius:7px;background:rgba(255,255,255,.045);color:#DDE5EF;font-size:16px}
+.md-scroll{display:flex;gap:6px;align-items:stretch;padding:7px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.md-scroll::-webkit-scrollbar{display:none}
+.md-cmd{position:relative;flex:0 0 66px;min-height:54px;padding:6px 5px;border:1px solid rgba(255,255,255,.09);border-radius:9px;background:rgba(255,255,255,.035);
+  color:#AAB7C8;font-family:inherit;text-align:left;transition:background 100ms,border-color 100ms,transform 80ms}
+.md-cmd small{display:block;font-family:var(--mono);font-size:7px;letter-spacing:.1em;color:#62758F}.md-cmd b{display:block;margin-top:5px;font-size:11px;white-space:nowrap}
+.md-cmd.on{border-color:rgba(75,130,255,.42);background:rgba(75,130,255,.14);color:#fff}.md-cmd.on small{color:#8DB1FF}.md-cmd:active{transform:scale(.95)}
+.md-item{position:relative;flex:0 0 76px;min-height:58px;border:1px solid rgba(255,255,255,.09);border-radius:9px;background:rgba(255,255,255,.035);overflow:hidden}
+.md-item.on{border-color:rgba(75,130,255,.38);background:rgba(75,130,255,.10)}
+.md-main{width:100%;height:100%;min-height:58px;padding:7px 24px 6px 7px;border:0;background:transparent;color:#AAB7C8;text-align:left;font-family:inherit}
+.md-main small{display:block;font-family:var(--mono);font-size:7px;letter-spacing:.1em;color:#62758F}.md-main b{display:block;margin-top:4px;font-size:11px;white-space:nowrap}.md-main span{display:block;margin-top:2px;font-family:var(--mono);font-size:7px;color:#64758C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.md-item.on .md-main{color:#fff}.md-item.on .md-main small,.md-item.on .md-main span{color:#86A9DF}
+.md-power{position:absolute;right:4px;top:4px;width:22px;height:22px;border:0;border-radius:7px;background:rgba(255,255,255,.04);color:#5F6E83;font-size:11px;line-height:1}
+.md-power.on{color:#6FA0FF;background:rgba(75,130,255,.12);box-shadow:0 0 10px rgba(75,130,255,.14)}
+.md-step{flex:0 0 auto;display:grid;grid-template-columns:28px 30px 34px 30px;align-items:center;gap:3px;min-height:54px;padding:5px 6px;border:1px solid rgba(255,255,255,.09);border-radius:9px;background:rgba(255,255,255,.03)}
+.md-step small{font-family:var(--mono);font-size:6px;color:#62758F}.md-step b{font-family:var(--mono);font-size:10px;text-align:center}.md-step button{height:28px;border:1px solid rgba(255,255,255,.09);border-radius:7px;background:rgba(255,255,255,.04);color:#fff;font-size:16px}
+body.simple.dock-open #mact{bottom:calc(166px + max(env(safe-area-inset-bottom),20px))}
+@media (display-mode:standalone){body.simple.dock-open #mact{bottom:calc(166px + max(env(safe-area-inset-bottom),34px))}}
+body.simple.dock-open #v4-nudge{bottom:calc(354px + max(env(safe-area-inset-bottom),20px))}
+@media (display-mode:standalone){body.simple.dock-open #v4-nudge{bottom:calc(354px + max(env(safe-area-inset-bottom),34px))}}
+body:not(.simple) #mdock{display:none!important}
+@keyframes v4DockIn{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:none}}
+@media (max-height:560px) and (orientation:landscape){
+  #mdock{left:6px;right:6px}.md-head{display:none}.md-scroll{padding:5px}.md-cmd,.md-item{min-height:48px}.md-main{min-height:48px}
+  body.simple.dock-open #mact{bottom:calc(130px + max(env(safe-area-inset-bottom),10px))}
+}
+@media (prefers-reduced-motion:reduce){#mdock{animation:none!important}}
