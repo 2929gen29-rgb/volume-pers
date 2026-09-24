@@ -16,8 +16,13 @@ function applyUIPref(){
  document.documentElement.style.setProperty("--bim-label-scale",(ls/100).toFixed(2));
  document.body&&document.body.setAttribute("data-edit-scope",UI_PREF.editScope||"all");
 }
-window.setUIFontScale=(v)=>{UI_PREF.fontScale=Math.max(85,Math.min(130,Math.round(numv(v,100))));saveUIPref();applyUIPref();renderSettings();};
-window.setLabelScale=(v)=>{UI_PREF.labelScale=Math.max(75,Math.min(160,Math.round(numv(v,100))));saveUIPref();applyUIPref();rebuild();renderSettings();};
+function syncSettingsValues(){
+ const f=document.getElementById("set-font-val"),l=document.getElementById("set-label-val");
+ if(f)f.textContent=Math.round(numv(UI_PREF.fontScale,100))+"%";
+ if(l)l.textContent=Math.round(numv(UI_PREF.labelScale,100))+"%";
+}
+window.setUIFontScale=(v)=>{UI_PREF.fontScale=Math.max(85,Math.min(130,Math.round(numv(v,100))));saveUIPref();applyUIPref();syncSettingsValues();};
+window.setLabelScale=(v)=>{UI_PREF.labelScale=Math.max(75,Math.min(160,Math.round(numv(v,100))));saveUIPref();applyUIPref();rebuild();syncSettingsValues();};
 window.setEditScope=(v)=>{UI_PREF.editScope=(v==="temp"?"temp":"all");saveUIPref();applyUIPref();renderSettings();renderLayers();renderBar();toast(UI_PREF.editScope==="temp"?"仮設編集ロック：建物・敷地・道路は動きません":"編集ロックを解除しました","ok");};
 applyUIPref();
 
@@ -419,7 +424,11 @@ function panBy(dxp,dyp){
  ctrl.cx += (-rx*dxp + fx*dyp)*k;
  ctrl.cz += (-rz*dxp + fz*dyp)*k;
 }
-function _tempDragKey(k){return ["crane","ev","mixer","rough","fence"].includes(k)||k.startsWith("fpt:")||k.startsWith("co:");}
+function _tempDragKey(k){
+ if(["crane","ev","mixer","rough","fence"].includes(k)||k.startsWith("fpt:"))return true;
+ if(k.startsWith("co:")){const c=U.cobj[+k.slice(3)];return !!c&&c.type!=="obstacle";}
+ return false;
+}
 function dragCandidates(){const small=["crane","ev","mixer","rough","poles","demo","road","roadwalk","roadside","fence"];const out=[],tempOnly=(UI_PREF.editScope==="temp");
  for(const[k,o]of Object.entries(dragMap)){
   if(tempOnly&&!_tempDragKey(k))continue;
@@ -3976,8 +3985,8 @@ window.renderSettings=()=>{
  const fs=Math.round(numv(UI_PREF.fontScale,100)),ls=Math.round(numv(UI_PREF.labelScale,100)),scope=UI_PREF.editScope||"all";
  el.innerHTML=`<div class="set-card"><div class="set-top"><div><small>SYSTEM SETTINGS / DISPLAY</small><b>表示と操作</b><span>説明書を読まなくても見やすい画面に調整</span></div><button onclick="closeSettings()">×</button></div>
   <div class="set-grid">
-   <section><em>01 / TEXT</em><h3>画面の文字サイズ</h3><p>左パネル・上部操作・設定カードの表示倍率。</p><div class="set-range"><input type="range" min="85" max="130" step="5" value="${fs}" oninput="setUIFontScale(this.value)"><b>${fs}%</b></div><div class="set-presets"><button onclick="setUIFontScale(90)">小</button><button onclick="setUIFontScale(100)">標準</button><button onclick="setUIFontScale(115)">大</button><button onclick="setUIFontScale(130)">特大</button></div></section>
-   <section><em>02 / 3D LABEL</em><h3>3D寸法・ラベル</h3><p>寸法値・道路幅・起算点など3D上の文字だけ変更。</p><div class="set-range"><input type="range" min="75" max="160" step="5" value="${ls}" oninput="setLabelScale(this.value)"><b>${ls}%</b></div><div class="set-presets"><button onclick="setLabelScale(85)">小</button><button onclick="setLabelScale(100)">標準</button><button onclick="setLabelScale(125)">大</button><button onclick="setLabelScale(150)">特大</button></div></section>
+   <section><em>01 / TEXT</em><h3>画面の文字サイズ</h3><p>左パネル・上部操作・設定カードの表示倍率。</p><div class="set-range"><input type="range" min="85" max="130" step="5" value="${fs}" oninput="setUIFontScale(this.value)"><b id="set-font-val">${fs}%</b></div><div class="set-presets"><button onclick="setUIFontScale(90);renderSettings()">小</button><button onclick="setUIFontScale(100);renderSettings()">標準</button><button onclick="setUIFontScale(115);renderSettings()">大</button><button onclick="setUIFontScale(130);renderSettings()">特大</button></div></section>
+   <section><em>02 / 3D LABEL</em><h3>3D寸法・ラベル</h3><p>寸法値・道路幅・起算点など3D上の文字だけ変更。</p><div class="set-range"><input type="range" min="75" max="160" step="5" value="${ls}" oninput="setLabelScale(this.value)"><b id="set-label-val">${ls}%</b></div><div class="set-presets"><button onclick="setLabelScale(85);renderSettings()">小</button><button onclick="setLabelScale(100);renderSettings()">標準</button><button onclick="setLabelScale(125);renderSettings()">大</button><button onclick="setLabelScale(150);renderSettings()">特大</button></div></section>
    <section class="wide"><em>03 / EDIT LOCK</em><h3>誤操作を防ぐ</h3><p>仮設計画中に建物や敷地をうっかり動かさないためのロック。</p><div class="set-mode"><button class="${scope==="all"?"on":""}" onclick="setEditScope('all')"><small>ALL OBJECTS</small><b>すべて動かす</b></button><button class="${scope==="temp"?"on":""}" onclick="setEditScope('temp')"><small>TEMP ONLY</small><b>仮設物だけ動かす</b></button></div></section>
   </div>
   <div class="set-foot"><button onclick="UI_PREF.fontScale=100;UI_PREF.labelScale=100;UI_PREF.editScope='all';saveUIPref();applyUIPref();rebuild();renderSettings();renderBar()">RESET / 標準に戻す</button><span>設定はこの端末に保存されます</span></div></div>`;
