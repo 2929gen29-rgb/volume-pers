@@ -1106,3 +1106,118 @@ body.simple #msheet[data-sheet="edit"]>.ms-row{color:#A7B4C5}
 body.simple #v4-selection-cue{top:calc(58px + max(env(safe-area-inset-top),0px));max-width:76vw}
 body.simple #v4-selection-cue b{max-width:48vw}
 @media (prefers-reduced-motion:reduce){#v4-selection-cue.show{animation:none!important;opacity:1;transform:translate(-50%,0)}}
+
+
+/* ============================================================
+   BimGen UI v4 / Stage 3.3 — legibility, touch ergonomics, phase FX
+   ============================================================ */
+
+/* PC: 文字を一段だけ大きく。情報量は維持しつつ可読性を上げる */
+@media (min-width:821px){
+ body:not(.simple) #panel{width:374px}
+ body:not(.simple) #body{font-size:12px;line-height:1.55}
+ body:not(.simple) #body label,
+ body:not(.simple) #body .f>span{font-size:11.5px}
+ body:not(.simple) #body input,
+ body:not(.simple) #body select,
+ body:not(.simple) #body textarea{font-size:12.5px;min-height:34px}
+ body:not(.simple) #body .btn{font-size:11.5px;min-height:34px}
+ body:not(.simple) #body>.sec>.sec-h{font-size:12.5px;min-height:38px}
+ body:not(.simple) .v4-brief .td-head b{font-size:16px}
+ body:not(.simple) .v4-brief .td-copy{font-size:11.5px}
+ body:not(.simple) .v4-brief .td-flow span{font-size:10px}
+ body:not(.simple) .step-l{font-size:11px}
+ body:not(.simple) #subtabs div{font-size:11px}
+ body:not(.simple) #bar{max-width:calc(100vw - 420px)}
+ body:not(.simple) #bar .btn{font-size:12px}
+ body:not(.simple) .tool{font-size:11.5px}
+ body:not(.simple) .hud-title b{font-size:12px}
+ body:not(.simple) .hud-row{font-size:11px}
+ body:not(.simple) .hud-v{font-size:11px}
+ body:not(.simple) #title .b{font-size:11px}
+ body:not(.simple) #title td{font-size:10px}
+ body:not(.simple) #title td+td{font-size:11px}
+ body:not(.simple) .sc-title span{font-size:13px}
+ body:not(.simple) .sc-b{font-size:11.5px}
+}
+
+/* スマホから詳細/PC版UIへ入った時：右上カードと左パネルの衝突を解消 */
+@media (max-width:820px) and (pointer:coarse){
+ body.touch-full:not(.simple) #bar{
+  position:fixed;left:8px;right:8px;top:8px;max-width:none;width:auto;
+  overflow-x:auto;overflow-y:hidden;white-space:nowrap;z-index:55;padding:5px;
+  -webkit-overflow-scrolling:touch
+ }
+ body.touch-full:not(.simple) #bar .btn{min-height:38px;font-size:12px;flex:none}
+ body.touch-full:not(.simple) #panel{
+  position:fixed;left:8px;right:8px;top:58px;width:auto;max-height:calc(100dvh - 126px);
+  z-index:50;border-radius:14px
+ }
+ body.touch-full:not(.simple) #phead{min-height:48px}
+ body.touch-full:not(.simple) #pwrap{max-height:calc(100dvh - 178px);overflow:auto}
+ body.touch-full:not(.simple) #tabs{position:sticky;top:0;z-index:2}
+ body.touch-full:not(.simple) #body{max-height:none;font-size:13px;padding:12px}
+ body.touch-full:not(.simple) #body label{font-size:12px}
+ body.touch-full:not(.simple) #body input,
+ body.touch-full:not(.simple) #body select,
+ body.touch-full:not(.simple) #body textarea{min-height:44px;font-size:16px}
+ body.touch-full:not(.simple) #body .btn{min-height:42px;font-size:12px}
+ body.touch-full:not(.simple) #tabgroups .tg.step{min-height:52px}
+ body.touch-full:not(.simple) .step-l{font-size:11px}
+ body.touch-full:not(.simple) #subtabs div{min-height:40px;font-size:11px;display:flex;align-items:center;justify-content:center}
+ body.touch-full:not(.simple) #title,
+ body.touch-full:not(.simple) #hud{display:none!important}
+ body.touch-full:not(.simple) #br-stack{display:none!important}
+ body.touch-full:not(.simple) #selcard{
+  left:8px;right:8px;top:auto;bottom:72px;width:auto;max-height:42dvh;z-index:62
+ }
+ body.touch-full:not(.simple) #layers{
+  left:8px;right:8px;top:auto;bottom:72px;width:auto;max-height:46dvh;z-index:63
+ }
+ body.touch-full:not(.simple) #tools{
+  top:auto!important;left:8px!important;right:8px!important;bottom:8px!important;max-width:none!important;
+  overflow-x:auto;overflow-y:hidden;z-index:58
+ }
+ body.touch-full:not(.simple) .tool-grp{flex:none}
+ body.touch-full:not(.simple) #mpill{z-index:70}
+}
+
+/* 指操作：タップ領域を少し広く、ドックは誤タップしにくく */
+@media (pointer:coarse){
+ body.simple .mbtn{min-height:58px}
+ body.simple .md-cmd{flex-basis:72px;min-height:58px}
+ body.simple .md-item{flex-basis:82px;min-height:62px}
+ body.simple .md-main{min-height:62px}
+ body.simple .md-power{width:26px;height:26px}
+ body.simple .oc-key{min-width:38px;min-height:38px}
+ body.simple .oc-rot{min-height:38px}
+}
+
+/* 工程変更：3Dの上に短い「施工シーケンス」演出 */
+#v4-phase-scene{position:fixed;inset:0;z-index:47;display:none;overflow:hidden;pointer-events:none;color:#fff;
+ background:linear-gradient(90deg,rgba(8,14,24,.70) 0%,rgba(8,14,24,.30) 42%,rgba(8,14,24,.06) 72%,transparent 100%)}
+#v4-phase-scene.show{display:block;animation:v4PhaseSceneIn 140ms ease-out both}
+#v4-phase-scene.out{display:block;animation:v4PhaseSceneOut 240ms var(--v4-ease) both}
+.v4ps-scan{position:absolute;inset:0;background:linear-gradient(110deg,transparent 0 38%,rgba(75,130,255,.12) 46%,transparent 54%);transform:translateX(-60%);animation:v4PhaseScan 620ms var(--v4-ease) both}
+.v4ps-main{position:absolute;left:clamp(24px,7vw,104px);top:50%;transform:translateY(-50%);min-width:260px}
+.v4ps-main>small{display:block;font-family:var(--mono);font-size:8px;font-weight:800;letter-spacing:.2em;color:#7FA4DD;opacity:0;animation:v4PhaseRise 280ms var(--v4-ease) 50ms forwards}
+.v4ps-route{display:flex;align-items:center;gap:10px;margin-top:10px;font-family:var(--mono)}
+.v4ps-route span{font-size:20px;color:#62748E}.v4ps-route i{font-style:normal;color:#4B82FF}.v4ps-route b{font-size:44px;line-height:1;color:#fff}
+.v4ps-main h2{margin:8px 0 0;font-size:clamp(34px,5.5vw,68px);line-height:.9;letter-spacing:-.045em;opacity:0;animation:v4PhaseRise 300ms var(--v4-ease) 85ms forwards}
+.v4ps-main p{margin:10px 0 0;font-size:13px;font-weight:700;color:#B8C5D5;opacity:0;animation:v4PhaseRise 280ms var(--v4-ease) 120ms forwards}
+.v4ps-line{position:absolute;left:clamp(24px,7vw,104px);bottom:20%;width:min(420px,62vw);height:2px;background:rgba(255,255,255,.08)}
+.v4ps-line i{display:block;width:100%;height:100%;background:#4B82FF;transform-origin:left;animation:v4PhaseLine 470ms var(--v4-ease) both;box-shadow:0 0 16px rgba(75,130,255,.55)}
+body.phase-switching #view canvas{filter:brightness(.78) saturate(.82);transform:scale(1.006);transition:filter 140ms ease,transform 420ms var(--v4-ease)}
+@keyframes v4PhaseSceneIn{from{opacity:0}to{opacity:1}}
+@keyframes v4PhaseSceneOut{from{opacity:1}to{opacity:0}}
+@keyframes v4PhaseScan{from{transform:translateX(-65%)}to{transform:translateX(65%)}}
+@keyframes v4PhaseRise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes v4PhaseLine{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@media (max-width:720px){
+ .v4ps-main{left:20px;top:45%}.v4ps-route b{font-size:38px}.v4ps-main h2{font-size:38px}.v4ps-main p{font-size:12px}
+ .v4ps-line{left:20px;bottom:26%;width:68vw}
+}
+@media (prefers-reduced-motion:reduce){
+ #v4-phase-scene.show,#v4-phase-scene.out,.v4ps-scan,.v4ps-main>small,.v4ps-main h2,.v4ps-main p,.v4ps-line i{animation:none!important}
+ body.phase-switching #view canvas{filter:none;transform:none;transition:none}
+}
