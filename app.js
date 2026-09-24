@@ -918,19 +918,19 @@ function rebuild(){
   geo.rotateX(-Math.PI/2);            // XY平面 → 地面(XZ)へ
   geo.translate(0,0.12,0);
   if(!U._exporting&&!L&&(U.sel==="site"||(U.sel||"").startsWith("spt:")))addVertexTools(siteG,sp,"spt:",()=>0.9,0x2E6FBE,0,true);
-  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0xb3bbc5:0xc5cdd6,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND,side:THREE.DoubleSide}));
+  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0x8f9dac:0xaab7c4,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND,side:THREE.DoubleSide}));
   sm.receiveShadow=!L;siteG.add(sm);
   // 外周ライン
   const lp=[]; sp.forEach(p=>lp.push(p.x,0.14,-p.z)); lp.push(sp[0].x,0.14,-sp[0].z);
   const lg=new THREE.BufferGeometry();lg.setAttribute("position",new THREE.BufferAttribute(new Float32Array(lp),3));
-  siteG.add(new THREE.Line(lg,new THREE.LineBasicMaterial({color:L?0x8a94a8:0x8290a3})));
+  siteG.add(new THREE.Line(lg,new THREE.LineBasicMaterial({color:L?0x8a94a8:0x58697d})));
  }else{
   // ── 矩形敷地（従来：四隅高さで傾斜）──
   const seg=12,vts=[],idx=[];
   for(let j=0;j<=seg;j++)for(let i=0;i<=seg;i++){const x=-sw/2+sw*i/seg,z=-sd/2+sd*j/seg;vts.push(x,terrainH(x,z,sw,sd,hh)+0.12,z);}
   for(let j=0;j<seg;j++)for(let i=0;i<seg;i++){const a=j*(seg+1)+i;idx.push(a,a+seg+1,a+1,a+1,a+seg+1,a+seg+2);}
   const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.BufferAttribute(new Float32Array(vts),3));geo.setIndex(idx);geo.computeVertexNormals();
-  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0xb3bbc5:0xc5cdd6,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND}));
+  const sm=new THREE.Mesh(geo,L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:(U.tw.mode==="build"||PH_GROUND||PH_STEEL)?0x8f9dac:0xaab7c4,transparent:PH_GROUND,opacity:PH_GROUND?0.38:1,depthWrite:!PH_GROUND}));
   sm.receiveShadow=!L;siteG.add(sm);
   if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo,5),new THREE.LineBasicMaterial({color:0x8a94a8}));siteG.add(e);}
  }
@@ -1130,7 +1130,7 @@ function rebuild(){
  const builtH=gl+built*fh;
 
  // 仮囲い（ゲート開口・高さ可変・全モード対応・ドラッグ移動/回転可）
- if(U.tw.fence && (U.tw.mode==="build" || PH_GROUND || PH_STEEL || U.tw.fenceAll)){
+ if(U.tw.fence && (U.tw.mode==="build" || PH_GROUND || PH_STEEL)){
   const fG=new THREE.Group(); fG.userData.dragKey="fence";
   const fh=Math.max(2,Math.min(8,numv(U.tw.fenceH,3)));        // パネル高さ
   const gate=U.tw.fenceGate||"front";                           // ゲート位置
@@ -1190,7 +1190,8 @@ function rebuild(){
   const cm=mat(spec.mast==="mini"?0x4B82FF:0xF2A33C);
   const a=(geo,x,y,z)=>{const m=new THREE.Mesh(geo,cm);m.position.set(x,y,z);m.castShadow=!L;cg.add(m);if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:0x16243d}));e.position.set(x,y,z);cg.add(e);}};
   if(spec.mast==="tube"){ // 円筒マスト・高自立：小さなベース＋丸マスト＋短い尾部（カタログ形状）
-   const mhT=Math.min(mh,(spec.selfH||26.5)+4);
+   const reqH=numv(U.tw.craneHeight,0)>0?numv(U.tw.craneHeight,0):Math.max(spec.selfH||26.5,builtH+8);
+   const mhT=Math.min(spec.maxInstallH||63,Math.max(spec.selfH||26.5,reqH));
    const b2=spec.base||2.5;
    a(new THREE.BoxGeometry(b2,.4,b2),0,.2,0);
    a(new THREE.CylinderGeometry(.31,.31,mhT,20),0,mhT/2,0);
@@ -1551,11 +1552,12 @@ function rebuild(){
    g.add(new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xF2A33C})));
    const dist=Math.hypot(B.x-A.x,B.z-A.z);
    U._dimDist=dist;
+   const ds=edgeLabelSprite(dist.toFixed(2)+" m");ds.position.set((A.x+B.x)/2,1.15,(A.z+B.z)/2);ds.scale.set(5.2,1.45,1);g.add(ds);
   } else U._dimDist=null;
  } else U._dimDist=null;
 
  scene.add(g);model=g;
- ctrl.ty=Math.max(builtH,H*.6)*.45;
+ // rebuildのたびに注視高さを戻さない。工程の階数変更中も現在のカメラを維持する。
  applyLayers(g);
 
  // UI v4 Stage 3：選択対象を3D側でも一目で分かるように、軽量な青アウトライン＋接地リングを表示
@@ -2354,6 +2356,8 @@ function updateShoshiChips(){
 }
 window.updateShoshiChips=updateShoshiChips;
 
+window.jumpTab=(group,tab)=>{U.tabGroup=group;U.tab=tab;renderPanel();};
+
 function renderPanel(){
  // 段階バー：作業の流れ順（① 下地を貼る → ② なぞる → ③ 仮設を計画 → ④ 検討・出力）
  // 内部のタブ名（U.tab）は従来どおり。表示名だけ流れに合わせる
@@ -2373,7 +2377,18 @@ function renderPanel(){
  const subBar=curG.tabs.length>1
    ? `<div id="subtabs">${curG.tabs.map(t=>`<div class="${U.tab===t?"on":""}" onclick="U.tab='${t}';renderPanel()">${TAB_LABEL[t]||t}</div>`).join("")}</div>`
    : "";
- $("#tabs").innerHTML=`<div id="tabgroups">${groupBar}</div>${subBar}`;
+ const FLOW_NAV=[
+   ["2","諸元","📋","案件",!!(U.p.name&&posv(U.p.floors,0))],
+   ["1","下敷き","🗺","元図",!!(U.under&&U.under.tex)],
+   ["2","敷地・地形","📐","敷地・道路",!!(siteArea()>0&&((U.roads||[]).length||U.road.show!==false))],
+   ["2","形状","🏢","建物",!!(U.blocks&&U.blocks.length)],
+   ["2","近隣","🏙","近隣",!!(U.nbs&&U.nbs.length)],
+   ["3","仮設","🏗","工程・仮設",!!(U.tw&&U.tw.mode)],
+   ["3","施工/CAD","🚚","重機・通路",!!(U.cobj&&U.cobj.length)],
+   ["4","検討","✓","判定・出力",false]
+ ];
+ const flowBar=`<div id="project-flow"><div class="pf-head"><small>PROJECT FLOW</small><b>実案件の入力・検討</b><span>どこからでも移動できます</span></div><div class="pf-scroll">${FLOW_NAV.map(([g,t,ic,l,done],i)=>`<button class="pf-step ${U.tab===t?"on":""} ${done?"done":""}" onclick="jumpTab('${g}','${t}')"><i>${done?"✓":String(i+1).padStart(2,"0")}</i><span>${ic}</span><b>${l}</b></button>`).join("")}</div></div>`;
+ $("#tabs").innerHTML=`<div id="tabgroups">${groupBar}</div>${subBar}${flowBar}`;
  let h="";
  if(U.tab==="諸元"){
   // 自動算出プレビュー用の値
@@ -2669,17 +2684,7 @@ function renderPanel(){
   h=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin-bottom:4px">工程フェーズ（施工の流れ順）</div>
   <div class="phase-grid">${PHASES.map(([k,l,ic])=>`<button class="btn phase ${U.tw.mode===k?"active":""}" onclick="setMode('${k}')"><span>${ic}</span>${l}</button>`).join("")}</div>`;;
   if(U.tw.mode==="plan"){
-   const secPlanFence = CK("仮囲いを表示（完成イメージにも重ねる）",U.tw.fenceAll,"(v)=>S('tw.fenceAll',v)")
-    +(U.tw.fenceAll?`<div style="padding-left:10px">
-       ${SL("パネル高さ m",U.tw.fenceH,"(v)=>S('tw.fenceH',v)",2,8,0.5)}
-       <label class="f"><span>ゲート（出入口）位置</span><select onchange="S('tw.fenceGate',this.value)">
-         <option value="front" ${U.tw.fenceGate==="front"?"selected":""}>前面（道路側）</option>
-         <option value="left" ${U.tw.fenceGate==="left"?"selected":""}>左側</option>
-         <option value="right" ${U.tw.fenceGate==="right"?"selected":""}>右側</option>
-         <option value="none" ${U.tw.fenceGate==="none"?"selected":""}>開口なし（全周閉鎖）</option>
-       </select></label></div>`:"")
-    +`<div class="hint">完成パースは通常そのまま見せますが、近隣説明で「工事中の囲い」を見せたい時に使えます。重機・足場は「施工中」モードで。</div>`;
-   h += SEC("仮囲い（任意）", secPlanFence, {key:"tw-planfence", icon:"🚧", open:false});
+   h += `<div class="phase-complete-note"><b>🏢 完成フェーズ</b><span>仮囲い・足場・クレーン・重機・安全通路などの仮設物は自動で非表示になります。</span></div>`;
   }
   if(U.tw.mode==="demo"){
    h+=`<div class="hint" style="margin:0 0 8px">解体予定の既存建物（赤×印）を表示。重機をドラッグ配置して解体計画を検討できます。新築ボリュームは非表示になります。</div>`
@@ -2733,7 +2738,8 @@ function renderPanel(){
   else if(U.tw.mode==="build"){
    const secCrane = SL("躯体の進捗（〜階）",U.tw.step,"(v)=>S('tw.step',v)",1,Math.max(1,Math.round(posv(U.p.floors,14))),1)
     +CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")
-    +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${CRANE_SPECS[k].label}</option>`).join("")}</select></label><div style="font-size:10px;color:#2552A0;margin:-2px 0 4px">作業半径 ${craneSpec(U.tw.craneModel).work}m ／ 定格 ${craneSpec(U.tw.craneModel).cap}t ／ 尾部 ${craneSpec(U.tw.craneModel).tail}m</div>${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}${CK("作業半径・尾部旋回の円",U.tw.radius,"(v)=>S('tw.radius',v)")}</div>`:"")
+    +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${CRANE_SPECS[k].label}</option>`).join("")}</select></label><div style="font-size:10px;color:#2552A0;margin:-2px 0 4px">作業半径 ${craneSpec(U.tw.craneModel).work}m ／ 定格 ${craneSpec(U.tw.craneModel).cap}t ／ 尾部 ${craneSpec(U.tw.craneModel).tail}m</div>${craneSpec(U.tw.craneModel).mast==="tube"?SL("設置高さ m",numv(U.tw.craneHeight,0)||craneSpec(U.tw.craneModel).selfH,"(v)=>S('tw.craneHeight',v)",craneSpec(U.tw.craneModel).selfH,craneSpec(U.tw.craneModel).maxInstallH||51,0.5):""}${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}${CK("作業半径・尾部旋回の円",U.tw.radius,"(v)=>S('tw.radius',v)")}</div>`:"")
+    +`<button class="addbtn tc-add" onclick="addTowerCrane('JCL015')">＋ タワークレーンをもう1台追加</button><div class="hint">追加TCは施工オブジェクトとして複数配置できます。選択後に機種・設置高さ・位置・旋回を変更できます。</div>`
     +CK("ラフタークレーン（ドラッグ可）",U.tw.rough,"(v)=>S('tw.rough',v)");
    const secFence = fenceSectionHtml()
     +CK("外部足場＋養生シート",U.tw.scaffold,"(v)=>S('tw.scaffold',v)");
@@ -2752,9 +2758,9 @@ function renderPanel(){
  if(U.tab==="施工/CAD"){
   // 施工オブジェクトを追加（カテゴリ別に整理して選びやすく）
   const COBJ_CATS=[
-    {name:"🏗 重機・クレーン", keys:["rough","backhoe","found"]},
+    {name:"🏗 重機・クレーン", keys:["towercrane","rough","backhoe","found"]},
     {name:"🚚 車両", keys:["mixer","pump","truck"]},
-    {name:"🚧 仮設・人員", keys:["stage","lsev","komalift","temp","guard","walkzone"]},
+    {name:"🚧 仮設・人員", keys:["safepath","stage","lsev","komalift","temp","guard","walkzone"]},
     {name:"⚠ 支障物", keys:["obstacle"]},
   ];
   h=`<div style="font-size:11px;font-weight:700;color:var(--mut);margin:0 0 6px">施工オブジェクトを追加</div>`;
@@ -2972,7 +2978,7 @@ function renderTitle(){
 }
 function syncBtns(){renderBar();}
 function view(k,opt){const H=posv(U.p.height,42),o=opt||{};
- const t={theta:ctrl.theta,phi:ctrl.phi,r:ctrl.r,ty:ctrl.ty,cx:numv(U.site.dx,0),cz:numv(U.site.dz,0)};
+ const t={theta:ctrl.theta,phi:ctrl.phi,r:ctrl.r,ty:Math.max(3,H*.22),cx:numv(U.site.dx,0),cz:numv(U.site.dz,0)};
  if(k==="bird"){t.theta=Math.PI/4+.28;t.phi=.9;t.r=Math.max(H*2.2,130);}
  if(k==="eye"){t.phi=1.45;t.r=Math.max(H*1.7,95);}
  if(k==="front"){t.theta=Math.PI/2;t.phi=1.35;t.r=Math.max(H*2,115);}
@@ -3368,7 +3374,7 @@ function savePNG(){
 function _shot(viewKey){
  // 指定視点で1枚撮影して dataURL を返す（UIは呼び出し側で隠す）
  const save={theta:ctrl.theta,phi:ctrl.phi,r:ctrl.r,cx:ctrl.cx,cz:ctrl.cz,ty:ctrl.ty,auto:U.auto};
- view(viewKey);
+ view(viewKey,{instant:true});
  camera.position.set(ctrl.cx+ctrl.r*Math.sin(ctrl.phi)*Math.cos(ctrl.theta),ctrl.ty+ctrl.r*Math.cos(ctrl.phi),ctrl.cz+ctrl.r*Math.sin(ctrl.phi)*Math.sin(ctrl.theta));
  camera.lookAt(ctrl.cx,ctrl.ty,ctrl.cz); renderer.render(scene,camera);
  const url=renderer.domElement.toDataURL("image/jpeg",0.86);
