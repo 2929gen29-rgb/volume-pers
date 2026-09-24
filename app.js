@@ -7,6 +7,20 @@ if(!webglOK()){document.body.innerHTML='<div style="max-width:520px;margin:80px 
 const $=(q)=>document.querySelector(q);
 const numv=(v,fb)=>{const n=parseFloat(v);return isFinite(n)?n:fb};
 const posv=(v,fb)=>{const n=parseFloat(v);return isFinite(n)&&n>0?n:fb};
+const UI_PREF_KEY="bimgen_ui_pref_v1";
+const UI_PREF=(()=>{try{return Object.assign({fontScale:100,labelScale:100,editScope:"all"},JSON.parse(localStorage.getItem(UI_PREF_KEY)||"{}"));}catch(e){return {fontScale:100,labelScale:100,editScope:"all"};}})();
+function saveUIPref(){try{localStorage.setItem(UI_PREF_KEY,JSON.stringify(UI_PREF));}catch(e){}}
+function applyUIPref(){
+ const fs=Math.max(85,Math.min(130,numv(UI_PREF.fontScale,100))),ls=Math.max(75,Math.min(160,numv(UI_PREF.labelScale,100)));
+ document.documentElement.style.setProperty("--bim-ui-scale",(fs/100).toFixed(2));
+ document.documentElement.style.setProperty("--bim-label-scale",(ls/100).toFixed(2));
+ document.body&&document.body.setAttribute("data-edit-scope",UI_PREF.editScope||"all");
+}
+window.setUIFontScale=(v)=>{UI_PREF.fontScale=Math.max(85,Math.min(130,Math.round(numv(v,100))));saveUIPref();applyUIPref();renderSettings();};
+window.setLabelScale=(v)=>{UI_PREF.labelScale=Math.max(75,Math.min(160,Math.round(numv(v,100))));saveUIPref();applyUIPref();rebuild();renderSettings();};
+window.setEditScope=(v)=>{UI_PREF.editScope=(v==="temp"?"temp":"all");saveUIPref();applyUIPref();renderSettings();renderLayers();renderBar();toast(UI_PREF.editScope==="temp"?"仮設編集ロック：建物・敷地・道路は動きません":"編集ロックを解除しました","ok");};
+applyUIPref();
+
 
 // ───── 状態 ─────
 const U={
@@ -656,7 +670,7 @@ function edgeLabelSprite(text){
   const r=px*0.35,W=cv.width,H=cv.height;c2.beginPath();c2.moveTo(r,0);c2.lineTo(W-r,0);c2.quadraticCurveTo(W,0,W,r);c2.lineTo(W,H-r);c2.quadraticCurveTo(W,H,W-r,H);c2.lineTo(r,H);c2.quadraticCurveTo(0,H,0,H-r);c2.lineTo(0,r);c2.quadraticCurveTo(0,0,r,0);c2.closePath();c2.fill();
   c2.fillStyle="#16243D";c2.fillText(text,px*0.35,H/2);tex=new THREE.CanvasTexture(cv);tex.minFilter=THREE.LinearFilter;_lblCache[text]=tex;}
  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false,depthWrite:false,transparent:true}));
- const asp=tex.image.width/tex.image.height; sp.scale.set(1.6*asp,1.6,1); return sp;
+ const asp=tex.image.width/tex.image.height,ls=Math.max(.75,Math.min(1.6,numv(UI_PREF.labelScale,100)/100)); sp.scale.set(1.6*asp*ls,1.6*ls,1); return sp;
 }
 function addVertexTools(parent,pts,keyPrefix,yAt,color,ryDeg,showLabels){
  const n=pts.length;
@@ -3662,32 +3676,56 @@ window.openBimSample=()=>{
  closeStart(); rebuild();renderPanel();renderBar();view("bird");
  toast("BIM連携用フルサンプルを開きました。出力▾→BIM出力 で全項目入りの bim.json が出ます","ok");
 };
-// 実案件ベースデモ：都内の狭小地・共同住宅12階の実案件から「形状・階数・道路幅」だけを使用（公開版。個別情報なし）
+// 実案件ベースデモ：2026-09-24 ユーザー確定版 #5 を正とする。
+// 公開リポジトリには番地・緯度経度などの個別識別情報を持ち込まず、計画条件・形状・施工配置だけを反映。
+const REAL_DEMO_REV="20260924-5";
 const REAL_DEMO={
- p:{name:"実案件ベースデモ（都内・共同住宅12階）",use:"共同住宅（分譲）",struct:"RC",floors:12,height:37,
-    note:"実案件の敷地形状・階数・前面道路幅のみを使用したデモ。個別情報は含みません。塔状比4超の狭小地・前面道路下に地下鉄あり。",
-    bcrLimit:80,farLimit:600,bcrNote:"商業地域・防火地域内耐火建築物"},
- site:{w:15.6,d:14,gl:0,h:[0,0,0,0],slopeDir:"flat",slopeDiff:0,poly:[{x:-8.1,z:8.4},{x:1.5,z:8.4},{x:7.5,z:8.4},{x:7.8,z:-4.4},{x:2.6,z:-5.0},{x:2.4,z:-5.0},{x:-5.4,z:-5.4},{x:-8.2,z:-5.6}]},
- blocks:[{id:1,label:"住棟",f1:1,f2:12,w:13.2,d:10.2,dx:-0.7,dz:2.0,ry:0}],
- road:{w:16.3,side:"none",show:false,slope:0,walkShow:false},
- roads:[{pts:[{x:-30,z:16.6},{x:30,z:16.6}],w:16.3,walkL:0,walkR:0,dx:0,dz:0,ry:0}],
- roadwork:{mixerSize:"8t",pumpSize:"m4t",mountUp:0},
- tw:{mode:"build",step:6,crane:true,craneModel:"JCL015",craneX:-5.8,craneZ:7.1,craneRot:270,craneJib:15,ev:true,evX:3.1,evZ:8.1,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceShape:"poly",
-     fencePts:[{x:-8.1,z:8.4},{x:1.5,z:8.4},{x:7.5,z:8.4},{x:7.8,z:-4.4},{x:2.6,z:-5.0},{x:2.4,z:-5.0},{x:-5.4,z:-5.4},{x:-8.2,z:-5.6}],fenceGateSeg:1,
-     scaffold:true,poles:false,person:false,pileLen:39,pilePitch:4,pileDia:1.0},
- cobj:[{type:"mixer",size:"8t",x:-6,z:13.2,ry:90},{type:"pump",size:"m4t",x:4,z:13.2,ry:90},{type:"guard",size:"std",x:-10,z:10,ry:0},{type:"walkzone",size:"std",x:0,z:10.2,ry:90}],
- subsurface:[{kind:"subway",x:0,z:18,w:12,d:70,ry:90}],
- annot:[{type:"text",x:-20,z:18,ry:0,color:"red",text:"地下鉄直下：杭長の検討要",fsize:1.6},{type:"text",x:-0.7,z:-8,ry:0,color:"amber",text:"TC 建物内設置（塔状比4超）",fsize:1.4},{type:"text",x:-6,z:22,ry:0,color:"green",text:"生コン 敷地側に縦列（道路使用許可）",fsize:1.4}],
+ p:{name:"実案件ベースデモ（都内・共同住宅12階）",use:"共同住宅（分譲）",struct:"RC",floors:12,height:37,addr:"",
+    siteArea:"200.83",bldgArea:"142.12",tArea:"1485.3",consArea:"1668",privArea:"1170",units:"21",
+    note:"実案件の計画条件を匿名化したデモ。塔状比4超の狭小地・前面道路下に地下鉄あり。",
+    aiIncludeAddr:false,bcrLimit:100,farLimit:600,bcrNote:"商業地域・防火地域内耐火建築物"},
+ site:{w:15.6,d:14,dx:0,dz:0,gl:0,h:[0,0,0,0],slopeDir:"flat",slopeDiff:0,
+    poly:[{x:-8.1,z:8.4},{x:1.5,z:8.4},{x:7.5,z:8.4},{x:7.8,z:-4.4},{x:2.6,z:-5},{x:2.4,z:-5},{x:-5.4,z:-5.4},{x:-8.2,z:-5.6}]},
+ blocks:[{id:1,label:"住棟",f1:1,f2:12,w:13.2,d:10.2,dx:-0.8,dz:1.5,ry:0}],
+ road:{w:16.3,side:"none",dx:0,dz:0,ry:0,show:false,slope:0,walkDz:0,walkW:1.6,walkShow:false,sideDx:0,sideDz:0,splitWalk:false},
+ roadwork:{mixerSize:"8t",pumpSize:"m4t",mountUp:0,permitPolice:"",permitRoad:"",permitOffice:""},
+ roads:[{pts:[{x:-41.56,z:15.86},{x:38.7,z:16.26}],w:14,walkL:2,walkR:0,dx:.7,dz:1.6,ry:0}],
+ subsurface:[{kind:"subway",x:-2.9,z:17.8,w:12,d:70,ry:90}],
+ annot:[
+   {type:"text",x:-27.6,z:16,ry:0,color:"red",text:"地下鉄直下：杭長の検討要",fsize:1.6},
+   {type:"text",x:-.7,z:-8,ry:0,color:"amber",text:"TC 建物内設置（塔状比4超）",fsize:1.4},
+   {type:"text",x:.1,z:21.9,ry:0,color:"green",text:"生コン 敷地側に縦列（道路使用許可）",fsize:1.4}
+ ],
  nbs:[{x:15.5,z:2,w:14,d:13,h:36,ry:0},{x:-16.5,z:2,w:14,d:13,h:27,ry:0}],
+ tw:{mode:"build",step:10,fenceShape:"poly",fencePts:[{x:-8.1,z:8.4},{x:-1.84,z:8.42},{x:7.5,z:8.4},{x:7.8,z:-4.4},{x:2.6,z:-5},{x:2.4,z:-5},{x:-5.4,z:-5.4},{x:-8.2,z:-5.6}],fenceGateSeg:1,
+    pitDepth:4,retainMargin:1,pilePitch:4,pileDia:1,pileLen:39,oldPiles:false,oldPitch:4,oldRot:0,oldExtend:2,oldDx:0,oldDz:0,steelPitch:7,
+    crane:true,craneModel:"JCL015_H",craneHeight:0,craneX:-6,craneZ:7,craneJib:15,craneRot:270,radius:true,
+    ev:false,evX:3.1,evZ:8.1,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceAll:false,fenceDx:0,fenceDz:0,fenceRy:0,fenceW:0,fenceD:0,
+    scaffold:true,poles:false,person:false,mixer:false,mixX:-12,mixZ:16.8,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
+ cobj:[
+   {type:"mixer",size:"8t",x:-4.8,z:13.6,ry:90,phase:"build"},
+   {type:"pump",size:"m4t",x:3.7,z:13.5,ry:270,phase:"build"},
+   {type:"guard",size:"std",x:-10,z:10,ry:0,phase:"build"},
+   {type:"walkzone",size:"std",x:0,z:10.2,ry:90,phase:"build"},
+   {type:"lsev",size:"h32",x:3.2,z:7.3,w:3.2,d:5,h:32,ry:182,phase:"build"},
+   {type:"temp",size:"asagao",x:2.5,z:8.7,w:8,d:1.8,h:.2,ry:0,phase:"build",mountH:21},
+   {type:"temp",size:"asagao",x:-4,z:8.9,w:8,d:1.8,h:.2,ry:0,phase:"build",mountH:12},
+   {type:"temp",size:"asagao",x:2.5,z:8.8,w:8,d:1.8,h:.2,ry:0,phase:"build",mountH:12},
+   {type:"temp",size:"asagao",x:-3.7,z:8.7,w:8,d:1.8,h:.2,ry:0,phase:"build",mountH:21},
+   {type:"obstacle",size:"tree",x:-2.4,z:11.2,w:3,d:3,h:6,ry:0,phase:"build"},
+   {type:"safepath",size:"18m",x:-.1,z:15.7,w:1.2,d:18,h:.8,ry:90,phase:"build"}
+ ],
  ojt:{s1:true,s3:true,s5:true,t1:true,t5:true,t6:true},
+ layers:{site:true,building:true,nbs:true,fence:true,scaffold:true,crane:true,vehicles:true,tempobj:true,safety:true,obstacles:true,annot:true,sub:true,roads:true,under:true,cobj:true},
+ roadcond:{lane:6,walk:2.5,side:"front"}
 };
 window.openRealDemo=()=>{
  const loadDemo=()=>{
   resetToDefault();
-  deepMerge(U,{p:REAL_DEMO.p,site:REAL_DEMO.site,road:REAL_DEMO.road,roadwork:REAL_DEMO.roadwork,tw:REAL_DEMO.tw});
+  deepMerge(U,{p:REAL_DEMO.p,site:REAL_DEMO.site,road:REAL_DEMO.road,roadwork:REAL_DEMO.roadwork,tw:REAL_DEMO.tw,layers:REAL_DEMO.layers,roadcond:REAL_DEMO.roadcond});
   ["blocks","roads","cobj","subsurface","annot","nbs"].forEach(k=>{U[k]=JSON.parse(JSON.stringify(REAL_DEMO[k]));});
   U.site.poly=JSON.parse(JSON.stringify(REAL_DEMO.site.poly));U.site.h=[0,0,0,0];U.tw.fencePts=JSON.parse(JSON.stringify(REAL_DEMO.tw.fencePts));U.ojt=Object.assign({},REAL_DEMO.ojt);
-  U.road.walkShow=false;U.tw.person=false;U.tw.poles=false;U.tab="仮設";U.tabGroup="3";
+  U.road.walkShow=false;U.tw.person=false;U.tw.poles=false;U.snap=false;U.tab="仮設";U.tabGroup="3";
   closeStart();rebuild();renderPanel();renderBar();view("bird",{instant:true});
   toast(document.body.classList.contains("simple")?"実案件ベースのデモです。画面を回して、下の「工程」「仮設」を触ってみてください":"実案件ベースのデモを開きました（形状・階数・道路幅のみ実案件）","ok");
  };
