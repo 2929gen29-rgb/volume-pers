@@ -1170,7 +1170,7 @@ function rebuild(){
   c._warn=warn;
   const cg=new THREE.Group(); cg.userData.dragKey="co:"+i;
   const seld=(U.sel==="co:"+i);
-  const col=warn?0xD64545:(seld?0xF2A33C:t.color);
+  const col=warn?0xD64545:(seld?0x4B82FF:t.color);
   const baseMat=L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:col});
   if(c.type==="guard"){
    const body=new THREE.Mesh(new THREE.CylinderGeometry(.22,.26,1.5,8),baseMat);body.position.y=.75;body.castShadow=!L;cg.add(body);
@@ -2132,7 +2132,8 @@ function renderPanel(){
  if(!U.tabGroup||!TAB_GROUPS.some(g=>g.key===U.tabGroup)){const g=TAB_GROUPS.find(g=>g.tabs.includes(U.tab));U.tabGroup=g?g.key:"2";}
  const curG=TAB_GROUPS.find(g=>g.key===U.tabGroup)||TAB_GROUPS[1];
  if(!curG.tabs.includes(U.tab))U.tab=curG.tabs[0];
- const groupBar=TAB_GROUPS.map(g=>`<div class="tg step ${U.tabGroup===g.key?"on":""}" onclick="U.tabGroup='${g.key}';U.tab='${g.tabs[0]}';renderPanel()"><span class="step-n">${g.key}</span><span class="step-l">${g.label}</span></div>`).join("");
+ const GROUP_EN={"1":"BASE","2":"TRACE","3":"PLAN","4":"REVIEW"};
+ const groupBar=TAB_GROUPS.map(g=>`<div class="tg step ${U.tabGroup===g.key?"on":""}" onclick="U.tabGroup='${g.key}';U.tab='${g.tabs[0]}';v4PanelStage('${g.key}','${g.label}');renderPanel()"><span class="step-n">${g.key}</span><span class="step-l">${g.label}</span><small class="step-e">${GROUP_EN[g.key]||""}</small></div>`).join("");
  const subBar=curG.tabs.length>1
    ? `<div id="subtabs">${curG.tabs.map(t=>`<div class="${U.tab===t?"on":""}" onclick="U.tab='${t}';renderPanel()">${TAB_LABEL[t]||t}</div>`).join("")}</div>`
    : "";
@@ -2685,11 +2686,11 @@ function renderHUD(){
  const cs=collectChecks();
  const ico={ok:"●",warn:"▲",ng:"✕",na:"－"};
  const cls={ok:"ok",warn:"warn",ng:"ng",na:"na"};
- const nNg=cs.filter(c=>c.lv==="ng").length,nW=cs.filter(c=>c.lv==="warn").length;
- const head=nNg?`<span class="ng">要検討 ${nNg}件</span>`:(nW?`<span class="warn">注意 ${nW}件</span>`:`<span class="ok">判定OK</span>`);
- el.innerHTML=`<div class="hud-h"><span>検討判定</span>${head}<span id="hud-toggle" title="折りたたむ">${U._hudMin?"＋":"－"}</span></div>
-  ${U._hudMin?"":`<div class="hud-b">${cs.map(c=>`<div class="hud-row ${cls[c.lv]}" title="${c.note}"><span class="hud-i">${ico[c.lv]}</span><span class="hud-l">${c.label}</span><span class="hud-v">${c.val}</span></div>`).join("")}
-  <div class="hud-f">目安判定です。正式な可否は関係機関・法規で確認</div></div>`}`;
+ const nNg=cs.filter(c=>c.lv==="ng").length,nW=cs.filter(c=>c.lv==="warn").length,nOk=cs.filter(c=>c.lv==="ok").length;
+ const head=nNg?`<span class="ng">REVIEW ${String(nNg).padStart(2,"0")}</span>`:(nW?`<span class="warn">CAUTION ${String(nW).padStart(2,"0")}</span>`:`<span class="ok">ALL CLEAR</span>`);
+ el.innerHTML=`<div class="hud-h"><div class="hud-title"><small>PROJECT CHECK</small><b>検討判定</b></div>${head}<span id="hud-toggle" title="折りたたむ">${U._hudMin?"＋":"－"}</span></div>
+  ${U._hudMin?"":`<div class="hud-b"><div class="hud-summary"><span class="ok"><small>OK</small><b>${String(nOk).padStart(2,"0")}</b></span><span class="warn"><small>CAUTION</small><b>${String(nW).padStart(2,"0")}</b></span><span class="ng"><small>REVIEW</small><b>${String(nNg).padStart(2,"0")}</b></span></div>${cs.map(c=>`<div class="hud-row ${cls[c.lv]}" title="${c.note}"><span class="hud-i">${ico[c.lv]}</span><span class="hud-l">${c.label}</span><span class="hud-v">${c.val}</span></div>`).join("")}
+  <div class="hud-f">INITIAL REVIEW / 正式な可否は関係機関・法規で確認</div></div>`}`;
  const t=document.getElementById("hud-toggle");if(t)t.onclick=()=>{U._hudMin=!U._hudMin;renderHUD();};
 }
 window.renderHUD=renderHUD;
@@ -3437,6 +3438,16 @@ window.v4PhaseFlash=(key,label)=>{
  requestAnimationFrame(()=>el.classList.add("show"));
  _v4FxTimer=setTimeout(()=>el.classList.remove("show"),720);
 };
+window.v4PanelStage=(key,label)=>{
+ if(document.body.classList.contains("simple"))return;
+ let el=document.getElementById("v4-panel-stage");
+ if(!el){el=document.createElement("div");el.id="v4-panel-stage";document.body.appendChild(el);}
+ const en=({"1":"BASE","2":"TRACE","3":"PLAN","4":"REVIEW"})[key]||"";
+ el.innerHTML=`<small>STAGE ${String(key).padStart(2,"0")} / ${en}</small><b>${label||""}</b>`;
+ el.className="";
+ requestAnimationFrame(()=>el.classList.add("show"));
+ clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),520);
+};
 window.v4Nudge=(txt)=>{
  let el=document.getElementById("v4-nudge");
  if(!el){el=document.createElement("div");el.id="v4-nudge";document.body.appendChild(el);}
@@ -3639,7 +3650,7 @@ function renderSelCard(force){
  else {el.style.display="none";return;}
  el.style.display="";
  const dupOK=/^(co:|an:|sub:|nb:|rd:|rpt:|blk:|bpt:)/.test(k);
- el.innerHTML=`<div class="sc-h"><span>${title}</span><span class="sc-x" onclick="U.sel=null;rebuild();renderPanel()">✕</span></div><div class="sc-b">${body}<div class="sc-actions">${dupOK?`<button class="btn btn-secondary" onclick="duplicateSel()">複製</button>`:""}${del?`<button class="btn btn-danger" onclick="${del}">削除</button>`:""}</div><div class="hint">Delete＝削除　Ctrl+D＝複製　Esc＝選択解除　↶で戻せます</div></div>`;
+ el.innerHTML=`<div class="sc-h"><div class="sc-title"><small>OBJECT SELECTED</small><span>${title}</span></div><span class="sc-x" onclick="U.sel=null;rebuild();renderPanel()">✕</span></div><div class="sc-b">${body}<div class="sc-actions">${dupOK?`<button class="btn btn-secondary" onclick="duplicateSel()">複製</button>`:""}${del?`<button class="btn btn-danger" onclick="${del}">削除</button>`:""}</div><div class="hint">Delete＝削除　Ctrl+D＝複製　Esc＝選択解除　↶で戻せます</div></div>`;
 }
 window.renderSelCard=renderSelCard;
 // 選択中の物を複製（少しずらして配置）／削除
