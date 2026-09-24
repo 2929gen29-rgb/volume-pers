@@ -35,7 +35,7 @@ const U={
  annot:[],       // 注記（地面貼り付け）{type:"zone"|"text", x,z,w,d,ry,color,text,fsize}
  poles:{n:3,pitch:18,far:true,dx:0,dz:0,ry:0},
  demo:{w:22,d:14,h:9,dx:0,dz:0,ry:0},
- tw:{mode:"plan",step:8,fenceShape:"rect",fencePts:[],fenceGateSeg:0,pitDepth:4,retainMargin:1,pilePitch:5,pileDia:0.8,pileLen:15,oldPiles:false,oldPitch:4,oldRot:0,oldExtend:2,oldDx:0,oldDz:0,steelPitch:7,crane:true,craneModel:"JCL022", craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceAll:false,fenceDx:0,fenceDz:0,fenceRy:0,fenceW:0,fenceD:0,scaffold:true,poles:false,person:false,mixer:true,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
+ tw:{mode:"plan",step:8,fenceShape:"rect",fencePts:[],fenceGateSeg:0,pitDepth:4,retainMargin:1,pilePitch:5,pileDia:0.8,pileLen:15,oldPiles:false,oldPitch:4,oldRot:0,oldExtend:2,oldDx:0,oldDz:0,steelPitch:7,crane:true,craneModel:"JCL022",craneHeight:0, craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceAll:false,fenceDx:0,fenceDz:0,fenceRy:0,fenceW:0,fenceD:0,scaffold:true,poles:false,person:false,mixer:true,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
  under:{tex:null,show:true,width:40,opacity:.65,rot:0,dx:0,dz:0,pages:1,page:1,raw:null,gsiKind:"std",gsiZoom:17,gsiStatus:""},
  photo:{tex:null,show:true,width:160,opacity:.8,rot:0,dx:0,dz:0},
  nbs:[], line:false, auto:true, tab:"諸元", tabGroup:"建物", moveLayers:false,
@@ -44,7 +44,7 @@ const U={
  grid:{show:false, size:1},  // グリッド表示
  roadcond:{lane:6, walk:2.5, side:"front"}, // 道路条件（車道・歩道幅員）
  cobj:[],                    // 施工オブジェクト配列（constructionObjects）
- dim:{on:false, a:null, b:null}, // 寸法線ツール（2点間）
+ dim:{on:false, a:null, b:null, base:"free"}, // 寸法線ツール（自由2点／敷地・建物・道路起算）
  polyInput:{on:false, pts:[], target:null}, // 多角形入力モード
  calib:{on:false, a:null, b:null}, // 下絵スケール補正（2点）
  dxf:{ents:null, layers:{}, scale:0.001, dx:0, dz:0, raw:null}, // DXF読込（1/1000）
@@ -95,6 +95,17 @@ const COBJ_TYPES={
    {key:"plate",label:"敷鉄板",w:1.5,d:6.0,h:0.05},
    {key:"asagao",label:"朝顔(落下防止)",w:8.0,d:1.8,h:0.2},
  ]},
+ towercrane:{label:"タワークレーン（追加）",color:0xF2A33C,sizes:[
+   {key:"JCL015",label:"JCL015Ⅱ",w:2.5,d:2.5,h:14.3},
+   {key:"JCL015_H",label:"JCL015Ⅱ 高自立",w:2.2,d:2.2,h:26.5},
+   {key:"JCL021",label:"JCL021C・Ⅱ",w:2.8,d:2.8,h:14.4},
+   {key:"JCL022",label:"JCL022Ⅱ",w:3.0,d:3.0,h:30.5},
+ ]},
+ safepath:{label:"安全通路（カラーコーン＋バー）",color:0xF28C28,sizes:[
+   {key:"6m",label:"6m",w:1.2,d:6,h:0.8},
+   {key:"12m",label:"12m",w:1.2,d:12,h:0.8},
+   {key:"18m",label:"18m",w:1.2,d:18,h:0.8},
+ ]},
  stage:{label:"乗入れ構台",color:0x8A7F72,sizes:[
    {key:"s",label:"小（幅6×長10m・高1.5m）",w:6,d:10,h:1.5},
    {key:"m",label:"中（幅8×長16m・高2.5m）",w:8,d:16,h:2.5},
@@ -123,6 +134,21 @@ const COBJ_TYPES={
    {key:"powerline",label:"架線・高圧線(揚重支障)",w:0.3,d:14,h:8.0},
  ]},
 };
+// 工程ごとの施工オブジェクト表示。新規配置は原則「配置した工程のみ」。
+const COBJ_PHASE_DEFAULT={
+ found:["demo","retain","pile"],backhoe:["demo","retain","pile"],
+ towercrane:["steel","build"],rough:["steel","build"],mixer:["build"],pump:["build"],truck:["steel","build"],
+ stage:["retain","pile","steel","build"],lsev:["build"],komalift:["build"],temp:["steel","build"],
+ guard:["demo","retain","pile","steel","build"],walkzone:["demo","retain","pile","steel","build"],safepath:["demo","retain","pile","steel","build"],
+ obstacle:["demo","retain","pile","steel","build","plan"]
+};
+function cobjVisibleInPhase(c,phase){
+ if(!c)return false;
+ if(c.phase==="all")return c.type==="obstacle"||phase!=="plan";
+ if(c.phase)return c.phase===phase;
+ const a=COBJ_PHASE_DEFAULT[c.type];return a?a.includes(phase):phase!=="plan";
+}
+window.cobjVisibleInPhase=cobjVisibleInPhase;
 // 指定タイプ・クラスの寸法を引く
 function cobjSize(type,sizeKey){const t=COBJ_TYPES[type];if(!t)return null;const arr=t.sizes;return arr.find(s=>s.key===sizeKey)||arr[0];}
 // 地下の支障物（範囲マーカー）種類：色・ラベル
@@ -147,7 +173,7 @@ const annotColor=(k)=>(ANNOT_COLORS.find(c=>c.key===k)||ANNOT_COLORS[0]).hex;
 const CRANE_SPECS={
  JCL008C:{label:"昭和 JCL008C（ジブ10m/0.8t）",jib:10,work:10,cap:0.8,tail:2.1},
  JCL010:{label:"昭和 JCL010Ⅱ（ジブ10m/1.0t）",jib:10,work:10,cap:1.0,tail:2.59},
- JCL015:{label:"昭和 JCL015Ⅱ（ジブ15m/1.0t）",jib:15,work:15,cap:1.0,tail:2.38},
+ JCL015:{label:"昭和 JCL015Ⅱ（ジブ15m/1.0t）",jib:15,work:15,cap:1.0,tail:2.38,selfH:14.3,maxInstallH:51,maxLift:63},
  JCL07175:{label:"昭和 JCL07175Ⅱ（ジブ17.5m/0.7t）",jib:17.5,work:17.5,cap:0.7,tail:2.38},
  JCL021:{label:"昭和 JCL021C・Ⅱ（ジブ21m/1.0t）",jib:21,work:21,cap:1.0,tail:2.95},
  JCL022:{label:"昭和 JCL022Ⅱ（ジブ22m/1.0t）",jib:22,work:22,cap:1.0,tail:2.58},
@@ -155,7 +181,7 @@ const CRANE_SPECS={
  JCL040:{label:"昭和 JCL040Ⅱ（ジブ40m/1.0t）",jib:40,work:40,cap:1.0,tail:5.8},
  // 円筒マスト・高自立タイプ（北川鉄工所カタログ）：φ457〜610の丸マスト、ベース小、尾部短い
  JCL012C_H:{label:"北川 JCL012C高自立（ジブ12m/1.0t・自立19.5m・丸マスト）",jib:12,work:12,cap:1.0,tail:2.0,mast:"tube",selfH:19.5,base:3.5},
- JCL015_H:{label:"北川 JCL015高自立（ジブ15m/1.0t・自立26.5m・丸マスト）",jib:15,work:15,cap:1.0,tail:3.0,mast:"tube",selfH:26.5,base:2.2},
+ JCL015_H:{label:"北川 JCL015高自立（ジブ15m/1.0t・自立26.5m・丸マスト）",jib:15,work:15,cap:1.0,tail:3.0,mast:"tube",selfH:26.5,maxInstallH:51,maxLift:63,base:2.2},
  // 枠組足場上に自立する小型ジブクレーン（日工カタログ）
  NSA406A:{label:"日工 スリングエース NSA406A（ブーム6m/0.4t・全高10.6m）",jib:6,work:6,cap:0.4,tail:0.75,mast:"mini",selfH:10.6,base:0.9},
 };
@@ -2280,7 +2306,13 @@ function v4PhaseSceneTransition(next){
 window.v4PhaseSceneTransition=v4PhaseSceneTransition;
 window.setMode=(m)=>v4PhaseSceneTransition(m);
 window.addCO=(type)=>{snapshot();const t=COBJ_TYPES[type]||COBJ_TYPES.truck;const sz=t.sizes[0];const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);const nx0=numv(U.site.dx,0),nz0=sdz2+sd2/2+6;const hd=(U.snap!==false)?nearestRoadHeading(nx0,nz0):null;
- U.cobj.push({type,size:sz.key,x:nx0,z:nz0,w:sz.w,d:sz.d,h:sz.h,ry:hd!=null?hd:0});U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();};
+ U.cobj.push({type,size:sz.key,x:nx0,z:nz0,w:sz.w,d:sz.d,h:sz.h,ry:hd!=null?hd:0,phase:U.tw.mode});U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();};
+window.addTowerCrane=(model="JCL015")=>{snapshot();const t=COBJ_TYPES.towercrane,sz=t.sizes.find(s=>s.key===model)||t.sizes[0],spec=craneSpec(sz.key);
+ const i=(U.cobj||[]).filter(c=>c.type==="towercrane").length;
+ U.cobj.push({type:"towercrane",size:sz.key,x:numv(U.tw.craneX,0)+5+i*4,z:numv(U.tw.craneZ,0),w:sz.w,d:sz.d,h:spec.selfH||sz.h,ry:numv(U.tw.craneRot,0),phase:(U.tw.mode==="steel"?"steel":"build")});
+ U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();focusSelectionCamera(U.sel,{duration:240});if(typeof renderMobile==="function")renderMobile();
+ toast("追加タワークレーンを配置しました。ドラッグで位置調整できます","ok");
+};
 window.delCO=(i)=>{snapshot();U.cobj.splice(i,1);if(U.sel==="co:"+i)U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
 window.addSub=(kind)=>{
  snapshot();
@@ -2298,7 +2330,8 @@ window.addAnnotZone=()=>{snapshot();const sdz2=numv(U.site.dz,0),sd2=posv(U.site
 window.addAnnotText=()=>{const t=prompt("注記の文字を入力（40文字まで）","注意");if(t==null)return;snapshot();const sdz2=numv(U.site.dz,0);U.annot.push({type:"text",x:numv(U.site.dx,0),z:sdz2,ry:0,color:"red",text:t.slice(0,40),fsize:2.5});U.sel="an:"+(U.annot.length-1);rebuild();renderPanel();};
 window.editAnnotText=(i)=>{const a=U.annot[i];if(!a)return;const t=prompt("注記の文字を編集",a.text||"");if(t==null)return;snapshot();a.text=t.slice(0,40);rebuild();renderPanel();};
 window.delAnnot=(i)=>{snapshot();U.annot.splice(i,1);if(U.sel==="an:"+i)U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
-window.setCOSize=(i,key)=>{const c=U.cobj[i];if(!c)return;const sz=cobjSize(c.type,key);if(sz){snapshot();c.size=key;c.w=sz.w;c.d=sz.d;c.h=sz.h;}rebuild();renderPanel();};
+window.setCOSize=(i,key)=>{const c=U.cobj[i];if(!c)return;const sz=cobjSize(c.type,key);if(sz){snapshot();c.size=key;c.w=sz.w;c.d=sz.d;c.h=(c.type==="towercrane"?(craneSpec(key).selfH||sz.h):sz.h);}rebuild();renderPanel();};
+window.setCOHeight=(i,v)=>{const c=U.cobj[i];if(!c)return;const n=parseFloat(v);if(!isFinite(n))return;const spec=c.type==="towercrane"?craneSpec(c.size):null;const lo=spec&&spec.selfH?spec.selfH:0.1,hi=spec&&spec.maxInstallH?spec.maxInstallH:80;snapshot("co."+i+".h");c.h=Math.max(lo,Math.min(hi,n));rebuild();renderPanel();if(typeof renderMobile==="function")renderMobile();};
 window.selCO=(i)=>{U.sel="co:"+i;rebuild();renderPanel();};
 window.setPage=async(v)=>{U.under.page=v;await renderPdfPage();};
 
