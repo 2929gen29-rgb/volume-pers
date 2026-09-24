@@ -3691,13 +3691,58 @@ window.resetDisplay=()=>{
  try{const m=document.querySelector('meta[name="viewport"]');if(m){const c=m.getAttribute("content");m.setAttribute("content",c+", maximum-scale=1.0");setTimeout(()=>m.setAttribute("content",c),350);}}catch(e){}
  rebuild(); renderPanel(); renderBar(); renderMobile(); toast("画面表示を初期状態に戻しました","ok");
 };
-let _sheet=null,_lastSheet=null;
+let _sheet=null,_lastSheet=null,_dock=null;
 function closeSheet(){if(_sheet&&_sheet!=="obj")_lastSheet=_sheet;_sheet=null;const s=document.getElementById("msheet");if(s)s.classList.remove("open");const b=document.getElementById("mback");if(b)b.classList.remove("open");renderMobile();}
 window.closeSheet=closeSheet;
-window.openSheet=(k)=>{if(!k)return;if(_sheet===k){closeSheet();return;}_sheet=k;if(k!=="obj")_lastSheet=k;U._mEdit=true;renderMobile();};
+function closeMobileDock(){_dock=null;document.body.classList.remove("dock-open");const d=document.getElementById("mdock");if(d)d.classList.remove("open");renderMobile();}
+window.closeMobileDock=closeMobileDock;
+window.openMobileDock=(k,force)=>{
+ if(!k)return;
+ if(!force&&_dock===k){closeMobileDock();return;}
+ if(_sheet){_sheet=null;const s=document.getElementById("msheet");if(s)s.classList.remove("open");const b=document.getElementById("mback");if(b)b.classList.remove("open");}
+ _dock=k;U._mEdit=true;document.body.classList.add("dock-open");renderMobile();
+};
+window.openSheet=(k)=>{
+ if(!k)return;
+ if(k==="phase"||k==="temp"||k==="view"){openMobileDock(k);return;}
+ if(_sheet===k){closeSheet();return;}
+ _dock=null;document.body.classList.remove("dock-open");
+ const d=document.getElementById("mdock");if(d)d.classList.remove("open");
+ _sheet=k;if(k!=="obj")_lastSheet=k;U._mEdit=true;renderMobile();
+};
 // 仮設シート用：指定タイプの車両を1台だけON/OFF、移動・回転
 function _cobjIdx(type){let last=-1;(U.cobj||[]).forEach((c,i)=>{if(c.type===type)last=i;});return last;}
 window.mToggleCO=(type,size)=>{const i=_cobjIdx(type);if(i>=0){snapshot();U.cobj.splice(i,1);U.sel=null;rebuild();renderPanel();}else{addCO(type);const k=U.cobj.length-1;if(size&&U.cobj[k]){const sz=cobjSize(type,size);if(sz){U.cobj[k].size=size;U.cobj[k].w=sz.w;U.cobj[k].d=sz.d;U.cobj[k].h=sz.h;}}rebuild();}renderMobile();};
+window.mDockSelectCO=(type,size)=>{
+ let i=_cobjIdx(type);
+ if(i<0){
+  addCO(type);i=U.cobj.length-1;
+  if(size&&U.cobj[i]){const sz=cobjSize(type,size);if(sz){U.cobj[i].size=size;U.cobj[i].w=sz.w;U.cobj[i].d=sz.d;U.cobj[i].h=sz.h;}}
+ }
+ if(i>=0){U.sel="co:"+i;U._mEdit=true;rebuild();renderPanel();renderMobile();}
+};
+window.mDockPowerCO=(type,size)=>{
+ const i=_cobjIdx(type);
+ if(i>=0){snapshot();U.cobj.splice(i,1);if(U.sel==="co:"+i||String(U.sel||"").startsWith("co:"))U.sel=null;rebuild();renderPanel();renderMobile();return;}
+ mDockSelectCO(type,size);
+};
+window.mDockCrane=(power)=>{
+ if(power===false){if(U.tw.crane){S("tw.crane",false);}if(U.sel==="crane")U.sel=null;renderMobile();return;}
+ if(!U.tw.crane)S("tw.crane",true);
+ U.sel="crane";U._mEdit=true;rebuild();renderPanel();renderMobile();
+};
+window.mDockFence=(power)=>{
+ if(power===false){if(U.tw.fence)S("tw.fence",false);if(String(U.sel||"").startsWith("fence")||String(U.sel||"").startsWith("fpt:"))U.sel=null;renderMobile();return;}
+ if(!U.tw.fence)S("tw.fence",true);
+ U.sel="fence";U._mEdit=true;rebuild();renderPanel();renderMobile();
+};
+window.mDockEV=(power)=>{
+ if(power===false){if(U.tw.ev)S("tw.ev",false);if(U.sel==="ev")U.sel=null;renderMobile();return;}
+ if(!U.tw.ev)S("tw.ev",true);
+ U.sel="ev";U._mEdit=true;rebuild();renderPanel();renderMobile();
+};
+window.mDockScaffold=()=>{S("tw.scaffold",!U.tw.scaffold);renderMobile();};
+
 window.mMoveCO=(type,dx,dz)=>{const i=_cobjIdx(type);if(i<0)return;snapshot("mco."+type);U.cobj[i].x=+(numv(U.cobj[i].x,0)+dx).toFixed(1);U.cobj[i].z=+(numv(U.cobj[i].z,0)+dz).toFixed(1);U.sel="co:"+i;rebuildThrottled();};
 window.mRotCO=(type,d)=>{const i=_cobjIdx(type);if(i<0)return;snapshot("mcor."+type);U.cobj[i].ry=((numv(U.cobj[i].ry,0)+d)%360+360)%360;U.sel="co:"+i;rebuildThrottled();};
 window.mCrane=(k,d)=>{snapshot("mcrane."+k);if(k==="x")U.tw.craneX=+(numv(U.tw.craneX,16)+d).toFixed(1);if(k==="z")U.tw.craneZ=+(numv(U.tw.craneZ,0)+d).toFixed(1);if(k==="r")U.tw.craneRot=((numv(U.tw.craneRot,0)+d)%360+360)%360;rebuildThrottled();};
@@ -3713,8 +3758,8 @@ window.quickCreate=()=>{
  U.blocks=[{id:1,label:"建物",f1:1,f2:fl,w:bw,d:bd,dx:0,dz:0,ry:0}];
  U.tw.mode="build";U.tw.step=Math.max(1,Math.round(fl*0.6));U.tw.fence=true;U.tw.fenceShape="rect";U.tw.crane=true;U.tw.craneX=Math.round(bw/2+4);U.tw.craneZ=0;U.tw.scaffold=true;
  U.cobj=[];U._mEdit=true;
- closeStart();rebuild();renderPanel();renderBar();view("bird");_sheet="temp";renderMobile();
- toast("3Dを作りました。仮設メニューでクレーンや車両を置いてみてください","ok");
+ closeStart();rebuild();renderPanel();renderBar();view("bird");openMobileDock("temp",true);
+ toast("3Dを作りました。下の仮設ドックからクレーンや車両を置いてみてください","ok");
 };
 function _selInfo(){const k=U.sel;if(!k)return null;
  if(k.startsWith("co:")){const c=U.cobj[+k.slice(3)];if(!c)return null;const t=COBJ_TYPES[c.type]||{};return {kind:"co",i:+k.slice(3),label:t.label||c.type,sizes:t.sizes||[],cur:c.size};}
@@ -3742,16 +3787,17 @@ window.mSelType=(type)=>{const s=_selInfo();if(!s||s.kind!=="co")return;snapshot
 window.openObjMenu=(key)=>{U.sel=key;_sheet="obj";rebuild();renderPanel();renderMobile();};
 function renderMobile(){
  const on=document.body.classList.contains("simple");
- let top=document.getElementById("mtop"),bar=document.getElementById("mbar"),sheet=document.getElementById("msheet"),back=document.getElementById("mback");
+ let top=document.getElementById("mtop"),bar=document.getElementById("mbar"),sheet=document.getElementById("msheet"),back=document.getElementById("mback"),dock=document.getElementById("mdock");
  if(!top){top=document.createElement("div");top.id="mtop";document.body.appendChild(top);}
  if(!bar){bar=document.createElement("div");bar.id="mbar";document.body.appendChild(bar);}
+ if(!dock){dock=document.createElement("div");dock.id="mdock";document.body.appendChild(dock);}
  if(!back){back=document.createElement("div");back.id="mback";back.onclick=closeSheet;document.body.appendChild(back);}
  if(!sheet){sheet=document.createElement("div");sheet.id="msheet";document.body.appendChild(sheet);
   // 下スワイプで閉じる
   let y0=null;sheet.addEventListener("touchstart",(e)=>{y0=e.touches[0].clientY;},{passive:true});
   sheet.addEventListener("touchend",(e)=>{if(y0==null)return;const dy=e.changedTouches[0].clientY-y0;y0=null;if(dy>60&&sheet.scrollTop<=0)closeSheet();},{passive:true});}
  renderPill();
- if(!on){top.style.display="none";bar.style.display="none";sheet.classList.remove("open");back.classList.remove("open");return;}
+ if(!on){top.style.display="none";bar.style.display="none";dock.classList.remove("open");sheet.classList.remove("open");back.classList.remove("open");document.body.classList.remove("dock-open");return;}
  top.style.display="";bar.style.display="";
  const cs=(typeof collectChecks==="function")?collectChecks():[];const nNg=cs.filter(c=>c.lv==="ng").length,nW=cs.filter(c=>c.lv==="warn").length;
  const badge=nNg?`<button class="mb ng" onclick="openSheet('check')">要検討 ${nNg}${nW?"・注意 "+nW:""}</button>`:(nW?`<button class="mb warn" onclick="openSheet('check')">注意 ${nW}</button>`:`<button class="mb ok" onclick="openSheet('check')">判定OK</button>`);
@@ -3760,7 +3806,7 @@ function renderMobile(){
  const mode=`<span class="mmode ${si?"edit":""}" title="物はタップで選択。選択中だけ操作できます"><small>${si?"EDIT MODE":"VIEW MODE"}</small>${si?si.label:"LOCKED"}</span>`;
  top.innerHTML=`<button class="mt-btn" onclick="openStart()" title="案件を開く">≡</button><div class="mt-title"><b>${(U.p.name||"BimGen").slice(0,20)}</b><span>${PH[U.tw.mode]||""}</span></div>${mode}${badge}`;
  const tabs=[["phase","工程","01"],["temp","仮設","02"],["view","表示","03"],["edit","編集","04"]];
- bar.innerHTML=tabs.map(t=>`<button class="mbtn ${_sheet===t[0]?"on":""}" onclick="openSheet('${t[0]}')"><span>${t[2]}</span>${t[1]}</button>`).join("");
+ bar.innerHTML=tabs.map(t=>`<button class="mbtn ${((_dock===t[0])||(_sheet===t[0]))?"on":""}" onclick="${t[0]==="edit"?"openSheet('edit')":"openMobileDock('"+t[0]+"')"}"><span>${t[2]}</span>${t[1]}</button>`).join("");
  let ab=document.getElementById("mact");if(!ab){ab=document.createElement("div");ab.id="mact";document.body.appendChild(ab);}
  if(si&&!_sheet){
   ab.style.display="flex";
@@ -3792,8 +3838,51 @@ function renderMobile(){
  let pk=document.getElementById("mpeek");if(!pk){pk=document.createElement("button");pk.id="mpeek";document.body.appendChild(pk);
   let py=null;pk.addEventListener("touchstart",(e)=>{py=e.touches[0].clientY;},{passive:true});pk.addEventListener("touchend",(e)=>{if(py!=null&&py-e.changedTouches[0].clientY>20){openSheet(_lastSheet);}py=null;},{passive:true});
   pk.onclick=()=>openSheet(_lastSheet);}
- const NAMES={phase:"工程",temp:"仮設",view:"表示",edit:"編集",check:"判定",obj:"選択中の物"};
- if(!_sheet&&_lastSheet&&!si){pk.style.display="";pk.textContent="▲ "+(NAMES[_lastSheet]||"")+" を再表示";}else pk.style.display="none";
+ const NAMES={edit:"編集",check:"判定",obj:"選択中の物",layers:"レイヤー"};
+ if(!_sheet&&_lastSheet&&!si&&NAMES[_lastSheet]){pk.style.display="";pk.textContent="▲ "+NAMES[_lastSheet]+" を再表示";}else pk.style.display="none";
+
+ // 3Dを見ながら使う工程・仮設・表示は、大きなシートではなくフローティングドックに描画
+ if(_dock){
+  document.body.classList.add("dock-open");
+  dock.dataset.dock=_dock;
+  let dh="";
+  if(_dock==="phase"){
+   const ps=[["demo","01","解体"],["retain","02","山留"],["pile","03","杭"],["steel","04","鉄骨"],["build","05","躯体"],["plan","06","完成"]];
+   dh=`<div class="md-head"><span>PHASE</span><b>工程を切り替える</b><button onclick="closeMobileDock()">×</button></div>
+    <div class="md-scroll">${ps.map(([k,n,l])=>`<button class="md-cmd ${U.tw.mode===k?"on":""}" onclick="setMode('${k}');v4PhaseFlash('${k}','${({demo:"既存解体",retain:"山留め・掘削",pile:"杭工事",steel:"鉄骨建て方",build:"躯体・仮設",plan:"完成"})[k]}');renderMobile()"><small>${n}</small><b>${l}</b></button>`).join("")}
+    ${(U.tw.mode==="build"||U.tw.mode==="steel")?`<div class="md-step"><small>STEP</small><button onclick="S('tw.step',Math.max(1,Math.round(numv(U.tw.step,1))-1));renderMobile()">−</button><b>${Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1)))}F</b><button onclick="S('tw.step',Math.min(Math.round(posv(U.p.floors,1)),Math.round(numv(U.tw.step,1))+1));renderMobile()">＋</button></div>`:""}</div>`;
+  }else if(_dock==="temp"){
+   const has=(t)=>_cobjIdx(t)>=0;
+   const item=(key,label,sub,on,main,power)=>`<div class="md-item ${on?"on":""}"><button class="md-main" onclick="${main}"><small>${key}</small><b>${label}</b><span>${sub}</span></button><button class="md-power ${on?"on":""}" onclick="event.stopPropagation();${power}" aria-label="${label}を${on?"OFF":"ON"}">${on?"●":"○"}</button></div>`;
+   dh=`<div class="md-head"><span>TEMPORARY WORKS</span><b>3Dを見ながら配置</b><button onclick="closeMobileDock()">×</button></div>
+    <div class="md-scroll">
+     ${item("TC","クレーン",U.tw.crane?(U.tw.craneModel||"ON"):"OFF",!!U.tw.crane,"mDockCrane()","mDockCrane("+(!U.tw.crane)+")")}
+     ${item("FN","仮囲い",U.tw.fence?"ON":"OFF",!!U.tw.fence,"mDockFence()","mDockFence("+(!U.tw.fence)+")")}
+     ${item("SC","足場",U.tw.scaffold?"ON":"OFF",!!U.tw.scaffold,"mDockScaffold()","mDockScaffold()")}
+     ${item("MX","生コン",has("mixer")?"8t":"OFF",has("mixer"),"mDockSelectCO('mixer','8t')","mDockPowerCO('mixer','8t')")}
+     ${item("PP","ポンプ",has("pump")?"ON":"OFF",has("pump"),"mDockSelectCO('pump','m4t')","mDockPowerCO('pump','m4t')")}
+     ${item("EV","LSEV",U.tw.ev?"ON":"OFF",!!U.tw.ev,"mDockEV()","mDockEV("+(!U.tw.ev)+")")}
+     ${item("RF","ラフター",has("rough")?"25t":"OFF",has("rough"),"mDockSelectCO('rough','25t')","mDockPowerCO('rough','25t')")}
+    </div>`;
+  }else if(_dock==="view"){
+   const vb=(key,label,fn,on)=>`<button class="md-cmd ${on?"on":""}" onclick="${fn}"><small>${key}</small><b>${label}</b></button>`;
+   dh=`<div class="md-head"><span>VIEW CONTROL</span><b>視点・表示</b><button onclick="closeMobileDock()">×</button></div>
+    <div class="md-scroll">
+     ${vb("BIRD","鳥瞰","view('bird')",false)}
+     ${vb("FRONT","正面","view('front')",false)}
+     ${vb("EYE","目線","view('eye')",false)}
+     ${vb("TOP","真上","view('top')",false)}
+     ${vb("AUTO",U.auto?"回転停止":"自動回転","U.auto=!U.auto;renderBar();renderMobile()",!!U.auto)}
+     ${vb("LAYER","レイヤー","openSheet('layers')",false)}
+     ${vb("RESET","リセット","resetDisplay()",false)}
+     ${vb("FULL","全画面","closeMobileDock();togglePresent()",false)}
+    </div>`;
+  }
+  dock.innerHTML=dh;dock.classList.add("open");
+ }else{
+  dock.classList.remove("open");document.body.classList.remove("dock-open");
+ }
+
  sheet.dataset.sheet=_sheet||"";
  if(!_sheet){sheet.classList.remove("open");back.classList.remove("open");return;}
  let h="",title="";
@@ -3820,6 +3909,9 @@ function renderMobile(){
    <div class="ms-row"><button class="ms-btn" onclick="U.auto=!U.auto;renderBar();renderMobile()">${U.auto?"自動回転 停止":"自動回転"}</button><button class="ms-btn" onclick="closeSheet();togglePresent()">全画面</button></div>
    <div class="ms-row"><button class="ms-btn primary" onclick="resetDisplay()">画面表示をリセット</button></div>
    <div class="ms-h">表示するもの</div><div class="ms-list">${LAYER_DEF.map(d=>`<label class="ms-chk"><input type="checkbox" ${(U.layers||{})[d[0]]!==false?"checked":""} onchange="toggleLayer('${d[0]}',this.checked);renderMobile()"><span>${d[1]}</span></label>`).join("")}</div>`;
+ }else if(_sheet==="layers"){title="レイヤー表示";
+  h=`<div class="ms-list">${LAYER_DEF.map(d=>`<label class="ms-chk"><input type="checkbox" ${(U.layers||{})[d[0]]!==false?"checked":""} onchange="toggleLayer('${d[0]}',this.checked);renderMobile()"><span>${d[1]}</span></label>`).join("")}</div>
+   <div class="ms-row"><button class="ms-btn" onclick="LAYER_DEF.forEach(d=>U.layers[d[0]]=true);rebuild();renderMobile()">全部表示</button><button class="ms-btn" onclick="LAYER_DEF.forEach(d=>U.layers[d[0]]=false);U.layers.building=true;U.layers.site=true;rebuild();renderMobile()">建物・敷地だけ</button></div>`;
  }else if(_sheet==="check"){title="検討判定";
   const ico={ok:"●",warn:"▲",ng:"✕",na:"－"};
   h=`<div class="ms-list">${cs.map(c=>`<div class="ms-check ${c.lv}"><div class="ms-ci">${ico[c.lv]}</div><div class="ms-ct"><b>${c.label}</b><span class="ms-cv">${c.val}</span><small>${c.note}</small></div></div>`).join("")||'<div class="ms-note">判定項目がありません</div>'}</div>
