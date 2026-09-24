@@ -3868,7 +3868,7 @@ window.tutorialSetStep=(n)=>{if(!REAL_TUTORIAL.active)return;REAL_TUTORIAL.step=
 window.tutorialSelectCrane=()=>{if(REAL_TUTORIAL.active&&REAL_TUTORIAL.step===4){U.tw.crane=true;tutorialSetStep(5);}};
 window.tutorialPlaceCrane=()=>{if(!REAL_TUTORIAL.active||REAL_TUTORIAL.step!==5)return;U.tw.craneX=REAL_DEMO.tw.craneX;U.tw.craneZ=REAL_DEMO.tw.craneZ;U.tw.crane=true;tutorialComplete();};
 function tutorialComplete(){
- if(!REAL_TUTORIAL.active)return;REAL_TUTORIAL.complete=true;REAL_TUTORIAL.allow=null;REAL_TUTORIAL.target=null;U.tw.crane=true;U.tw.craneModel="JCL015_H";U.sel="crane";rebuild();renderPanel();renderBar();focusSelectionCamera("crane",{duration:620});v4Nudge("TOWER CRANE / SET");tutorialRender();
+ if(!REAL_TUTORIAL.active)return;REAL_TUTORIAL.complete=true;REAL_TUTORIAL.allow=null;REAL_TUTORIAL.target=null;clearTutorialTrace();U.tw.crane=true;U.tw.craneModel="JCL015_H";U.sel="crane";rebuild();renderPanel();renderBar();focusSelectionCamera("crane",{duration:620});v4Nudge("TOWER CRANE / SET");tutorialRender();
 }
 window.startRealTutorial=()=>{
  REAL_TUTORIAL.active=true;REAL_TUTORIAL.loading=false;REAL_TUTORIAL.step=0;REAL_TUTORIAL.traceI=0;REAL_TUTORIAL.complete=false;document.body.classList.add("tutorial-mode");tutorialPrepareStep(0);tutorialRender();
