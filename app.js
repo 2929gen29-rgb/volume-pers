@@ -1598,7 +1598,7 @@ function rebuild(){
     const pipe=addP(new THREE.CylinderGeometry(.07,.07,d*.62,8),0,hgt*.70,0,dark);pipe.rotation.x=Math.PI/2;
    }else if(c.size==="genset"){
     addP(new THREE.BoxGeometry(w*.92,hgt*.80,d*.86),0,hgt*.42,0,L?baseMat:new THREE.MeshLambertMaterial({color:0x657D67}));
-    addP(new THREE.BoxGeometry(w*.68,.05,d*.88),0,hgt*.46,-w*.47,dark);
+    addP(new THREE.BoxGeometry(w*.68,.05,d*.88),0,hgt*.46,-d*.47,dark);
     for(let yy=hgt*.24;yy<hgt*.68;yy+=.20)addP(new THREE.BoxGeometry(w*.58,.035,.05),0,yy,-d*.44,dark);
     const ex=addP(new THREE.CylinderGeometry(.07,.09,hgt*.52,8),w*.30,hgt*.96,d*.24,dark);ex.position.y=hgt*.86;
    }else{ // 汚泥・残土コンテナ
