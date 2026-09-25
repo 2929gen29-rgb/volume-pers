@@ -916,6 +916,51 @@ function rebuild(){
  const edge=(geo,m,col=0x16243d)=>{if(!L)return;const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo,12),new THREE.LineBasicMaterial({color:col}));e.position.copy(m.position);e.rotation.copy(m.rotation);g.add(e);};
  const box=(parent,w,h,d,c,x,y,z,o={})=>{const geo=new THREE.BoxGeometry(w,h,d);const m=new THREE.Mesh(geo,o.mat||mat(c,o));m.position.set(x,y,z);if(o.ry)m.rotation.y=o.ry;if(o.rx)m.rotation.x=o.rx;m.castShadow=!L&&o.shadow!==false;m.receiveShadow=!L;parent.add(m);if(parent===g)edge(geo,m);return m;};
  const cylm=(parent,r1,r2,h,c,x,y,z,o={})=>{const geo=new THREE.CylinderGeometry(r1,r2,h,o.seg||10);const m=new THREE.Mesh(geo,mat(c));m.position.set(x,y,z);if(o.rz)m.rotation.z=o.rz;if(o.rx)m.rotation.x=o.rx;m.castShadow=!L;parent.add(m);return m;};
+ const buildLongspanEV=(parent,W,D,H,carY,warn=false)=>{
+  const metal=L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:warn?0xD64545:0xAEB7C3});
+  const dark=L?metal:new THREE.MeshLambertMaterial({color:0x3C4652});
+  const cageMat=L?metal:new THREE.MeshLambertMaterial({color:0xE5E9EE});
+  const meshMat=L?metal:new THREE.MeshLambertMaterial({color:0x6F7E8F,transparent:true,opacity:.34,depthWrite:false});
+  const add=(geo,x,y,z,ma=metal)=>{const m=new THREE.Mesh(geo,ma);m.position.set(x,y,z);m.castShadow=!L;parent.add(m);return m;};
+  const mx=Math.max(.75,W*.34), mz=-D*.12, mastW=Math.max(.22,W*.09);
+  // ベースフレーム
+  add(new THREE.BoxGeometry(W*.95,.20,D*.72),0,.10,0,dark);
+  // 2列マスト＋格子
+  [-mx,mx].forEach(x=>{
+   [-.16,.16].forEach(z=>add(new THREE.BoxGeometry(mastW,H,mastW),x,H/2,mz+z,metal));
+   for(let y=1.0;y<H;y+=1.5){
+    add(new THREE.BoxGeometry(mastW*.9,.07,.56),x,y,mz,metal);
+   }
+  });
+  for(let y=1.4;y<H;y+=2.2){
+   add(new THREE.BoxGeometry(mx*2+.3,.09,.09),0,y,mz-.18,metal);
+   add(new THREE.BoxGeometry(mx*2+.3,.09,.09),0,y,mz+.18,metal);
+  }
+  add(new THREE.BoxGeometry(W*.94,.34,D*.62),0,H+.18,mz,metal);
+  // 建物側へのタイインブラケットを数段
+  for(let y=6;y<H-1;y+=8){
+   [-mx,mx].forEach(x=>{
+    const tie=add(new THREE.BoxGeometry(.10,.10,D*.42),x,y,-D*.34,dark);tie.rotation.x=.08;
+   });
+  }
+  // 搬器（床・屋根・柱・メッシュ・ゲート）
+  const cy=Math.max(1.7,Math.min(H-1.4,carY));
+  const cageW=W*.86,cageD=D*.45,cageH=2.5;
+  add(new THREE.BoxGeometry(cageW,.16,cageD),0,cy-cageH/2,mz+D*.12,dark);
+  add(new THREE.BoxGeometry(cageW,.14,cageD),0,cy+cageH/2,mz+D*.12,metal);
+  const ox=cageW/2-.08,oz=cageD/2-.07;
+  [[-ox,-oz],[-ox,oz],[ox,-oz],[ox,oz]].forEach(([x,z])=>add(new THREE.BoxGeometry(.12,cageH,.12),x,cy,mz+D*.12+z,metal));
+  // 側面メッシュ
+  [-1,1].forEach(sx=>add(new THREE.BoxGeometry(.035,cageH*.82,cageD*.88),sx*cageW/2,cy,mz+D*.12,meshMat));
+  add(new THREE.BoxGeometry(cageW*.92,cageH*.78,.035),0,cy,mz+D*.12+cageD/2,meshMat);
+  // 前面ゲートの横桟
+  for(let gy=-.75;gy<=.75;gy+=.5)add(new THREE.BoxGeometry(cageW*.88,.06,.05),0,cy+gy,mz+D*.12-cageD/2,metal);
+  // 駆動装置
+  [-1,1].forEach(sx=>add(new THREE.BoxGeometry(.42,.72,.42),sx*cageW*.34,cy+.45,mz-.22,dark));
+  // 電源ケーブルガイド
+  add(new THREE.BoxGeometry(.08,Math.max(1,cy-1),.08),cageW*.46,(cy-1)/2+.5,mz+.36,dark);
+ };
+
 
  const floorsAll=Math.min(60,Math.max(1,Math.round(posv(U.p.floors,14))));
  const H=posv(U.p.height,42), fh=H/floorsAll;
@@ -1345,12 +1390,11 @@ function rebuild(){
   cg.rotation.y=numv(U.tw.craneRot,0)*Math.PI/180;
   g.add(cg);dragMap.crane=cg;}
 
- // ロングスパンEV（ドラッグ可）
+ // ロングスパンEV（ドラッグ可・詳細モデル）
  if(U.tw.ev&&U.tw.mode==="build"){
   const eg=new THREE.Group();eg.userData.dragKey="ev";
-  const eh=builtH-gl+3;
-  box(eg,.5,eh,.5,0xd0d3d8,-1.7,eh/2,0);box(eg,.5,eh,.5,0xd0d3d8,1.7,eh/2,0);
-  box(eg,3.8,.4,1.9,0xd0d3d8,0,eh+.2,.1);box(eg,3.4,2.4,1.6,0xeef0f3,0,Math.max(2,(builtH-gl)*.45),.1);
+  const eh=Math.max(8,builtH-gl+3);
+  buildLongspanEV(eg,3.6,4.6,eh,Math.max(2,(builtH-gl)*.45),false);
   eg.position.set(numv(U.tw.evX,-6),gl,U.tw.evZ==null?frontMax+1.1:numv(U.tw.evZ,frontMax+1.1));eg.rotation.y=numv(U.tw.evRy,0)*Math.PI/180;
   g.add(eg);dragMap.ev=eg;}
 
@@ -1555,13 +1599,8 @@ function rebuild(){
    for(let i=0;i<nx;i++){const b=new THREE.Mesh(new THREE.BoxGeometry(0.25,0.4,d),col);b.position.set(-w/2+0.3+i*(w-0.6)/(nx-1),hgt-0.35,0);cg.add(b);}
    const rl=Math.max(4,hgt*4); const ramp=new THREE.Mesh(new THREE.BoxGeometry(w*0.8,0.25,rl),dk);ramp.position.set(0,hgt/2,d/2+rl/2*Math.cos(Math.atan2(hgt,rl)));ramp.rotation.x=Math.atan2(hgt,rl);cg.add(ramp);
    if(!L){const rail=new THREE.MeshLambertMaterial({color:0xF2A33C});[-w/2,w/2].forEach(x=>{const h=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.9,d),rail);h.position.set(x,hgt+0.6,0);cg.add(h);});}
-  }else if(c.type==="lsev"){ // ロングスパンEV：以前の仮設タブ版と同じ見た目（2本マスト＋頂部梁＋搬器）
-   const mm=L?baseMat:new THREE.MeshLambertMaterial({color:warn?0xD64545:0xd0d3d8});
-   const cm=L?baseMat:new THREE.MeshLambertMaterial({color:0xeef0f3});
-   [-1.7,1.7].forEach(x=>{const m=new THREE.Mesh(new THREE.BoxGeometry(.5,hgt,.5),mm);m.position.set(x,hgt/2,0);m.castShadow=!L;cg.add(m);});
-   const top=new THREE.Mesh(new THREE.BoxGeometry(3.8,.4,1.9),mm);top.position.set(0,hgt+.2,.1);cg.add(top);
-   const cage=new THREE.Mesh(new THREE.BoxGeometry(3.4,2.4,1.6),cm);cage.position.set(0,Math.max(2,hgt*.45),.1);cage.castShadow=!L;cg.add(cage);
-   for(let y=3;y<hgt;y+=3){const r=new THREE.Mesh(new THREE.BoxGeometry(3.9,.12,.12),mm);r.position.set(0,y,0);cg.add(r);}
+  }else if(c.type==="lsev"){ // ロングスパンEV：格子マスト＋搬器＋ゲート＋タイイン
+   buildLongspanEV(cg,w,d,hgt,Math.max(2,hgt*.45),warn);
   }else if(c.type==="komalift"){ // コマリフト（小型荷揚げ機）：1本マスト＋小さな荷台＋台車
    const mm=L?baseMat:new THREE.MeshLambertMaterial({color:warn?0xD64545:0xc9ccd2});
    const mast=new THREE.Mesh(new THREE.BoxGeometry(.32,hgt,.32),mm);mast.position.set(0,hgt/2,-d/2+.3);mast.castShadow=!L;cg.add(mast);
