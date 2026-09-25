@@ -2256,6 +2256,7 @@ function fenceSectionHtml(){
 // 敷地外周（矩形／多角形）から仮囲い頂点を作る。inset: 外周からの内側オフセット(m)。
 function fenceFromSite(inset){
  inset=numv(inset,0);
+ if(U.site.active===false){toast("先に敷地を作成してください","err");return false;}
  if(Array.isArray(U.site.poly)&&U.site.poly.length>=3){
   U.tw.fencePts=U.site.poly.map(p=>({x:+p.x.toFixed(2),z:+p.z.toFixed(2)}));   // 多角形敷地：そのまま（オフセットは手で頂点を動かす）
  }else{
@@ -2271,11 +2272,11 @@ function fenceRemoveVertex(){const p=U.tw.fencePts||[];if(p.length>3)p.pop();els
 window.fenceFromSite=fenceFromSite;window.fenceAddVertex=fenceAddVertex;window.fenceRemoveVertex=fenceRemoveVertex;window.fenceSegLen=fenceSegLen;window.fencePerimeter=fencePerimeter;
 // 各タブ冒頭の「このタブでやること」
 const TAB_DESC={
- "諸元":["案件の基本情報","まず案件名・用途・構造・階数。面積は分かる範囲だけでOKです。"],
+ "諸元":["案件情報から始める","案件名と計画地住所を入力。住所から国土地理院の地図まで一気に取得できます。"],
  "形状":["建物の形を作る","建物を追加して、幅・奥行・階数を入れ、3Dを見ながら位置を合わせます。"],
  "敷地・地形":["敷地と道路を合わせる","敷地形状 → 前面道路 → 必要なら高低差、の順で進めます。"],
  "近隣":["周辺建物を置く","隣接建物は必要な時だけ。高さと離隔を入れて3Dで確認します。"],
- "下敷き":["元図を敷く","PDF・画像・地図を置き、縮尺を合わせてから真上表示で位置を確認します。"],
+ "下敷き":["地図・プランPDFを敷く","案件住所の地図を確認し、プランPDFを読み込んで敷地・建物をなぞる準備をします。"],
  "仮設":["施工の流れと仮設","工程を選び、まずクレーンと仮囲い。必要に応じて足場・EV・車両を追加します。"],
  "施工/CAD":["重機・車両・注記","必要なものだけ追加して3D上で配置。細かい補助機能は最後でOKです。"],
  "検討":["結果を確認して出力","要検討・注意を確認し、最後に検討シート・画像・BIMへ出力します。"],
@@ -2284,7 +2285,7 @@ const TAB_QUICK={
  "下敷き":["元図を置く","縮尺を合わせる","真上で確認"],
  "敷地・地形":["敷地を決める","道路を合わせる","高低差は必要時"],
  "形状":["建物を追加","寸法・階数","3Dで位置調整"],
- "諸元":["案件名・用途","構造・階数","面積は分かる範囲"],
+ "諸元":["案件名・住所","地図を取得","規模を入力"],
  "近隣":["近隣を追加","高さ・離隔","必要な時だけ"],
  "仮設":["工程を選ぶ","TC・仮囲い","3Dで配置"],
  "施工/CAD":["必要物を追加","3Dで動かす","注記・補助は最後"],
@@ -2397,6 +2398,10 @@ function placementAnchor(extra=3){
  return {x:numv(ctrl&&ctrl.cx,0),z:numv(ctrl&&ctrl.cz,0)+Math.max(2,extra)};
 }
 window.placementAnchor=placementAnchor;
+window.setPrimaryCrane=(v)=>{
+ if(v&&U.site.active===false){const a=placementAnchor(0);U.tw.craneX=a.x;U.tw.craneZ=a.z;}
+ S('tw.crane',!!v);
+};
 window.clearSite=()=>{
  snapshot();U.site.active=false;U.site.poly=null;if(U.sel==="site"||(U.sel||"").startsWith("spt:"))U.sel=null;
  const a=placementAnchor(0);if(!U.tw.crane){U.tw.craneX=a.x;U.tw.craneZ=a.z;}
@@ -2878,7 +2883,7 @@ function renderPanel(){
    +SL("建て方の進捗（〜階）",U.tw.step,"(v)=>S('tw.step',v)",1,Math.max(1,Math.round(posv(U.p.floors,14))),1)
    +SL("柱スパン（目安）m",U.tw.steelPitch,"(v)=>S('tw.steelPitch',v)",3,12,0.5)
    +`<div style="border-top:1px solid var(--hair);margin:8px 0"></div>`
-   +`<div id="tutorial-tc-control">${CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")}</div>`
+   +`<div id="tutorial-tc-control">${CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>setPrimaryCrane(v)")}</div>`
    +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${k}　作業半径${CRANE_SPECS[k].work}m／${CRANE_SPECS[k].cap}t</option>`).join("")}</select></label>${craneSpec(U.tw.craneModel).mast==="tube"?SL("設置高さ m",primaryCraneHeight(craneSpec(U.tw.craneModel),posv(U.p.height,42)/Math.max(1,posv(U.p.floors,1))*Math.max(1,numv(U.tw.step,1))),"(v)=>S('tw.craneHeight',v)",craneSpec(U.tw.craneModel).selfH,craneSpec(U.tw.craneModel).maxInstallH||51,0.5):""}${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}</div>`:"")
    +`<button class="addbtn tc-add" onclick="addTowerCrane('JCL015')">＋ タワークレーンをもう1台追加</button>`
    +fenceSectionHtml()
@@ -2886,7 +2891,7 @@ function renderPanel(){
   }
   else if(U.tw.mode==="build"){
    const secCrane = SL("躯体の進捗（〜階）",U.tw.step,"(v)=>S('tw.step',v)",1,Math.max(1,Math.round(posv(U.p.floors,14))),1)
-    +`<div id="tutorial-tc-control">${CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>S('tw.crane',v)")}</div>`
+    +`<div id="tutorial-tc-control">${CK("タワークレーン（ドラッグ移動可）",U.tw.crane,"(v)=>setPrimaryCrane(v)")}</div>`
     +(U.tw.crane?`<div style="padding-left:10px"><label class="f"><span>機種（カタログ仕様）</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(k=>`<option value="${k}" ${U.tw.craneModel===k?"selected":""}>${CRANE_SPECS[k].label}</option>`).join("")}</select></label><div style="font-size:10px;color:#2552A0;margin:-2px 0 4px">作業半径 ${craneSpec(U.tw.craneModel).work}m ／ 定格 ${craneSpec(U.tw.craneModel).cap}t ／ 尾部 ${craneSpec(U.tw.craneModel).tail}m</div>${craneSpec(U.tw.craneModel).mast==="tube"?SL("設置高さ m",primaryCraneHeight(craneSpec(U.tw.craneModel),posv(U.p.height,42)/Math.max(1,posv(U.p.floors,1))*Math.max(1,numv(U.tw.step,1))),"(v)=>S('tw.craneHeight',v)",craneSpec(U.tw.craneModel).selfH,craneSpec(U.tw.craneModel).maxInstallH||51,0.5):""}${SL("旋回 °",U.tw.craneRot,"(v)=>S('tw.craneRot',v)",0,360,5)}${CK("作業半径・尾部旋回の円",U.tw.radius,"(v)=>S('tw.radius',v)")}</div>`:"")
     +`<button class="addbtn tc-add" onclick="addTowerCrane('JCL015')">＋ タワークレーンをもう1台追加</button><div class="hint">追加TCは独立して位置・機種・高さを調整できます。</div>`;
    const secFence = fenceSectionHtml()
@@ -4011,7 +4016,7 @@ window.v4PanelStage=(key,label)=>{
  if(document.body.classList.contains("simple"))return;
  let el=document.getElementById("v4-panel-stage");
  if(!el){el=document.createElement("div");el.id="v4-panel-stage";document.body.appendChild(el);}
- const en=({"1":"BASE","2":"TRACE","3":"PLAN","4":"REVIEW"})[key]||"";
+ const en=({"1":"PROJECT","2":"BASE","3":"PLAN","4":"REVIEW"})[key]||"";
  el.innerHTML=`<small>STAGE ${String(key).padStart(2,"0")} / ${en}</small><b>${label||""}</b>`;
  el.className="";
  requestAnimationFrame(()=>el.classList.add("show"));
