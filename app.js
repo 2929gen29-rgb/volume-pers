@@ -99,6 +99,8 @@ const COBJ_TYPES={
    {key:"70t",label:"70t級（概略）",w:3.0,d:13.5,h:3.7,out:7.8,tail:4.5,work:40,boomMin:11,boomMax:47},
    {key:"80t",label:"80t級（概略）",w:3.0,d:14.0,h:3.8,out:8.0,tail:4.7,work:43,boomMin:11.5,boomMax:50},
    {key:"100t",label:"100t級（概略）",w:3.2,d:15.0,h:3.9,out:8.4,tail:5.0,work:48,boomMin:12,boomMax:54},
+   {key:"110t",label:"TADANO GR-1100EX（110t）",w:3.315,d:14.45,h:3.79,out:7.3,tail:5.0,work:48.3,boomMin:12.0,boomMax:56.0},
+   {key:"145t",label:"TADANO GR-1450EX（145t・構内専用）",w:3.315,d:16.19,h:3.785,out:8.2,tail:5.5,work:54.0,boomMin:13.1,boomMax:61.0},
  ]},
  pump:{label:"コンクリポンプ車",color:0x4F7CC4,sizes:[
    {key:"s2t",label:"小型(2t)・ブーム16m級",w:2.0,d:6.5,h:3.2,out:4.0,work:16,boomMin:5,boomMax:16},
@@ -1880,7 +1882,7 @@ function loadProjectJSON(file){
    (U.cobj||[]).forEach(c=>{if(c.size==null){const t=COBJ_TYPES[c.type];if(t)c.size=t.sizes[0].key;}if(c.type==="rough"||c.type==="pump"){if(c.boomPct==null)c.boomPct=c.type==="pump"?62:55;if(c.boomAngle==null)c.boomAngle=c.type==="pump"?48:42;if(c.outPct==null)c.outPct=c.type==="pump"?85:70;}});
    migrateLegacyVehicles();
    if(U.p.addr==null)U.p.addr="";
-   U.sel=null;U._layersOpen=false;
+   U.sel=null;U._layersOpen=false;U._hudMin=true;U._titleMin=true;
    if(U.site&&U.site.active==null)U.site.active=true;
    if(isTutorialFinishCandidate(U))cacheTutorialFinishState(U);
    // 詳細諸元フィールドの後方互換
@@ -2284,7 +2286,7 @@ function applyState(p){
  const keep={ut:U.under.tex,ur:U.under.raw,up:U.under.pages,upg:U.under.page,pt:U.photo.tex,de:U.dxf.ents,dr:U.dxf.raw};
  Object.assign(U,p);
  U.under.tex=keep.ut;U.under.raw=keep.ur;U.under.pages=keep.up;U.under.page=keep.upg;U.photo.tex=keep.pt;U.dxf.ents=keep.de;U.dxf.raw=keep.dr;
- U.sel=null;U._layersOpen=false;U.polyInput={on:false,pts:[],target:null};U.calib={on:false,a:null,b:null};
+ U.sel=null;U._layersOpen=false;U._hudMin=true;U._titleMin=true;U.polyInput={on:false,pts:[],target:null};U.calib={on:false,a:null,b:null};
  if(!Array.isArray(U.annot))U.annot=[];if(!Array.isArray(U.subsurface))U.subsurface=[];if(!U.ojt)U.ojt={};if(!Array.isArray(U.roads))U.roads=[];
  if(U.site&&U.site.active==null)U.site.active=true;
  migrateLegacyVehicles();
@@ -3193,6 +3195,14 @@ function collectChecks(){
  return out;
 }
 window.collectChecks=collectChecks;
+function closeRightSurfaces(except){
+ if(except!=="hud")U._hudMin=true;
+ if(except!=="title")U._titleMin=true;
+ if(except!=="layers"){U._layersOpen=false;const x=document.getElementById("layers");if(x)x.style.display="none";}
+ if(except!=="sel"){const x=document.getElementById("selcard");if(x)x.style.display="none";}
+ if(except!=="settings"&&typeof closeSettings==="function")closeSettings();
+}
+window.closeRightSurfaces=closeRightSurfaces;
 function renderHUD(){
  let el=document.getElementById("hud");
  if(!el){
@@ -3203,7 +3213,7 @@ function renderHUD(){
  }
  if(U.tw.mode==="demo"){el.style.display="none";return;}
  el.style.display="";
- if(U._hudMin===undefined&&window.innerWidth<720)U._hudMin=true;   // スマホは初期折りたたみ
+ if(U._hudMin===undefined)U._hudMin=true;   // PC/スマホとも初期折りたたみ
  const cs=collectChecks();
  const ico={ok:"●",warn:"▲",ng:"✕",na:"－"};
  const cls={ok:"ok",warn:"warn",ng:"ng",na:"na"};
@@ -3212,10 +3222,11 @@ function renderHUD(){
  el.innerHTML=`<div class="hud-h"><div class="hud-title"><small>PROJECT CHECK</small><b>検討判定</b></div>${head}<span id="hud-toggle" title="折りたたむ">${U._hudMin?"＋":"－"}</span></div>
   ${U._hudMin?"":`<div class="hud-b"><div class="hud-summary"><span class="ok"><small>OK</small><b>${String(nOk).padStart(2,"0")}</b></span><span class="warn"><small>CAUTION</small><b>${String(nW).padStart(2,"0")}</b></span><span class="ng"><small>REVIEW</small><b>${String(nNg).padStart(2,"0")}</b></span></div>${cs.map(c=>`<div class="hud-row ${cls[c.lv]}" title="${c.note}"><span class="hud-i">${ico[c.lv]}</span><span class="hud-l">${c.label}</span><span class="hud-v">${c.val}</span></div>`).join("")}
   <div class="hud-f">INITIAL REVIEW / 正式な可否は関係機関・法規で確認</div></div>`}`;
- const t=document.getElementById("hud-toggle");if(t)t.onclick=()=>{U._hudMin=!U._hudMin;renderHUD();};
+ const t=document.getElementById("hud-toggle");if(t)t.onclick=()=>{const opening=!!U._hudMin;U._hudMin=!U._hudMin;if(opening)closeRightSurfaces("hud");renderHUD();renderTitle();};
 }
 window.renderHUD=renderHUD;
 function renderTitle(){
+ const _te=document.getElementById("title");if(_te)_te.style.display="";
  renderHUD(); if(typeof renderSelCard==="function")renderSelCard(); if(document.body.classList.contains("simple")&&typeof renderMobile==="function")renderMobile();
  const modeLabel={build:`仮設計画イメージ（${Math.min(U.p.floors,U.tw.step)}階 躯体時）`,demo:"既存解体フェーズ ― 重機配置検討",retain:`山留め・掘削フェーズ（GL-${numv(U.tw.pitDepth,4)}m）`,pile:"杭工事フェーズ ― 杭配置・既存杭の重ね合わせ",steel:`鉄骨建て方フェーズ（〜${Math.min(U.p.floors,U.tw.step)}階）`,plan:"BimGen ― 営業概算BIM"}[U.tw.mode]||"BimGen";
  const st=U._stats||{floorArea:0,maxFloors:0};
@@ -3246,7 +3257,7 @@ function renderTitle(){
    ${rowC("容積率", far.toFixed(0)+" %", barColor(far,300))}
    ${extra}
    <div style="font-size:8.5px;color:var(--mut);margin-top:2px">敷地${site.toFixed(0)}m²${posv(U.p.siteArea,0)?"(入力値)":"(形状から)"}に対する値${posv(U.p.tArea,0)?"":"・延床は形状概算"}</div></div>`;
- $("#title").innerHTML=`<div class="h" style="display:flex;justify-content:space-between;align-items:center"><span>${modeLabel}</span><span id="title-toggle" style="cursor:pointer;padding:0 4px;font-size:13px" onclick="U._titleMin=!U._titleMin;renderTitle()">${U._titleMin?"＋":"−"}</span></div><div class="b" style="${U._titleMin?"display:none":""}">
+ $("#title").innerHTML=`<div class="h" style="display:flex;justify-content:space-between;align-items:center"><span>${modeLabel}</span><span id="title-toggle" style="cursor:pointer;padding:0 4px;font-size:13px" onclick="const opening=!!U._titleMin;U._titleMin=!U._titleMin;if(opening)closeRightSurfaces('title');renderTitle()">${U._titleMin?"＋":"−"}</span></div><div class="b" style="${U._titleMin?"display:none":""}">
   <div style="font-weight:700;font-size:12px;border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:4px">${U.p.name||"（物件名未入力）"}</div>
   <table><tr><td>用途・構造</td><td>${U.p.use}・${U.p.struct}造</td></tr>
   ${U.p.addr?`<tr><td>所在地</td><td>${U.p.addr.replace(/</g,"&lt;")}</td></tr>`:""}
@@ -3951,7 +3962,7 @@ function resetToDefault(){
  if(U.under.tex&&U.under.tex.dispose)U.under.tex.dispose();
  if(U.photo.tex&&U.photo.tex.dispose)U.photo.tex.dispose();
  Object.assign(U,def);
- U.sel=null;U._layersOpen=false;
+ U.sel=null;U._layersOpen=false;U._hudMin=true;U._titleMin=true;
  _hist.length=0;
 }
 function deepMerge(t,s){for(const k in s){if(s[k]&&typeof s[k]==="object"&&!Array.isArray(s[k])&&t[k]&&typeof t[k]==="object"){deepMerge(t[k],s[k]);}else t[k]=s[k];}return t;}
@@ -4331,7 +4342,7 @@ window.renderLayers=()=>{
 };
 window.toggleLayers=()=>{
  const opening=!U._layersOpen;U._layersOpen=opening;
- if(opening){U.sel=null;renderSelCard();closeSettings();}
+ if(opening){closeRightSurfaces("layers");U._layersOpen=true;U.sel=null;renderSelCard();closeSettings();renderHUD();renderTitle();}
  renderLayers();
 };
 window.closeSettings=()=>{const e=document.getElementById("settings");if(e)e.classList.remove("open");};
@@ -4347,7 +4358,7 @@ window.renderSettings=()=>{
   <div class="set-foot"><button onclick="UI_PREF.fontScale=100;UI_PREF.labelScale=100;UI_PREF.editScope='all';saveUIPref();applyUIPref();rebuild();renderSettings();renderBar()">RESET / 標準に戻す</button><span>設定はこの端末に保存されます</span></div></div>`;
 };
 window.openSettings=()=>{
- U._layersOpen=false;renderLayers();U.sel=null;renderSelCard();
+ closeRightSurfaces("settings");U._layersOpen=false;renderLayers();U.sel=null;renderSelCard();
  let el=document.getElementById("settings");if(!el){el=document.createElement("div");el.id="settings";document.body.appendChild(el);el.addEventListener("pointerdown",e=>{if(e.target===el)closeSettings();});}
  el.classList.add("open");renderSettings();
 };
@@ -4407,6 +4418,7 @@ function renderSelCard(force){
  let el=document.getElementById("selcard");
  if(!el){el=document.createElement("div");el.id="selcard";document.body.appendChild(el);}
  const k=U.sel; if(!k){el.style.display="none";_selCardKey=null;return;}
+ if(_selCardKey!==k){closeRightSurfaces("sel");U._hudMin=true;U._titleMin=true;const h=document.getElementById("hud");if(h)h.style.display="none";const t=document.getElementById("title");if(t)t.style.display="none";}
  // 同じ物を表示中でカード内を操作している最中（スライダー等）は作り直さない
  if(!force&&_selCardKey===k&&el.contains(document.activeElement))return;
  _selCardKey=k;
@@ -4887,6 +4899,6 @@ $("#phead").addEventListener("click",()=>{
  $("#parr").textContent=closed?"▶":"▲";
  $("#phead").setAttribute("aria-expanded",closed?"false":"true");
 });
-U._titleMin = (window.innerWidth < 720);  // モバイルは初期最小化
+U._titleMin = true;U._hudMin=true;U._layersOpen=false;  // 起動時は右側パネルを閉じる
 renderBar();renderPanel();rebuild();
 setTimeout(()=>{const d=$("#drag");if(d)d.style.display="none";},9000);
