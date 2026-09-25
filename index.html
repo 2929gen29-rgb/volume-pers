@@ -80,6 +80,7 @@
   }
   function showApp(){
     if(gate){gate.style.display="none";}
+    document.body.classList.add("start-open");
     // UI v4: 起動直後はスタートメニューを開き、初見でも入口を迷わせない
     if(!window.__bimgenStartShown){
       window.__bimgenStartShown=true;
