@@ -117,6 +117,14 @@ const COBJ_TYPES={
    {key:"bg",label:"BG機械（杭打機）",w:4.5,d:6.0,h:20,tail:3.5,work:6},
    {key:"puller",label:"既存杭引抜機",w:4.0,d:5.5,h:16,tail:3.2,work:5},
  ]},
+ pileaux:{label:"杭工事設備",color:0x6F879E,sizes:[
+   {key:"water10",label:"工事用水槽 10m³級",w:2.4,d:4.5,h:2.0},
+   {key:"slurry10",label:"安定液・泥水槽 10m³級",w:2.4,d:4.5,h:2.0},
+   {key:"settle",label:"沈殿槽・ノッチタンク",w:2.4,d:6.0,h:2.0},
+   {key:"plant",label:"安定液プラント",w:3.5,d:6.0,h:3.5},
+   {key:"genset",label:"発電機・コンプレッサー",w:2.2,d:4.0,h:2.2},
+   {key:"sludge",label:"汚泥・残土コンテナ",w:2.4,d:5.5,h:2.2},
+ ]},
  temp:{label:"仮設材・設備",color:0xD9C9A8,sizes:[
    {key:"gate",label:"仮囲いゲート",w:6.0,d:0.4,h:3.0},
    {key:"hut",label:"プレハブ詰所",w:5.4,d:3.0,h:2.8},
@@ -164,7 +172,7 @@ const COBJ_TYPES={
 };
 // 工程ごとの施工オブジェクト表示。新規配置は原則「配置した工程のみ」。
 const COBJ_PHASE_DEFAULT={
- found:["demo","retain","pile"],backhoe:["demo","retain","pile"],
+ found:["demo","retain","pile"],pileaux:["pile"],backhoe:["demo","retain","pile"],
  towercrane:["steel","build"],rough:["steel","build"],mixer:["build"],pump:["build"],truck:["steel","build"],
  stage:["retain","pile","steel","build"],lsev:["build"],komalift:["build"],temp:["steel","build"],
  guard:["demo","retain","pile","steel","build"],walkzone:["demo","retain","pile","steel","build"],safepath:["demo","retain","pile","steel","build"],
@@ -2622,6 +2630,7 @@ window.addCO=(type)=>{if(U.tw.mode==="plan"&&type!=="obstacle"){toast("完成フ
  const obj={type,size:sz.key,x:nx0,z:nz0,w:sz.w,d:sz.d,h:sz.h,ry:hd!=null?hd:0,phase:U.tw.mode};
  if(type==="rough"){obj.boomPct=55;obj.boomAngle=42;obj.boomRy=0;obj.outPct=70;}
  if(type==="pump"){obj.boomPct=62;obj.boomAngle=48;obj.boomRy=0;obj.outPct=85;}
+ if(type==="towercrane")obj.jibRy=0;
  U.cobj.push(obj);U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();focusSelectionCamera(U.sel,{duration:220});};
 window.addTowerCrane=(model="JCL015")=>{snapshot();const t=COBJ_TYPES.towercrane,sz=t.sizes.find(s=>s.key===model)||t.sizes[0],spec=craneSpec(sz.key);
  const i=(U.cobj||[]).filter(c=>c.type==="towercrane").length,a=placementAnchor(2);
@@ -2647,7 +2656,7 @@ window.addAnnotZone=()=>{snapshot();const sdz2=numv(U.site.dz,0),sd2=posv(U.site
 window.addAnnotText=()=>{const t=prompt("注記の文字を入力（40文字まで）","注意");if(t==null)return;snapshot();const sdz2=numv(U.site.dz,0);U.annot.push({type:"text",x:numv(U.site.dx,0),z:sdz2,ry:0,color:"red",text:t.slice(0,40),fsize:2.5});U.sel="an:"+(U.annot.length-1);rebuild();renderPanel();};
 window.editAnnotText=(i)=>{const a=U.annot[i];if(!a)return;const t=prompt("注記の文字を編集",a.text||"");if(t==null)return;snapshot();a.text=t.slice(0,40);rebuild();renderPanel();};
 window.delAnnot=(i)=>{snapshot();U.annot.splice(i,1);if(U.sel==="an:"+i)U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
-window.setCOSize=(i,key)=>{const c=U.cobj[i];if(!c)return;const sz=cobjSize(c.type,key);if(sz){snapshot();c.size=key;c.w=sz.w;c.d=sz.d;c.h=(c.type==="towercrane"?(craneSpec(key).selfH||sz.h):sz.h);if(c.type==="rough"||c.type==="pump"){if(c.boomPct==null)c.boomPct=60;if(c.boomAngle==null)c.boomAngle=45;if(c.boomRy==null)c.boomRy=0;if(c.outPct==null)c.outPct=80;}}rebuild();renderPanel();};
+window.setCOSize=(i,key)=>{const c=U.cobj[i];if(!c)return;const sz=cobjSize(c.type,key);if(sz){snapshot();c.size=key;c.w=sz.w;c.d=sz.d;c.h=(c.type==="towercrane"?(craneSpec(key).selfH||sz.h):sz.h);if(c.type==="rough"||c.type==="pump"){if(c.boomPct==null)c.boomPct=60;if(c.boomAngle==null)c.boomAngle=45;if(c.boomRy==null)c.boomRy=0;if(c.outPct==null)c.outPct=80;}if(c.type==="towercrane"&&c.jibRy==null)c.jibRy=0;}rebuild();renderPanel();};
 window.setCOParam=(i,k,v)=>{const c=U.cobj[i];if(!c)return;const n=parseFloat(v);if(!isFinite(n))return;snapshot("co."+i+"."+k);c[k]=n;rebuildThrottled();};
 window.setCOHeight=(i,v)=>{const c=U.cobj[i];if(!c)return;const n=parseFloat(v);if(!isFinite(n))return;const spec=c.type==="towercrane"?craneSpec(c.size):null;const lo=spec&&spec.selfH?spec.selfH:0.1,hi=spec&&spec.maxInstallH?spec.maxInstallH:80;snapshot("co."+i+".h");c.h=Math.max(lo,Math.min(hi,n));rebuild();renderPanel();if(typeof renderMobile==="function")renderMobile();};
 window.selCO=(i)=>{U.sel="co:"+i;rebuild();renderPanel();};
@@ -3073,10 +3082,11 @@ function renderPanel(){
  }
  if(U.tab==="施工/CAD"){
   const COBJ_CATS=[
-    {key:"heavy",code:"01",name:"重機・クレーン",sub:"揚重・掘削・杭",keys:["towercrane","rough","backhoe","found"]},
-    {key:"vehicle",code:"02",name:"車両",sub:"生コン・ポンプ・搬入",keys:["mixer","pump","truck"]},
-    {key:"temp",code:"03",name:"仮設設備",sub:"EV・朝顔・構台",keys:["safepath","stage","lsev","komalift","temp"]},
-    {key:"safety",code:"04",name:"安全・支障物",sub:"警備・歩行帯・現地物",keys:["guard","walkzone","obstacle"]}
+    {key:"heavy",code:"01",name:"重機・クレーン",sub:"揚重・掘削",keys:["towercrane","rough","backhoe","found"]},
+    {key:"pile",code:"02",name:"杭工事",sub:"水槽・安定液・プラント",keys:["found","pileaux"]},
+    {key:"vehicle",code:"03",name:"車両",sub:"生コン・ポンプ・搬入",keys:["mixer","pump","truck"]},
+    {key:"temp",code:"04",name:"仮設設備",sub:"EV・朝顔・構台",keys:["safepath","stage","lsev","komalift","temp"]},
+    {key:"safety",code:"05",name:"安全・支障物",sub:"警備・歩行帯・現地物",keys:["guard","walkzone","obstacle"]}
   ];
   if(!window.__bimgenCobjCat||!COBJ_CATS.some(c=>c.key===window.__bimgenCobjCat))window.__bimgenCobjCat="heavy";
   const cat=COBJ_CATS.find(c=>c.key===window.__bimgenCobjCat)||COBJ_CATS[0];
@@ -4313,7 +4323,7 @@ window.openStart=()=>{
 // ───── レイヤー / 表示・編集スコープ ─────
 const LAYER_DEFAULTS={site:true,building:true,nbs:true,fence:true,scaffold:true,crane:true,vehicles:true,tempobj:true,safety:true,obstacles:true,annot:true,sub:true,roads:true,under:true,cobj:true};
 const _VEHICLE_TYPES=new Set(["mixer","pump","truck","rough","backhoe","found"]);
-const _TEMP_TYPES=new Set(["stage","lsev","komalift","temp"]);
+const _TEMP_TYPES=new Set(["stage","lsev","komalift","temp","pileaux"]);
 const _SAFETY_TYPES=new Set(["guard","walkzone","safepath"]);
 const LAYER_DEF=[
  ["site","敷地", (k,o)=>k==="site"],
@@ -4844,6 +4854,7 @@ function renderMobile(){
  }else if(_sheet==="catalog"){title="配置・重機";
   const CATS=[
    ["重機",["towercrane","rough","backhoe","found"]],
+   ["杭工事",["found","pileaux"]],
    ["車両",["mixer","pump","truck"]],
    ["仮設",["safepath","stage","lsev","komalift","temp"]],
    ["安全",["guard","walkzone","obstacle"]]
