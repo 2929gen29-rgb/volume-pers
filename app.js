@@ -1480,16 +1480,17 @@ function rebuild(){
    const pct=Math.max(0,Math.min(100,numv(c.boomPct,62)))/100;
    const total=Math.max(5,numv(sz.boomMin,6)+(numv(sz.boomMax,sz.work||20)-numv(sz.boomMin,6))*pct);
    const baseA=Math.max(15,Math.min(75,numv(c.boomAngle,48)))*Math.PI/180;
+   const boomG=new THREE.Group();boomG.position.set(0,0,d*.17);boomG.rotation.y=numv(c.boomRy,0)*Math.PI/180;cg.add(boomG);
    const ratios=[.31,.27,.23,.19],angs=[baseA,baseA+.58,baseA-.22,-.38];
-   let py=2.38,pz=d*.17;
+   let py=2.38,pz=0;
    ratios.forEach((rr,bi)=>{
     const len=total*rr,th=angs[bi],thick=Math.max(.20,.38-bi*.045);
     const bm=new THREE.Mesh(new THREE.BoxGeometry(thick,thick,len),bi<2?bodyMat:metalMat);
-    bm.geometry.translate(0,0,-len/2);bm.position.set(0,py,pz);bm.rotation.x=th;bm.castShadow=!L;cg.add(bm);
-    const pin=new THREE.Mesh(new THREE.CylinderGeometry(thick*.75,thick*.75,thick*.38,8),darkMat);pin.rotation.z=Math.PI/2;pin.position.set(0,py,pz);cg.add(pin);
+    bm.geometry.translate(0,0,-len/2);bm.position.set(0,py,pz);bm.rotation.x=th;bm.castShadow=!L;boomG.add(bm);
+    const pin=new THREE.Mesh(new THREE.CylinderGeometry(thick*.75,thick*.75,thick*.38,8),darkMat);pin.rotation.z=Math.PI/2;pin.position.set(0,py,pz);boomG.add(pin);
     py+=Math.sin(th)*len;pz-=Math.cos(th)*len;
    });
-   const hoseLen=Math.max(1.8,total*.10);const hose=new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,hoseLen,7),darkMat);hose.position.set(0,py-hoseLen/2,pz);cg.add(hose);
+   const hoseLen=Math.max(1.8,total*.10);const hose=new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,hoseLen,7),darkMat);hose.position.set(0,py-hoseLen/2,pz);boomG.add(hose);
   }else if(c.type==="rough"){ // ラフター：多軸車体＋旋回台＋アウトリガー＋伸縮ブーム
    const yellow=L?baseMat:new THREE.MeshLambertMaterial({color:warn?0xD64545:0xE8B820});
    const dark=L?baseMat:new THREE.MeshLambertMaterial({color:0x272C33});
@@ -1516,16 +1517,17 @@ function rebuild(){
    const boomL=Math.max(6,numv(sz.boomMin,8)+(numv(sz.boomMax,sz.work||24)-numv(sz.boomMin,8))*pct);
    const ang=Math.max(5,Math.min(80,numv(c.boomAngle,42)))*Math.PI/180;
    const baseY=2.82,baseZ=d*.11;
+   const boomG=new THREE.Group();boomG.position.set(0,0,baseZ);boomG.rotation.y=numv(c.boomRy,0)*Math.PI/180;cg.add(boomG);
    const lens=[boomL*.42,boomL*.33,boomL*.25],widths=[.58,.46,.34];
-   let py=baseY,pz=baseZ;
+   let py=baseY,pz=0;
    lens.forEach((len,bi)=>{
     const bm=new THREE.Mesh(new THREE.BoxGeometry(widths[bi],widths[bi],len),bi===0?yellow:(L?baseMat:new THREE.MeshLambertMaterial({color:bi===1?0xD5AA27:0xE7C65A})));
-    bm.geometry.translate(0,0,-len/2);bm.position.set(0,py,pz);bm.rotation.x=ang;bm.castShadow=!L;cg.add(bm);
+    bm.geometry.translate(0,0,-len/2);bm.position.set(0,py,pz);bm.rotation.x=ang;bm.castShadow=!L;boomG.add(bm);
     py+=Math.sin(ang)*len;pz-=Math.cos(ang)*len;
    });
-   const head=new THREE.Mesh(new THREE.BoxGeometry(.62,.55,.48),yellow);head.position.set(0,py,pz);cg.add(head);
-   const drop=Math.max(1.8,Math.min(8,boomL*.14));const rope=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,drop,6),dark);rope.position.set(0,py-drop/2,pz);cg.add(rope);
-   const hook=new THREE.Mesh(new THREE.BoxGeometry(.24,.34,.20),dark);hook.position.set(0,py-drop,pz);cg.add(hook);
+   const head=new THREE.Mesh(new THREE.BoxGeometry(.62,.55,.48),yellow);head.position.set(0,py,pz);boomG.add(head);
+   const drop=Math.max(1.8,Math.min(8,boomL*.14));const rope=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,drop,6),dark);rope.position.set(0,py-drop/2,pz);boomG.add(rope);
+   const hook=new THREE.Mesh(new THREE.BoxGeometry(.24,.34,.20),dark);hook.position.set(0,py-drop,pz);boomG.add(hook);
   }else if(c.type==="backhoe"){ // バックホウ：履帯＋旋回体＋アーム
    const track=new THREE.Mesh(new THREE.BoxGeometry(w,0.8,d),baseMat);track.position.y=.4;track.castShadow=!L;cg.add(track);
    const turret=new THREE.Mesh(new THREE.BoxGeometry(w*0.8,1.3,d*0.6),baseMat);turret.position.set(0,1.4,-d*0.1);cg.add(turret);
