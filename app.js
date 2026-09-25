@@ -4116,6 +4116,7 @@ function tutorialComplete(){
  if(!REAL_TUTORIAL.active)return;REAL_TUTORIAL.complete=true;REAL_TUTORIAL.allow=null;REAL_TUTORIAL.target=null;clearTutorialTrace();U.tw.crane=true;U.tw.craneModel="JCL015_H";U.sel="crane";rebuild();renderPanel();renderBar();focusSelectionCamera("crane",{duration:620});v4Nudge("TOWER CRANE / SET");tutorialRender();
 }
 window.startRealTutorial=()=>{
+ setLeftPanelCollapsed(false);
  REAL_TUTORIAL.active=true;REAL_TUTORIAL.loading=false;REAL_TUTORIAL.step=0;REAL_TUTORIAL.traceI=0;REAL_TUTORIAL.complete=false;document.body.classList.add("tutorial-mode");tutorialPrepareStep(0);tutorialRender();
 };
 window.exitRealTutorial=async(skipped)=>{
@@ -4156,7 +4157,7 @@ const TOUR_STEPS=[
  {t:"⑤ 出力と保存",b:"④「検討・出力」→ 📄検討シートでA4横1枚に。💾保存で案件ファイル。作業中の内容はこの端末に自動退避されます。",do:()=>{U.tabGroup="4";U.tab="検討";renderPanel();view("bird");}},
 ];
 let _tourI=0;
-window.startTour=()=>{openDemoCase();_tourI=0;setTimeout(()=>renderTour(),350);};
+window.startTour=()=>{openDemoCase();setLeftPanelCollapsed(false);_tourI=0;setTimeout(()=>renderTour(),350);};
 window.tourNext=(d)=>{_tourI+=d;if(_tourI<0)_tourI=0;if(_tourI>=TOUR_STEPS.length){endTour();return;}renderTour();};
 window.endTour=()=>{const el=document.getElementById("tour");if(el)el.style.display="none";try{localStorage.setItem("bimgen_tour_done","1");}catch(e){}toast("ガイド終了。右上「＋ 新規」からいつでもやり直せます","ok");};
 function renderTour(){
@@ -4416,18 +4417,40 @@ window.toolsToggle=()=>{U._toolsMin=!U._toolsMin;renderTools();};
 function renderTools(){
  if(typeof renderUnderControl==="function")renderUnderControl();
  let el=document.getElementById("tools");
- if(!el){el=document.createElement("div");el.id="tools";document.body.appendChild(el);
-  // つまみをドラッグで移動
+ if(!el){el=document.createElement("div");el.id="tools";document.body.appendChild(el);}
+ if(!el._dragBound){
   let drag=null;
-  el.addEventListener("pointerdown",(e)=>{const g=e.target.closest(".tool-grip");if(!g)return;e.preventDefault();const r=el.getBoundingClientRect();drag={dx:e.clientX-r.left,dy:e.clientY-r.top};el.setPointerCapture(e.pointerId);});
-  el.addEventListener("pointermove",(e)=>{if(!drag)return;const x=Math.max(0,Math.min(innerWidth-60,e.clientX-drag.dx)),y=Math.max(0,Math.min(innerHeight-40,e.clientY-drag.dy));el.style.left=x+"px";el.style.top=y+"px";el.style.right="auto";el.style.bottom="auto";el.style.transform="none";});
-  el.addEventListener("pointerup",(e)=>{if(!drag)return;drag=null;_toolsSave({x:parseFloat(el.style.left),y:parseFloat(el.style.top)});});
-  const p=_toolsPos(); if(p&&isFinite(p.x)&&isFinite(p.y)){el.style.left=Math.min(p.x,innerWidth-80)+"px";el.style.top=Math.min(p.y,innerHeight-50)+"px";el.style.right="auto";el.style.bottom="auto";el.style.transform="none";}
+  el.addEventListener("pointerdown",(e)=>{
+   const g=e.target.closest(".tool-grip");if(!g)return;
+   e.preventDefault();e.stopPropagation();
+   const r=el.getBoundingClientRect();
+   drag={id:e.pointerId,dx:e.clientX-r.left,dy:e.clientY-r.top};
+   el.classList.add("dragging");
+  });
+  window.addEventListener("pointermove",(e)=>{
+   if(!drag||e.pointerId!==drag.id)return;
+   const x=Math.max(8,Math.min(innerWidth-el.offsetWidth-8,e.clientX-drag.dx));
+   const y=Math.max(8,Math.min(innerHeight-el.offsetHeight-8,e.clientY-drag.dy));
+   el.style.left=x+"px";el.style.top=y+"px";el.style.right="auto";el.style.bottom="auto";el.style.transform="none";
+  },{passive:true});
+  const endDrag=(e)=>{
+   if(!drag||(e.pointerId!=null&&e.pointerId!==drag.id))return;
+   drag=null;el.classList.remove("dragging");
+   const r=el.getBoundingClientRect();_toolsSave({x:Math.round(r.left),y:Math.round(r.top)});
+  };
+  window.addEventListener("pointerup",endDrag);
+  window.addEventListener("pointercancel",endDrag);
+  el._dragBound=true;
  }
- if(U._toolsMin){el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ドラッグで移動">⋮⋮</span><button class="tool" style="min-width:auto" onclick="toolsToggle()" title="道具を表示"><span>✎</span>道具</button></div>`;return;}
+ if(!el.dataset.posApplied){
+  const p=_toolsPos();
+  if(p&&isFinite(p.x)&&isFinite(p.y)){el.style.left=Math.min(p.x,innerWidth-80)+"px";el.style.top=Math.min(p.y,innerHeight-50)+"px";el.style.right="auto";el.style.bottom="auto";el.style.transform="none";}
+  el.dataset.posApplied="1";
+ }
+ if(U._toolsMin){el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ここをドラッグして道具を移動"><b>⋮⋮</b><small>TOOLS</small></span><button class="tool" style="min-width:auto" onclick="toolsToggle()" title="道具を表示"><span>✎</span>道具</button></div>`;return;}
  const on=(t)=>U.polyInput.on&&((t==="block"&&U.polyInput.target==null)||U.polyInput.target===t);
  const b=(t,ic,lab)=>`<button class="tool ${on(t)?"on":""}" title="${lab}（クリック→ダブルクリックで確定）" onclick="startDraw('${t}')"><span>${ic}</span>${lab}</button>`;
- el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ドラッグで移動／ダブルクリックで初期位置" ondblclick="toolsReset()">⋮⋮</span>${b("site","▭","敷地")}${b("block","▣","建物")}${b("road","═","道路")}${b("fence","▦","仮囲い")}</div>
+ el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ここをドラッグして道具を移動／ダブルクリックで初期位置" ondblclick="toolsReset()"><b>⋮⋮</b><small>TOOLS</small></span>${b("site","▭","敷地")}${b("block","▣","建物")}${b("road","═","道路")}${b("fence","▦","仮囲い")}</div>
   <div class="tool-grp">
    <button class="tool ${U.dim.on?"on":""}" title="2点クリックで距離を測る" onclick="S('dim.on',!U.dim.on,false);if(!U.dim.on){U.dim.a=null;U.dim.b=null;}rebuild();renderBar()"><span>↔</span>寸法</button>
    <button class="tool ${U.snap!==false?"on":""}" title="頂点・道路への吸着、15°刻み回転" onclick="U.snap=!U.snap;renderBar();renderPanel()"><span>⌖</span>吸着</button>
@@ -4948,7 +4971,7 @@ function setLeftPanelCollapsed(closed){
  p.classList.toggle("collapsed",!!closed);
  w.style.display=closed?"none":"";
  if(a)a.textContent=closed?"▶":"▲";
- if(h)h.setAttribute("aria-expanded",closed?"false":"true");
+ if(h){h.setAttribute("aria-expanded",closed?"false":"true");h.title=closed?"案件パネルを開く":"案件パネルを閉じる";}
 }
 window.setLeftPanelCollapsed=setLeftPanelCollapsed;
 $("#phead").addEventListener("click",()=>setLeftPanelCollapsed(!$("#panel").classList.contains("collapsed")));
