@@ -1447,7 +1447,7 @@ function rebuild(){
  if(U.tw.ev&&U.tw.mode==="build"){
   const eg=new THREE.Group();eg.userData.dragKey="ev";
   const eh=Math.max(8,builtH-gl+3);
-  buildLongspanEV(eg,3.6,4.6,eh,Math.max(2,(builtH-gl)*.45),false);
+  buildLongspanEV(eg,3.6,4.6,eh,Math.max(2,eh*Math.max(.08,Math.min(.92,numv(U.tw.evLiftPct,45)/100))),false);
   eg.position.set(numv(U.tw.evX,-6),gl,U.tw.evZ==null?frontMax+1.1:numv(U.tw.evZ,frontMax+1.1));eg.rotation.y=numv(U.tw.evRy,0)*Math.PI/180;
   g.add(eg);dragMap.ev=eg;}
 
@@ -1699,7 +1699,7 @@ function rebuild(){
    const rl=Math.max(4,hgt*4); const ramp=new THREE.Mesh(new THREE.BoxGeometry(w*0.8,0.25,rl),dk);ramp.position.set(0,hgt/2,d/2+rl/2*Math.cos(Math.atan2(hgt,rl)));ramp.rotation.x=Math.atan2(hgt,rl);cg.add(ramp);
    if(!L){const rail=new THREE.MeshLambertMaterial({color:0xF2A33C});[-w/2,w/2].forEach(x=>{const h=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.9,d),rail);h.position.set(x,hgt+0.6,0);cg.add(h);});}
   }else if(c.type==="lsev"){ // ロングスパンEV：格子マスト＋搬器＋ゲート＋タイイン
-   buildLongspanEV(cg,w,d,hgt,Math.max(2,hgt*.45),warn);
+   buildLongspanEV(cg,w,d,hgt,Math.max(2,hgt*Math.max(.08,Math.min(.92,numv(c.carPct,45)/100))),warn);
   }else if(c.type==="komalift"){ // コマリフト（小型荷揚げ機）：1本マスト＋小さな荷台＋台車
    const mm=L?baseMat:new THREE.MeshLambertMaterial({color:warn?0xD64545:0xc9ccd2});
    const mast=new THREE.Mesh(new THREE.BoxGeometry(.32,hgt,.32),mm);mast.position.set(0,hgt/2,-d/2+.3);mast.castShadow=!L;cg.add(mast);
@@ -2814,7 +2814,7 @@ function v4PhaseSceneTransition(next){
 }
 window.v4PhaseSceneTransition=v4PhaseSceneTransition;
 window.setMode=(m)=>v4PhaseSceneTransition(m);
-window.addCO=(type)=>{if(U.tw.mode==="plan"&&type!=="obstacle"){toast("完成フェーズでは仮設物を配置しません。工程を施工中へ戻してください","err");return;}snapshot();const t=COBJ_TYPES[type]||COBJ_TYPES.truck;
+window.addCO=(type)=>{if(type==="pileaux"&&U.tw.mode!=="pile"){U.tw.mode="pile";U.tw.step=1;renderBar();}if(U.tw.mode==="plan"&&type!=="obstacle"){toast("完成フェーズでは仮設物を配置しません。工程を施工中へ戻してください","err");return;}snapshot();const t=COBJ_TYPES[type]||COBJ_TYPES.truck;
  const preferred={rough:"25t",pump:"m4t",mixer:"8t",truck:"4t"}[type];
  const sz=(preferred&&cobjSize(type,preferred))||t.sizes[0];
  const a=placementAnchor(5),nx0=a.x,nz0=a.z;const hd=(U.snap!==false)?nearestRoadHeading(nx0,nz0):null;
@@ -2822,6 +2822,7 @@ window.addCO=(type)=>{if(U.tw.mode==="plan"&&type!=="obstacle"){toast("完成フ
  if(type==="rough"){obj.boomPct=55;obj.boomAngle=42;obj.boomRy=0;obj.outPct=70;}
  if(type==="pump"){obj.boomPct=62;obj.boomAngle=48;obj.boomRy=0;obj.outPct=85;}
  if(type==="towercrane")obj.jibRy=0;
+ if(type==="lsev")obj.carPct=45;
  U.cobj.push(obj);U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();focusSelectionCamera(U.sel,{duration:220});};
 window.addTowerCrane=(model="JCL015")=>{snapshot();const t=COBJ_TYPES.towercrane,sz=t.sizes.find(s=>s.key===model)||t.sizes[0],spec=craneSpec(sz.key);
  const i=(U.cobj||[]).filter(c=>c.type==="towercrane").length,a=placementAnchor(2);
