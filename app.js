@@ -1388,49 +1388,51 @@ function rebuild(){
   const mh=builtH+16, jib=spec.jib, work=spec.work;
   const cg=new THREE.Group();cg.userData.dragKey="crane";
   const cm=mat(spec.mast==="mini"?0x4B82FF:0xF2A33C);
-  const a=(geo,x,y,z)=>{const m=new THREE.Mesh(geo,cm);m.position.set(x,y,z);m.castShadow=!L;cg.add(m);if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:0x16243d}));e.position.set(x,y,z);cg.add(e);}};
+  const upperG=new THREE.Group();upperG.rotation.y=numv(U.tw.craneRot,0)*Math.PI/180;cg.add(upperG);
+  const addTC=(parent,geo,x,y,z)=>{const m=new THREE.Mesh(geo,cm);m.position.set(x,y,z);m.castShadow=!L;parent.add(m);if(L){const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:0x16243d}));e.position.set(x,y,z);parent.add(e);}return m;};
+  const a=(geo,x,y,z)=>addTC(cg,geo,x,y,z), au=(geo,x,y,z)=>addTC(upperG,geo,x,y,z);
   if(spec.mast==="tube"){ // 円筒マスト・高自立：小さなベース＋丸マスト＋短い尾部（カタログ形状）
    const mhT=primaryCraneHeight(spec,builtH);
    const b2=spec.base||2.5;
    a(new THREE.BoxGeometry(b2,.4,b2),0,.2,0);
    a(new THREE.CylinderGeometry(.31,.31,mhT,20),0,mhT/2,0);
-   a(new THREE.BoxGeometry(1.4,1.4,1.4),0,mhT+.7,0);
-   a(new THREE.BoxGeometry(jib,.45,.6),jib/2-.6,mhT+1.5,0);
+   au(new THREE.BoxGeometry(1.4,1.4,1.4),0,mhT+.7,0);
+   au(new THREE.BoxGeometry(jib,.45,.6),jib/2-.6,mhT+1.5,0);
    const tailL=spec.tail+1;
-   a(new THREE.BoxGeometry(tailL,.4,.8),-tailL/2+.2,mhT+1.5,0);
+   au(new THREE.BoxGeometry(tailL,.4,.8),-tailL/2+.2,mhT+1.5,0);
    // 運転室・カウンターウェイト・トロリ
-   const cab=new THREE.Mesh(new THREE.BoxGeometry(.9,1.15,.9),mat(0xE7EAEE));cab.position.set(-.72,mhT+1.3,-.62);cab.castShadow=!L;cg.add(cab);
-   const win=new THREE.Mesh(new THREE.BoxGeometry(.58,.48,.05),mat(0x365169,{transparent:true,opacity:.84}));win.position.set(-.72,mhT+1.42,-1.08);cg.add(win);
-   for(let n=0;n<3;n++)a(new THREE.BoxGeometry(.34,.72,1.0),-tailL+.42+n*.32,mhT+1.9,0);
-   a(new THREE.BoxGeometry(.58,.28,.72),jib*.72,mhT+1.12,0);
-   a(new THREE.BoxGeometry(.25,3,.25),0,mhT+3,0);
+   const cab=new THREE.Mesh(new THREE.BoxGeometry(.9,1.15,.9),mat(0xE7EAEE));cab.position.set(-.72,mhT+1.3,-.62);cab.castShadow=!L;upperG.add(cab);
+   const win=new THREE.Mesh(new THREE.BoxGeometry(.58,.48,.05),mat(0x365169,{transparent:true,opacity:.84}));win.position.set(-.72,mhT+1.42,-1.08);upperG.add(win);
+   for(let n=0;n<3;n++)au(new THREE.BoxGeometry(.34,.72,1.0),-tailL+.42+n*.32,mhT+1.9,0);
+   au(new THREE.BoxGeometry(.58,.28,.72),jib*.72,mhT+1.12,0);
+   au(new THREE.BoxGeometry(.25,3,.25),0,mhT+3,0);
    const drop=Math.max(3,mhT-builtH-3);
-   a(new THREE.BoxGeometry(.06,drop,.06),jib*.75,mhT+1.3-drop/2,0);a(new THREE.BoxGeometry(.7,.7,.7),jib*.75,mhT+1.3-drop,0);
+   au(new THREE.BoxGeometry(.06,drop,.06),jib*.75,mhT+1.3-drop/2,0);au(new THREE.BoxGeometry(.7,.7,.7),jib*.75,mhT+1.3-drop,0);
   }else if(spec.mast==="mini"){ // 小型ジブクレーン（枠組足場上・全高10.6m）：格子柱＋起伏ブーム＋控え柱
    const H=spec.selfH||10.6, bw=spec.base||0.9;
    a(new THREE.BoxGeometry(bw,.15,bw),0,.075,0);
    [-1,1].forEach(sx=>[-1,1].forEach(sz=>a(new THREE.BoxGeometry(.08,H*0.55,.08),sx*bw/2,H*0.275,sz*bw/2)));
    for(let y=1;y<H*0.55;y+=1.2){a(new THREE.BoxGeometry(bw,.06,.06),0,y,bw/2);a(new THREE.BoxGeometry(bw,.06,.06),0,y,-bw/2);}
-   a(new THREE.BoxGeometry(.5,1.2,.7),0,H*0.55+.6,0);
-   a(new THREE.BoxGeometry(.62,.48,.72),-.48,H*0.55+.78,0);
-   a(new THREE.BoxGeometry(.42,.58,.50),.36,H*0.55+.84,-.28);
+   au(new THREE.BoxGeometry(.5,1.2,.7),0,H*0.55+.6,0);
+   au(new THREE.BoxGeometry(.62,.48,.72),-.48,H*0.55+.78,0);
+   au(new THREE.BoxGeometry(.42,.58,.50),.36,H*0.55+.84,-.28);
    const boomLen=spec.jib, ang=35*Math.PI/180;
-   const boom=new THREE.Mesh(new THREE.BoxGeometry(boomLen,.18,.18),cm);boom.position.set(Math.cos(ang)*boomLen/2,H*0.55+1.2+Math.sin(ang)*boomLen/2,0);boom.rotation.z=ang;boom.castShadow=!L;cg.add(boom);
-   a(new THREE.BoxGeometry(.12,H*0.45,.12),0,H*0.55+H*0.225,0);
+   const boom=new THREE.Mesh(new THREE.BoxGeometry(boomLen,.18,.18),cm);boom.position.set(Math.cos(ang)*boomLen/2,H*0.55+1.2+Math.sin(ang)*boomLen/2,0);boom.rotation.z=ang;boom.castShadow=!L;upperG.add(boom);
+   au(new THREE.BoxGeometry(.12,H*0.45,.12),0,H*0.55+H*0.225,0);
    const tipX=Math.cos(ang)*boomLen, tipY=H*0.55+1.2+Math.sin(ang)*boomLen; const drop=Math.max(2,tipY-builtH-2);
-   a(new THREE.BoxGeometry(.04,drop,.04),tipX,tipY-drop/2,0);a(new THREE.BoxGeometry(.4,.4,.4),tipX,tipY-drop,0);
+   au(new THREE.BoxGeometry(.04,drop,.04),tipX,tipY-drop/2,0);au(new THREE.BoxGeometry(.4,.4,.4),tipX,tipY-drop,0);
   }else{ // 格子マスト（従来）
    a(new THREE.BoxGeometry(4.5,.9,4.5),0,.45,0);a(new THREE.BoxGeometry(1.5,mh,1.5),0,mh/2,0);
-   a(new THREE.BoxGeometry(2.1,2,2.1),0,mh+1,0);a(new THREE.BoxGeometry(jib,.8,1),jib/2-1.2,mh+2.2,0);
-   a(new THREE.BoxGeometry(7,.7,1),-4.2,mh+2.2,0);
+   au(new THREE.BoxGeometry(2.1,2,2.1),0,mh+1,0);au(new THREE.BoxGeometry(jib,.8,1),jib/2-1.2,mh+2.2,0);
+   au(new THREE.BoxGeometry(7,.7,1),-4.2,mh+2.2,0);
    // 運転室とカウンターウェイト
-   const cab=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.55,1.15),mat(0xE7EAEE));cab.position.set(-1.15,mh+2.0,-.72);cab.castShadow=!L;cg.add(cab);
-   const win=new THREE.Mesh(new THREE.BoxGeometry(.78,.62,.05),mat(0x365169,{transparent:true,opacity:.84}));win.position.set(-1.15,mh+2.15,-1.32);cg.add(win);
-   for(let n=0;n<4;n++)a(new THREE.BoxGeometry(.38,1.4,2.1),-6.2-n*.38,mh+1.55,0);
-   a(new THREE.BoxGeometry(.58,.30,.78),jib*.72,mh+1.75,0);
-   a(new THREE.BoxGeometry(.5,4.5,.5),0,mh+4.4,0);
+   const cab=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.55,1.15),mat(0xE7EAEE));cab.position.set(-1.15,mh+2.0,-.72);cab.castShadow=!L;upperG.add(cab);
+   const win=new THREE.Mesh(new THREE.BoxGeometry(.78,.62,.05),mat(0x365169,{transparent:true,opacity:.84}));win.position.set(-1.15,mh+2.15,-1.32);upperG.add(win);
+   for(let n=0;n<4;n++)au(new THREE.BoxGeometry(.38,1.4,2.1),-6.2-n*.38,mh+1.55,0);
+   au(new THREE.BoxGeometry(.58,.30,.78),jib*.72,mh+1.75,0);
+   au(new THREE.BoxGeometry(.5,4.5,.5),0,mh+4.4,0);
    const drop=Math.max(4,mh-builtH-4);
-   a(new THREE.BoxGeometry(.07,drop,.07),jib*.72,mh+2-drop/2,0);a(new THREE.BoxGeometry(.9,.9,.9),jib*.72,mh+2-drop,0);
+   au(new THREE.BoxGeometry(.07,drop,.07),jib*.72,mh+2-drop/2,0);au(new THREE.BoxGeometry(.9,.9,.9),jib*.72,mh+2-drop,0);
   }
   // 作業半径ガイド（カタログ作業半径・選択時/設定時のみ・画像出力時は非表示）
   if(U.tw.radius&&!L&&!U._exporting){
@@ -1440,7 +1442,7 @@ function rebuild(){
   }
   const _krx=numv(U.tw.craneX,16), _krz=numv(U.tw.craneZ,0);
   cg.position.set(_krx,groundY(_krx,_krz)+.1,_krz);
-  cg.rotation.y=numv(U.tw.craneRot,0)*Math.PI/180;
+  cg.rotation.y=0;
   g.add(cg);dragMap.crane=cg;}
 
  // ロングスパンEV（ドラッグ可・詳細モデル）
