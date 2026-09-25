@@ -1403,28 +1403,46 @@ function rebuild(){
   if(c.type==="towercrane"){
    const spec=craneSpec(c.size), mastH=Math.max(spec.selfH||8,Math.min(spec.maxInstallH||63,hgt));
    const cm=L?baseMat:new THREE.MeshLambertMaterial({color:seld?0x4B82FF:0xF2A33C});
-   const addTC=(geo,x,y,z)=>{const m=new THREE.Mesh(geo,cm);m.position.set(x,y,z);m.castShadow=!L;cg.add(m);return m;};
+   const dark=L?baseMat:new THREE.MeshLambertMaterial({color:0x2B3037});
+   const glass=L?baseMat:new THREE.MeshLambertMaterial({color:0x365169,transparent:true,opacity:.84});
+   const steel=L?baseMat:new THREE.MeshLambertMaterial({color:0xD8DEE6});
+   const addTo=(parent,geo,x,y,z,material=cm)=>{const m=new THREE.Mesh(geo,material);m.position.set(x,y,z);m.castShadow=!L;parent.add(m);return m;};
    const bw=Math.max(1.5,Math.min(3.2,posv(sz.w,spec.base||2.4)));
    if(spec.mast==="tube"){
-    addTC(new THREE.BoxGeometry(bw,.35,bw),0,.18,0);
-    addTC(new THREE.CylinderGeometry(.30,.30,mastH,18),0,mastH/2,0);
+    addTo(cg,new THREE.BoxGeometry(bw,.35,bw),0,.18,0);
+    addTo(cg,new THREE.CylinderGeometry(.30,.30,mastH,18),0,mastH/2,0);
    }else{
-    const leg=.16,off=bw*.38;
-    [[-off,-off],[-off,off],[off,-off],[off,off]].forEach(([x,z])=>addTC(new THREE.BoxGeometry(leg,mastH,leg),x,mastH/2,z));
-    for(let y=1.5;y<mastH;y+=2.2){addTC(new THREE.BoxGeometry(bw*.8,.08,.08),0,y,off);addTC(new THREE.BoxGeometry(bw*.8,.08,.08),0,y,-off);addTC(new THREE.BoxGeometry(.08,.08,bw*.8),off,y,0);addTC(new THREE.BoxGeometry(.08,.08,bw*.8),-off,y,0);}
+    const leg=.15,off=bw*.38;
+    [[-off,-off],[-off,off],[off,-off],[off,off]].forEach(([x,z])=>addTo(cg,new THREE.BoxGeometry(leg,mastH,leg),x,mastH/2,z));
+    for(let y=1.2;y<mastH;y+=1.8){
+     addTo(cg,new THREE.BoxGeometry(bw*.80,.07,.07),0,y,off);
+     addTo(cg,new THREE.BoxGeometry(bw*.80,.07,.07),0,y,-off);
+     addTo(cg,new THREE.BoxGeometry(.07,.07,bw*.80),off,y,0);
+     addTo(cg,new THREE.BoxGeometry(.07,.07,bw*.80),-off,y,0);
+    }
    }
-   addTC(new THREE.BoxGeometry(1.4,1.2,1.4),0,mastH+.6,0);
-   addTC(new THREE.BoxGeometry(spec.jib,.38,.55),spec.jib/2-.5,mastH+1.5,0);
-   addTC(new THREE.BoxGeometry(spec.tail+.8,.34,.65),-(spec.tail+.8)/2+.15,mastH+1.5,0);
-   addTC(new THREE.BoxGeometry(.2,2.4,.2),0,mastH+2.8,0);
-   const hookX=spec.jib*.72,drop=Math.max(3,Math.min(12,mastH*.28));
-   addTC(new THREE.BoxGeometry(.05,drop,.05),hookX,mastH+1.3-drop/2,0);
-   addTC(new THREE.BoxGeometry(.55,.45,.55),hookX,mastH+1.3-drop,0);
+   addTo(cg,new THREE.CylinderGeometry(bw*.42,bw*.46,.28,18),0,mastH+.16,0,dark);
+   const upperG=new THREE.Group();upperG.position.y=mastH+.28;upperG.rotation.y=numv(c.jibRy,0)*Math.PI/180;cg.add(upperG);
+   addTo(upperG,new THREE.BoxGeometry(1.65,.72,1.45),0,.46,0,cm);
+   addTo(upperG,new THREE.BoxGeometry(.92,1.18,.88),-.72,1.22,-.08,cm);
+   addTo(upperG,new THREE.BoxGeometry(.58,.52,.055),-.72,1.34,-.535,glass);
+   addTo(upperG,new THREE.BoxGeometry(spec.jib,.34,.52),spec.jib/2-.55,1.38,0,cm);
+   for(let x=1.8;x<spec.jib-1.2;x+=2.4){const br=addTo(upperG,new THREE.BoxGeometry(.055,.055,1.0),x,1.72,0,steel);br.rotation.z=.72;}
+   const tailLen=Math.max(2.0,spec.tail+1.2);
+   addTo(upperG,new THREE.BoxGeometry(tailLen,.36,.62),-tailLen/2+.25,1.38,0,cm);
+   const cwMat=L?baseMat:new THREE.MeshLambertMaterial({color:0x5B626C});
+   const cwX=-tailLen+.48;
+   for(let n=0;n<3;n++)addTo(upperG,new THREE.BoxGeometry(.36,.72,1.05),cwX+n*.34,1.78,0,cwMat);
+   addTo(upperG,new THREE.BoxGeometry(.20,2.55,.20),0,2.66,0,cm);
+   const hookX=spec.jib*.72;
+   addTo(upperG,new THREE.BoxGeometry(.58,.30,.72),hookX,1.10,0,dark);
+   const drop=Math.max(3,Math.min(12,mastH*.28));
+   addTo(upperG,new THREE.CylinderGeometry(.025,.025,drop,6),hookX,1.05-drop/2,0,dark);
+   addTo(upperG,new THREE.BoxGeometry(.44,.56,.38),hookX,1.05-drop,0,dark);
    if(!L&&!U._exporting&&seld){
     const ring=new THREE.Mesh(new THREE.RingGeometry(Math.max(.2,spec.work-.35),spec.work,64),new THREE.MeshBasicMaterial({color:0x4B82FF,transparent:true,opacity:.30,side:THREE.DoubleSide,depthTest:false,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.07;ring.renderOrder=5;cg.add(ring);
     const tr=new THREE.Mesh(new THREE.RingGeometry(Math.max(.1,spec.tail-.18),spec.tail,40),new THREE.MeshBasicMaterial({color:0xD64545,transparent:true,opacity:.42,side:THREE.DoubleSide,depthTest:false,depthWrite:false}));tr.rotation.x=-Math.PI/2;tr.position.y=.08;tr.renderOrder=5;cg.add(tr);
-   }
-  }else if(c.type==="safepath"){
+   }  }else if(c.type==="safepath"){
    const lane=new THREE.Mesh(new THREE.BoxGeometry(w,.035,d),L?baseMat:new THREE.MeshLambertMaterial({color:0xEADFB9,transparent:true,opacity:.46}));lane.position.y=.025;cg.add(lane);
    const edgeMat=L?baseMat:new THREE.MeshLambertMaterial({color:0xF28C28});
    const barMat=L?baseMat:new THREE.MeshLambertMaterial({color:0xF5F7FA});
