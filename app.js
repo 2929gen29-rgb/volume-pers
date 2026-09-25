@@ -1493,10 +1493,14 @@ function rebuild(){
    for(let ai=0;ai<axles;ai++){const z=-d*.34+(d*.68)*(axles===1?0:ai/(axles-1));[-1,1].forEach(sx=>{const wh=new THREE.Mesh(new THREE.CylinderGeometry(.62,.62,.38,10),dark);wh.rotation.z=Math.PI/2;wh.position.set(sx*w*.49,.62,z);cg.add(wh);});}
    const driveCab=new THREE.Mesh(new THREE.BoxGeometry(w*.84,1.78,d*.20),yellow);driveCab.position.set(0,2.03,-d*.33);cg.add(driveCab);
    const wind=new THREE.Mesh(new THREE.BoxGeometry(w*.64,.70,.06),glass);wind.position.set(0,2.20,-d*.435);cg.add(wind);
-   const turret=new THREE.Mesh(new THREE.CylinderGeometry(w*.34,w*.38,.48,12),dark);turret.position.set(0,1.72,d*.08);cg.add(turret);
-   const opCab=new THREE.Mesh(new THREE.BoxGeometry(w*.42,1.55,d*.18),yellow);opCab.position.set(-w*.24,2.55,d*.13);cg.add(opCab);
-   const opGlass=new THREE.Mesh(new THREE.BoxGeometry(w*.30,.62,.05),glass);opGlass.position.set(-w*.24,2.72,d*.035);cg.add(opGlass);
-   const cw=new THREE.Mesh(new THREE.BoxGeometry(w*.76,.85,d*.13),dark);cw.position.set(0,2.18,d*.29);cg.add(cw);
+   // 上部旋回体：運転室・カウンターウェイト・ブームを一体で旋回
+   const upperG=new THREE.Group();upperG.position.set(0,0,d*.08);upperG.rotation.y=numv(c.boomRy,0)*Math.PI/180;cg.add(upperG);
+   const turret=new THREE.Mesh(new THREE.CylinderGeometry(w*.34,w*.38,.48,12),dark);turret.position.set(0,1.72,0);upperG.add(turret);
+   const deckRing=new THREE.Mesh(new THREE.CylinderGeometry(w*.40,w*.42,.16,12),yellow);deckRing.position.set(0,1.98,0);upperG.add(deckRing);
+   const opCab=new THREE.Mesh(new THREE.BoxGeometry(w*.42,1.55,d*.18),yellow);opCab.position.set(-w*.24,2.55,d*.05);upperG.add(opCab);
+   const opGlass=new THREE.Mesh(new THREE.BoxGeometry(w*.30,.62,.05),glass);opGlass.position.set(-w*.24,2.72,-d*.045);upperG.add(opGlass);
+   const cw=new THREE.Mesh(new THREE.BoxGeometry(w*.78,.88,d*.16),dark);cw.position.set(0,2.18,d*.22);upperG.add(cw);
+   const cw2=new THREE.Mesh(new THREE.BoxGeometry(w*.58,.38,d*.12),dark);cw2.position.set(0,2.72,d*.25);upperG.add(cw2);
    const outPct=Math.max(0,Math.min(100,numv(c.outPct,70)))/100;
    const outSpan=w+(Math.max(w,sz.out||w)-w)*outPct;
    [-d*.24,d*.25].forEach(z=>[-1,1].forEach(sx=>{
@@ -1508,8 +1512,8 @@ function rebuild(){
    const pct=Math.max(0,Math.min(100,numv(c.boomPct,55)))/100;
    const boomL=Math.max(6,numv(sz.boomMin,8)+(numv(sz.boomMax,sz.work||24)-numv(sz.boomMin,8))*pct);
    const ang=Math.max(5,Math.min(80,numv(c.boomAngle,42)))*Math.PI/180;
-   const baseY=2.82,baseZ=d*.11;
-   const boomG=new THREE.Group();boomG.position.set(0,0,baseZ);boomG.rotation.y=numv(c.boomRy,0)*Math.PI/180;cg.add(boomG);
+   const baseY=2.82,baseZ=d*.03;
+   const boomG=new THREE.Group();boomG.position.set(0,0,baseZ);upperG.add(boomG);
    const lens=[boomL*.42,boomL*.33,boomL*.25],widths=[.58,.46,.34];
    let py=baseY,pz=0;
    lens.forEach((len,bi)=>{
