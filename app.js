@@ -2860,7 +2860,7 @@ window.addTowerCrane=(model="JCL015")=>{snapshot();const t=COBJ_TYPES.towercrane
  U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();focusSelectionCamera(U.sel,{duration:240});if(typeof renderMobile==="function")renderMobile();
  toast("追加タワークレーンを配置しました。ドラッグで位置調整できます","ok");
 };
-window.delCO=(i)=>{snapshot();U.cobj.splice(i,1);if(U.sel==="co:"+i)U.sel=null;const gg=cobjGroup().filter(x=>x!==i).map(x=>x>i?x-1:x);U._cobjGroup=gg;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
+window.delCO=(i)=>{snapshot();const before=cobjGroup().slice();U.cobj.splice(i,1);if(U.sel==="co:"+i)U.sel=null;U._cobjGroup=before.filter(x=>x!==i).map(x=>x>i?x-1:x);_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
 window.addSub=(kind)=>{
  snapshot();
  const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);
@@ -4778,6 +4778,8 @@ function renderSelCard(force){
    <div class="sc-refdist">📏 ${refDistanceText(numv(c.x,0),numv(c.z,0))}</div>
    ${c._warn?`<div style="font-size:11px;color:#B0433A;font-weight:700">⚠ 歩行帯と干渉しています</div>`:""}
    ${c._roadRemain?`<div style="font-size:11px;font-weight:700;color:${c._roadRemain.lv==="ok"?"#2E7D5B":c._roadRemain.lv==="warn"?"#C77F1A":"#B0433A"}">道路${c._roadRemain.ri+1}：残り幅 ${c._roadRemain.remain}m</div>`:""}`;
+  const inGrp=cobjInGroup(i),grpN=cobjGroup().length;
+  body+=`<div class="cobj-group-box ${inGrp?"on":""}"><div><b>仮設グループ</b><span>${grpN>=2?grpN+"個を一括移動中":"2個以上選ぶと一括移動"}</span></div><button class="btn ${inGrp?"primary":""}" onclick="toggleCobjGroup(${i})">${inGrp?"✓ 外す":"＋ 追加"}</button>${grpN>=2?`<div class="cobj-group-actions"><button class="btn" onclick="rotateCobjGroup(-15)">↶ 15°</button><button class="btn" onclick="rotateCobjGroup(15)">15° ↷</button><button class="btn" onclick="clearCobjGroup()">解除</button></div>`:""}</div>`;
   del=`delCO(${i})`;}
  else if(k.startsWith("an:")){const i=+k.slice(3),a=U.annot[i];if(!a){el.style.display="none";return;}
   title=a.type==="zone"?"範囲マーカー":"文字注記";
@@ -4850,7 +4852,7 @@ window.duplicateSel=()=>{const k=U.sel;if(!k)return;snapshot();const cp=(o)=>JSO
 window.deleteSel=()=>{const k=U.sel;if(!k)return;snapshot();
  if(k==="ev"){U.tw.ev=false;}
  else if(k==="crane"){U.tw.crane=false;}
- else if(k.startsWith("co:"))U.cobj.splice(+k.slice(3),1);
+ else if(k.startsWith("co:")){const i=+k.slice(3),before=cobjGroup().slice();U.cobj.splice(i,1);U._cobjGroup=before.filter(x=>x!==i).map(x=>x>i?x-1:x);}
  else if(k.startsWith("an:"))U.annot.splice(+k.slice(3),1);
  else if(k.startsWith("sub:"))U.subsurface.splice(+k.slice(4),1);
  else if(k.startsWith("nb:"))U.nbs.splice(+k.slice(3),1);
