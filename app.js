@@ -4373,7 +4373,7 @@ function renderTools(){
   <div class="tool-grp">
    <button class="tool ${U.dim.on?"on":""}" title="2点クリックで距離を測る" onclick="S('dim.on',!U.dim.on,false);if(!U.dim.on){U.dim.a=null;U.dim.b=null;}rebuild();renderBar()"><span>↔</span>寸法</button>
    <button class="tool ${U.snap!==false?"on":""}" title="頂点・道路への吸着、15°刻み回転" onclick="U.snap=!U.snap;renderBar();renderPanel()"><span>⌖</span>吸着</button>
-   <button class="tool ${U.moveLayers?"on":""}" title="敷地・下敷き・図面をドラッグで動かす" onclick="U.moveLayers=!U.moveLayers;renderBar()"><span>✥</span>下地移動</button>
+   <button class="tool ${U.moveLayers?"on":""}" title="PDF・地図を操作：ドラッグ＝移動 / Ctrl＋ドラッグ＝回転" onclick="U.moveLayers=!U.moveLayers;if(U.moveLayers&&U.under&&U.under.tex){U.sel='under';U.auto=false;renderSelCard(true);view('top',{instant:true});}else if(!U.moveLayers&&U.sel==='under'){U.sel=null;renderSelCard();}rebuild();renderBar()"><span>✥</span>下地を動かす</button>
    <button class="tool" title="道具をしまう" onclick="toolsToggle()" style="min-width:34px"><span>▾</span><span style="font-size:0"></span></button>
   </div>
   ${U.polyInput.on?`<div class="tool-hint">なぞり中：${U.polyInput.pts.length}点　<b>ダブルクリックで確定</b>　<a href="#" onclick="if(U.polyInput.pts.length){U.polyInput.pts.pop();rebuild();renderPanel();renderBar();}return false">↩ 1点戻す</a><a href="#" onclick="U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar();return false">中止(Esc)</a></div>`:""}`;
@@ -4820,7 +4820,7 @@ function renderBar(){
     {label:"自動回転",fn:"U.auto=!U.auto;renderBar()",on:U.auto}])}
   ${mn("表示",[
     {label:"グリッド",fn:"U.grid.show=!U.grid.show;rebuild();renderBar()",on:U.grid.show},
-    {label:"敷地/下敷き移動モード",fn:"U.moveLayers=!U.moveLayers;renderBar()",on:U.moveLayers},
+    {label:"下地操作（ドラッグ移動 / Ctrl回転）",fn:"U.moveLayers=!U.moveLayers;if(U.moveLayers&&U.under&&U.under.tex){U.sel='under';U.auto=false;renderSelCard(true);view('top',{instant:true});}else if(!U.moveLayers&&U.sel==='under'){U.sel=null;renderSelCard();}rebuild();renderBar()",on:U.moveLayers},
     {label:"仮設物だけ動かす",fn:"setEditScope(UI_PREF.editScope==='temp'?'all':'temp')",on:UI_PREF.editScope==="temp"},
     {label:"線画（AI下絵）",fn:"U.line=!U.line;rebuild();renderBar()",on:U.line},null,
     {label:"吸着（頂点・道路・15°回転）",fn:"U.snap=!U.snap;renderBar();renderPanel()",on:U.snap!==false},null,
