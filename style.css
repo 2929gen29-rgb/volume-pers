@@ -1910,3 +1910,97 @@ body.touch-full:not(.simple) #panel.collapsed #pwrap{display:none!important}
   #under-control{left:auto;right:12px;transform:none;width:360px;min-width:0;bottom:12px}
 }
 @media (max-width:820px){#under-control{display:none!important}}
+
+
+/* UX Stage 8 — clean launch, draggable tools, compact project panel */
+/* Start menu owns the whole screen. Floating app chrome must never sit above it. */
+body.start-open #settings-fixed,
+body.start-open #settings,
+body.start-open #under-control,
+body.start-open #tools{
+  display:none!important
+}
+
+/* Drawing tools: one compact command palette with an obvious draggable handle. */
+body:not(.simple) #tools{
+  gap:4px;align-items:stretch;z-index:59;
+  padding:4px;border:1px solid rgba(150,171,199,.20);
+  border-radius:13px;background:rgba(9,15,25,.74);
+  box-shadow:0 12px 34px rgba(4,10,18,.24);
+  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)
+}
+body:not(.simple) #tools .tool-grp{
+  box-shadow:none;border:0;background:transparent;padding:0;gap:2px
+}
+body:not(.simple) #tools .tool-grp+.tool-grp{
+  padding-left:4px;border-left:1px solid rgba(255,255,255,.10)
+}
+body:not(.simple) #tools .tool-grip{
+  width:48px;min-width:48px;min-height:48px;padding:4px 5px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  border-radius:9px;background:rgba(255,255,255,.045);
+  color:#8293AA;cursor:grab;touch-action:none
+}
+body:not(.simple) #tools .tool-grip:hover{
+  background:rgba(75,130,255,.13);color:#AFC8FF
+}
+body:not(.simple) #tools .tool-grip b{
+  font-family:var(--mono);font-size:17px;line-height:.75;letter-spacing:-.12em
+}
+body:not(.simple) #tools .tool-grip small{
+  display:block;font-family:var(--mono);font-size:6.5px;font-weight:900;
+  letter-spacing:.12em;color:inherit
+}
+body:not(.simple) #tools.dragging{
+  opacity:.92;cursor:grabbing;box-shadow:0 18px 46px rgba(4,10,18,.34);
+  transition:none!important
+}
+body:not(.simple) #tools.dragging .tool-grip{cursor:grabbing;background:rgba(75,130,255,.20);color:#C9DAFF}
+body:not(.simple) #tools .tool{
+  min-width:52px;min-height:48px;padding:5px 7px
+}
+
+/* Project panel: stronger open/close affordance, less visual weight over the 3D. */
+@media (min-width:821px){
+  body:not(.simple) #panel:not(.collapsed){
+    width:324px!important;
+    border-color:rgba(139,158,184,.18);
+    box-shadow:0 14px 38px rgba(5,11,19,.20)
+  }
+  body:not(.simple) #panel:not(.collapsed) #phead{
+    min-height:50px;padding:8px 9px 8px 12px!important;
+    background:linear-gradient(135deg,rgba(18,31,50,.98),rgba(9,16,28,.98));
+    border-radius:13px 13px 0 0!important
+  }
+  body:not(.simple) #panel:not(.collapsed) #phead .brand{
+    gap:9px;font-size:14px
+  }
+  body:not(.simple) #panel:not(.collapsed) #phead .brand:after{
+    content:"PROJECT PANEL";display:block;margin-left:3px;margin-bottom:1px;
+    font-family:var(--mono);font-size:6.5px;letter-spacing:.14em;color:#6F82A0
+  }
+  body:not(.simple) #panel:not(.collapsed) #parr{
+    width:30px;height:30px;display:grid;place-items:center;
+    border:1px solid rgba(255,255,255,.10);border-radius:8px;
+    background:rgba(255,255,255,.045);color:#A8B7CA;font-size:11px
+  }
+  body:not(.simple) #panel:not(.collapsed) #phead:hover #parr{
+    background:rgba(75,130,255,.14);border-color:rgba(75,130,255,.28);color:#DCE7FF
+  }
+  body:not(.simple) #panel.collapsed{
+    width:54px!important;height:50px!important;min-height:50px!important;max-height:50px!important;
+    border-radius:12px!important;box-shadow:0 10px 28px rgba(5,11,19,.22)
+  }
+  body:not(.simple) #panel.collapsed #phead{
+    width:54px!important;height:50px!important;min-height:50px!important;border-radius:12px!important;
+    background:linear-gradient(135deg,#172A45,#0C1727)
+  }
+  body:not(.simple) #panel.collapsed #phead .brand{width:27px}
+  body:not(.simple) #panel.collapsed #phead .brand-mark{width:27px;height:24px}
+  body:not(.simple) #panel.collapsed #phead .brand:after{display:none}
+  body:not(.simple) #panel.collapsed #parr{
+    right:4px;bottom:3px;width:15px;height:15px;display:grid;place-items:center;
+    border-radius:5px;background:#4B82FF;color:#fff;font-size:8px;
+    box-shadow:0 2px 8px rgba(75,130,255,.35)
+  }
+}
