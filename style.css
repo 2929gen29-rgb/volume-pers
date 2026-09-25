@@ -2008,3 +2008,53 @@ body:not(.simple) #tools .tool{
 /* Stage 8 hotfix: start screen is always the topmost surface. */
 #start.v4-start{z-index:200!important}
 body.start-open #settings-fixed{visibility:hidden!important;pointer-events:none!important}
+
+
+/* UX Stage 9 — floating tools, no gray bar, grouped temporary works */
+/* Remove the large gray toolbar backing. Keep only the actual buttons and a tiny drag handle. */
+body:not(.simple) #tools{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+  padding:0!important;
+  gap:5px!important;
+  filter:none!important
+}
+body:not(.simple) #tools .tool-grp{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  padding:0!important
+}
+body:not(.simple) #tools .tool-grp+.tool-grp{
+  border-left:0!important;
+  padding-left:0!important
+}
+body:not(.simple) #tools .tool-grip{
+  width:22px!important;min-width:22px!important;min-height:42px!important;
+  padding:0!important;background:transparent!important;border:0!important;
+  opacity:.50;color:#4B82FF!important
+}
+body:not(.simple) #tools .tool-grip:hover{opacity:1;background:transparent!important}
+body:not(.simple) #tools .tool-grip b{font-size:15px!important}
+body:not(.simple) #tools .tool-grip small{display:none!important}
+body:not(.simple) #tools .tool{
+  box-shadow:0 5px 14px rgba(12,26,44,.14)!important
+}
+body:not(.simple) #tools.dragging{background:transparent!important;box-shadow:none!important}
+
+/* Temporary-work grouping controls live only in the selected-object card. */
+.cobj-group-box{
+  display:grid;grid-template-columns:1fr auto;gap:7px;align-items:center;
+  margin:9px 0 2px;padding:8px;border:1px solid #D7E0EC;border-radius:8px;background:#F7F9FC
+}
+.cobj-group-box.on{border-color:#8FB0EC;background:#EEF4FF}
+.cobj-group-box>div:first-child b{display:block;font-size:11px;color:#2E4058}
+.cobj-group-box>div:first-child span{display:block;margin-top:2px;font-size:9.5px;color:#718097}
+.cobj-group-box>.btn{min-height:30px;font-size:10px}
+.cobj-group-actions{
+  grid-column:1/-1;display:grid!important;grid-template-columns:1fr 1fr 1fr;gap:4px
+}
+.cobj-group-actions .btn{min-height:29px;font-size:9.5px}
