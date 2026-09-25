@@ -2004,3 +2004,7 @@ body:not(.simple) #tools .tool{
     box-shadow:0 2px 8px rgba(75,130,255,.35)
   }
 }
+
+/* Stage 8 hotfix: start screen is always the topmost surface. */
+#start.v4-start{z-index:200!important}
+body.start-open #settings-fixed{visibility:hidden!important;pointer-events:none!important}
