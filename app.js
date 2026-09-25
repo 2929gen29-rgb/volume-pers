@@ -3829,6 +3829,10 @@ window.loadTutorialFinishedProject=loadTutorialFinishedProject;
 
 window.openRealDemo=()=>{
  const loadDemo=()=>{
+  try{
+   const d=readDraft();
+   if(d&&d.data){const p=JSON.parse(d.data);cacheTutorialFinishState(p);}
+  }catch(e){}
   cacheTutorialFinishState(U);
   loadRealDemoState(true);
   setTimeout(()=>startRealTutorial(),1180);
