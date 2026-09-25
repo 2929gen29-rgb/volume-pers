@@ -4708,6 +4708,7 @@ function renderSelCard(force){
   body=`<label class="f"><span>サイズ</span><select onchange="setCOSize(${i},this.value)">${(t.sizes||[]).map(s=>`<option value="${s.key}" ${c.size===s.key?"selected":""}>${s.label}</option>`).join("")}</select></label>
    ${c.type==="towercrane"?rowSL("設置高さ m",numv(c.h,craneSpec(c.size).selfH),`(v)=>setCOHeight(${i},v)`,craneSpec(c.size).selfH,craneSpec(c.size).maxInstallH||51,.5):""}
    ${c.type==="towercrane"?rowSL("ジブ旋回 °",((numv(c.jibRy,0)%360)+360)%360,`(v)=>setCOParam(${i},\'jibRy\',v)`,0,359,1):""}
+   ${c.type==="lsev"?rowSL("搬器高さ %",Math.max(8,Math.min(92,numv(c.carPct,45))),`(v)=>setCOParam(${i},'carPct',v)`,8,92,1):""}
    ${mech?`<div class="machine-controls"><small>WORKING CONFIGURATION</small>
      ${rowSL("ブーム伸長 "+(boomLen!=null?"（約"+boomLen.toFixed(1)+"m）":""),boomPct,`(v)=>setCOParam(${i},'boomPct',v)`,0,100,5)}
      ${rowSL("ブーム角度 °",boomAngle,`(v)=>setCOParam(${i},'boomAngle',v)`,5,80,1)}
@@ -4750,6 +4751,10 @@ function renderSelCard(force){
  else if(k==="fence"||k.startsWith("fpt:")){
   title="仮囲い"+(U.tw.fenceShape==="poly"?`（任意形状・${(U.tw.fencePts||[]).length}頂点・${fencePerimeter().toFixed(0)}m）`:"（矩形）");
   body=rowSL("パネル高さ m",U.tw.fenceH,"(v)=>S('tw.fenceH',v)",2,8,0.5)+`<div class="grid2"><button class="btn" style="font-size:11px" onclick="U.tabGroup='3';U.tab='仮設';renderPanel()">詳細を開く</button><button class="btn" style="font-size:11px" onclick="startDraw('fence')">なぞり直す</button></div>`;}
+ else if(k==="ev"){
+  title="ロングスパンEV";
+  body=`${rowSL("搬器高さ %",Math.max(8,Math.min(92,numv(U.tw.evLiftPct,45))),"(v)=>S('tw.evLiftPct',v)",8,92,1)}${rowSL("向き °",numv(U.tw.evRy,0),"(v)=>S('tw.evRy',v)",0,359,1)}<div class="machine-note">マスト・搬器・ゲート・タイインを簡易再現。搬器高さは施工状況の見せ方にも使えます。</div>`;
+ }
  else if(k==="crane"){const cs=CRANE_SPECS[U.tw.craneModel]||{};
   title="タワークレーン";
   body=`<label class="f"><span>機種</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(m=>`<option value="${m}" ${U.tw.craneModel===m?"selected":""}>${m}　作業半径${CRANE_SPECS[m].work}m／${CRANE_SPECS[m].cap}t</option>`).join("")}</select></label><div style="font-size:11px;color:var(--mut)">作業半径 ${cs.work||"-"}m・尾部旋回 ${cs.tail||"-"}m</div>`;}
