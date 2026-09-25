@@ -1831,3 +1831,33 @@ body.touch-full:not(.simple) #panel.collapsed #pwrap{display:none!important}
    width:auto!important;max-height:44dvh!important
  }
 }
+
+
+/* UX Stage 7.1 — desktop non-overlap zones */
+@media (min-width:821px){
+  /* Common commands stay in one row; menus themselves portal outside this strip. */
+  body:not(.simple) #bar{
+    top:12px!important;right:102px!important;
+    max-width:calc(100vw - 468px)!important;
+    flex-wrap:nowrap!important;overflow-x:auto;overflow-y:hidden;
+    scrollbar-width:none;white-space:nowrap
+  }
+  body:not(.simple) #bar::-webkit-scrollbar{display:none}
+  body:not(.simple) #bar>.btn,
+  body:not(.simple) #bar>.mn{flex:0 0 auto}
+
+  /* Drawing tools own the center lane, clear of both edit panel and inspector. */
+  body:not(.simple) #tools{
+    top:62px!important;left:360px!important;right:310px!important;
+    transform:none!important;max-width:none!important;width:auto!important;
+    justify-content:center;pointer-events:none
+  }
+  body:not(.simple) #tools>*{pointer-events:auto}
+
+  /* Right inspector/layers are one exclusive lane. */
+  body:not(.simple) #selcard,
+  body:not(.simple) #layers{
+    top:62px!important;right:12px!important;bottom:12px!important;
+    width:286px!important
+  }
+}
