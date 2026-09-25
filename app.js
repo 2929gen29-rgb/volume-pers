@@ -1508,6 +1508,52 @@ function rebuild(){
    const base=new THREE.Mesh(new THREE.BoxGeometry(w,1.6,d),baseMat);base.position.y=.8;base.castShadow=!L;cg.add(base);
    const mast=new THREE.Mesh(new THREE.BoxGeometry(.6,hgt,.6),baseMat);mast.position.set(0,hgt/2,d*0.25);mast.castShadow=!L;cg.add(mast);
    if(L){const ee=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(.6,hgt,.6)),new THREE.LineBasicMaterial({color:0x16243d}));ee.position.copy(mast.position);cg.add(ee);}
+  }else if(c.type==="pileaux"){ // 杭工事設備：水槽・安定液・沈殿槽・プラント等
+   const steel=L?baseMat:new THREE.MeshLambertMaterial({color:warn?0xD64545:0x768493});
+   const dark=L?baseMat:new THREE.MeshLambertMaterial({color:0x38434F});
+   const water=L?baseMat:new THREE.MeshPhongMaterial({color:0x4E91C7,transparent:true,opacity:.72,shininess:90});
+   const slurry=L?baseMat:new THREE.MeshLambertMaterial({color:0x788268,transparent:true,opacity:.82});
+   const addP=(geo,x,y,z,ma=steel)=>{const m=new THREE.Mesh(geo,ma);m.position.set(x,y,z);m.castShadow=!L;cg.add(m);return m;};
+   if(["water10","slurry10","settle"].includes(c.size)){
+    const wall=.12, tankH=hgt, rim=.16;
+    addP(new THREE.BoxGeometry(w,.18,d),0,.09,0,dark);
+    addP(new THREE.BoxGeometry(wall,tankH,d),-w/2+wall/2,tankH/2,0);
+    addP(new THREE.BoxGeometry(wall,tankH,d), w/2-wall/2,tankH/2,0);
+    addP(new THREE.BoxGeometry(w-2*wall,tankH,wall),0,tankH/2,-d/2+wall/2);
+    addP(new THREE.BoxGeometry(w-2*wall,tankH,wall),0,tankH/2, d/2-wall/2);
+    const liq=addP(new THREE.BoxGeometry(w-.30,.05,d-.30),0,tankH*.72,0,c.size==="water10"?water:slurry);liq.castShadow=false;
+    if(c.size==="settle"){
+     // 2槽に分ける仕切り＋越流板
+     addP(new THREE.BoxGeometry(w-.20,tankH*.82,.10),0,tankH*.41,0,steel);
+     addP(new THREE.BoxGeometry(w*.56,.10,.22),-w*.18,tankH*.84,d*.30,steel);
+    }
+    // 梯子
+    [-.22,.22].forEach(x=>addP(new THREE.BoxGeometry(.045,tankH+.5,.045),x,(tankH+.5)/2,d/2+.08,dark));
+    for(let yy=.25;yy<tankH+.35;yy+=.28)addP(new THREE.BoxGeometry(.50,.035,.035),0,yy,d/2+.08,dark);
+    // 配管
+    const pipe=addP(new THREE.CylinderGeometry(.055,.055,Math.min(2.2,d*.45),8),w/2+.14,tankH*.62,0,dark);pipe.rotation.x=Math.PI/2;
+   }else if(c.size==="plant"){
+    // 安定液プラント：フレーム＋撹拌槽2基＋ポンプ・配管
+    addP(new THREE.BoxGeometry(w,.20,d),0,.10,0,dark);
+    [[-w*.23,-d*.12],[w*.23,-d*.12]].forEach(([x,z])=>{
+     addP(new THREE.CylinderGeometry(w*.18,w*.18,hgt*.62,14),x,hgt*.31,z,steel);
+     addP(new THREE.CylinderGeometry(w*.20,w*.20,.16,14),x,hgt*.63,z,dark);
+    });
+    addP(new THREE.BoxGeometry(w*.72,.64,d*.22),0,.42,d*.27,dark);
+    [-w*.42,w*.42].forEach(x=>addP(new THREE.BoxGeometry(.12,hgt,.12),x,hgt/2,0,dark));
+    addP(new THREE.BoxGeometry(w*.90,.12,.12),0,hgt*.78,0,dark);
+    const pipe=addP(new THREE.CylinderGeometry(.07,.07,d*.62,8),0,hgt*.70,0,dark);pipe.rotation.x=Math.PI/2;
+   }else if(c.size==="genset"){
+    addP(new THREE.BoxGeometry(w*.92,hgt*.80,d*.86),0,hgt*.42,0,L?baseMat:new THREE.MeshLambertMaterial({color:0x657D67}));
+    addP(new THREE.BoxGeometry(w*.68,.05,d*.88),0,hgt*.46,-w*.47,dark);
+    for(let yy=hgt*.24;yy<hgt*.68;yy+=.20)addP(new THREE.BoxGeometry(w*.58,.035,.05),0,yy,-d*.44,dark);
+    const ex=addP(new THREE.CylinderGeometry(.07,.09,hgt*.52,8),w*.30,hgt*.96,d*.24,dark);ex.position.y=hgt*.86;
+   }else{ // 汚泥・残土コンテナ
+    addP(new THREE.BoxGeometry(w,.16,d),0,.08,0,dark);
+    addP(new THREE.BoxGeometry(w,hgt*.90,d),0,hgt*.48,0,L?baseMat:new THREE.MeshLambertMaterial({color:0x6C747E}));
+    for(let z=-d*.38;z<=d*.38;z+=Math.max(.55,d/7))addP(new THREE.BoxGeometry(w+.04,hgt*.76,.045),0,hgt*.48,z,dark);
+    addP(new THREE.BoxGeometry(w*.86,.05,d*.86),0,hgt*.94,0,L?baseMat:new THREE.MeshLambertMaterial({color:0x5D5549,transparent:true,opacity:.75}));
+   }
   }else if(c.type==="pump"){
    // ポンプ車：シャーシ＋キャブ＋ポンプ架装＋4本アウトリガー＋多関節ブーム。
    // 高密度メッシュではなく基本形状の組み合わせで、軽さを保ったままシルエットを実機寄りにする。
@@ -1688,9 +1734,40 @@ function rebuild(){
    const ladderMat=L?baseMat:new THREE.MeshLambertMaterial({color:0x697482});
    [-.28,.28].forEach(x=>{const rail=new THREE.Mesh(new THREE.BoxGeometry(.045,1.45,.045),ladderMat);rail.position.set(x,1.65,d*.43);cg.add(rail);});
    for(let yy=1.02;yy<=2.26;yy+=.25){const rung=new THREE.Mesh(new THREE.BoxGeometry(.62,.035,.035),ladderMat);rung.position.set(0,yy,d*.43);cg.add(rung);}
-  }else{ // 一般トラック
-   const body=new THREE.Mesh(new THREE.BoxGeometry(w,hgt*0.7,d),baseMat);body.position.y=hgt*0.45;body.castShadow=!L;cg.add(body);
-   const cab=new THREE.Mesh(new THREE.BoxGeometry(w,hgt*0.6,d*0.22),baseMat);cab.position.set(0,hgt*0.5,-d*0.36);cg.add(cab);
+  }else if(c.type==="truck"){ // トラック：キャブ・シャーシ・荷台・タイヤを分離した詳細モデル
+   const bodyMat=L?baseMat:new THREE.MeshLambertMaterial({color:warn?0xD64545:0xE7EAEE});
+   const dark=L?baseMat:new THREE.MeshLambertMaterial({color:0x252A31});
+   const bedMat=L?baseMat:new THREE.MeshLambertMaterial({color:0x8E98A3});
+   const glass=L?baseMat:new THREE.MeshLambertMaterial({color:0x365169,transparent:true,opacity:.84});
+   const addT=(geo,x,y,z,ma=bodyMat)=>{const m=new THREE.Mesh(geo,ma);m.position.set(x,y,z);m.castShadow=!L;cg.add(m);return m;};
+   const semi=c.size==="semi", tractorD=semi?d*.27:d*.28;
+   addT(new THREE.BoxGeometry(w*.72,.30,semi?d*.30:d*.78),0,.62,semi?-d*.32:0,dark);
+   // キャブ
+   addT(new THREE.BoxGeometry(w*.88,.78,tractorD*.82),0,1.14,-d*.39,bodyMat);
+   addT(new THREE.BoxGeometry(w*.82,1.02,tractorD*.70),0,1.98,-d*.40,bodyMat);
+   addT(new THREE.BoxGeometry(w*.62,.58,.055),0,2.10,-d*.40-tractorD*.36,glass);
+   [-1,1].forEach(sx=>addT(new THREE.BoxGeometry(.05,.48,tractorD*.34),sx*w*.415,2.05,-d*.40,glass));
+   // 荷台 / セミトレーラー
+   const bedZ=semi?d*.18:d*.16, bedD=semi?d*.68:d*.58, bedY=semi?1.12:1.18;
+   addT(new THREE.BoxGeometry(w*.94,.20,bedD),0,bedY,bedZ,dark);
+   addT(new THREE.BoxGeometry(w*.92,.12,bedD*.96),0,bedY+.16,bedZ,bedMat);
+   // あおり
+   [-1,1].forEach(sx=>addT(new THREE.BoxGeometry(.08,semi?.55:.72,bedD*.94),sx*w*.47,bedY+(semi?.40:.48),bedZ,bedMat));
+   addT(new THREE.BoxGeometry(w*.92,semi?.55:.72,.08),0,bedY+(semi?.40:.48),bedZ+bedD*.48,bedMat);
+   // タイヤ：車格に応じて軸数を変える
+   const wheelMat=dark,hub=L?baseMat:new THREE.MeshLambertMaterial({color:0xA6AFBA});
+   const axleZ=semi?[-d*.40,-d*.17,d*.29,d*.38]:d>8?[-d*.34,d*.08,d*.32]:[-d*.34,d*.29];
+   axleZ.forEach(z=>[-1,1].forEach(sx=>{
+    const rr=semi?.50:(d>8?.52:.46);
+    const wh=addT(new THREE.CylinderGeometry(rr,rr,.34,14),sx*w*.49,.52,z,wheelMat);wh.rotation.z=Math.PI/2;
+    const hb=addT(new THREE.CylinderGeometry(rr*.38,rr*.38,.36,12),sx*w*.49,.52,z,hub);hb.rotation.z=Math.PI/2;
+   }));
+   // ミラー・ライト・サイドステップ
+   [-1,1].forEach(sx=>addT(new THREE.BoxGeometry(.12,.18,.10),sx*w*.50,2.08,-d*.46,dark));
+   [-w*.26,w*.26].forEach(x=>addT(new THREE.BoxGeometry(.20,.12,.035),x,1.26,-d*.49,L?baseMat:new THREE.MeshLambertMaterial({color:0xF2E7B4})));
+   addT(new THREE.BoxGeometry(w*.72,.10,tractorD*.18),0,.82,-d*.28,dark);
+  }else{ // その他の簡易施工オブジェクト
+   const body=new THREE.Mesh(new THREE.BoxGeometry(w,hgt,d),baseMat);body.position.y=hgt/2;body.castShadow=!L;cg.add(body);
   }
   // ───── 干渉チェックガイド（重機選択時・画像出力時は非表示）─────
   if(seld&&!L&&!U._exporting){
@@ -2688,7 +2765,7 @@ window.addCO=(type)=>{if(U.tw.mode==="plan"&&type!=="obstacle"){toast("完成フ
  const preferred={rough:"25t",pump:"m4t",mixer:"8t",truck:"4t"}[type];
  const sz=(preferred&&cobjSize(type,preferred))||t.sizes[0];
  const a=placementAnchor(5),nx0=a.x,nz0=a.z;const hd=(U.snap!==false)?nearestRoadHeading(nx0,nz0):null;
- const obj={type,size:sz.key,x:nx0,z:nz0,w:sz.w,d:sz.d,h:sz.h,ry:hd!=null?hd:0,phase:U.tw.mode};
+ const obj={type,size:sz.key,x:nx0,z:nz0,w:sz.w,d:sz.d,h:sz.h,ry:hd!=null?hd:0,phase:type==="pileaux"?"pile":U.tw.mode};
  if(type==="rough"){obj.boomPct=55;obj.boomAngle=42;obj.boomRy=0;obj.outPct=70;}
  if(type==="pump"){obj.boomPct=62;obj.boomAngle=48;obj.boomRy=0;obj.outPct=85;}
  if(type==="towercrane")obj.jibRy=0;
