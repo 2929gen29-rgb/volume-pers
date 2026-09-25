@@ -4537,6 +4537,7 @@ function renderSelCard(force){
   const boomLen=(szNow.boomMin!=null&&szNow.boomMax!=null)?(szNow.boomMin+(szNow.boomMax-szNow.boomMin)*boomPct/100):null;
   body=`<label class="f"><span>サイズ</span><select onchange="setCOSize(${i},this.value)">${(t.sizes||[]).map(s=>`<option value="${s.key}" ${c.size===s.key?"selected":""}>${s.label}</option>`).join("")}</select></label>
    ${c.type==="towercrane"?rowSL("設置高さ m",numv(c.h,craneSpec(c.size).selfH),`(v)=>setCOHeight(${i},v)`,craneSpec(c.size).selfH,craneSpec(c.size).maxInstallH||51,.5):""}
+   ${c.type==="towercrane"?rowSL("ジブ旋回 °",((numv(c.jibRy,0)%360)+360)%360,`(v)=>setCOParam(${i},\'jibRy\',v)`,0,359,1):""}
    ${mech?`<div class="machine-controls"><small>WORKING CONFIGURATION</small>
      ${rowSL("ブーム伸長 "+(boomLen!=null?"（約"+boomLen.toFixed(1)+"m）":""),boomPct,`(v)=>setCOParam(${i},'boomPct',v)`,0,100,5)}
      ${rowSL("ブーム角度 °",boomAngle,`(v)=>setCOParam(${i},'boomAngle',v)`,5,80,1)}
