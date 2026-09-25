@@ -2035,8 +2035,7 @@ async function loadGsiMap(){
   // 敷地中心が地図中心とずれる分を補正（タイル中心と実座標の差）
   U.under.gsiStatus=`✓ ${tile.label}を表示（約${totalM.toFixed(0)}m四方 / ズーム${z}）\n出典：国土地理院`;
   U.under.gsiKind=kind; U.under.gsiZoom=z;
-  U.moveLayers=true;U.sel="under";U.auto=false;
-  rebuild(); renderPanel();renderBar();renderSelCard(true);view("top",{instant:true});
+  setUnderMoveMode(true);renderPanel();
  }catch(err){
   U.under.gsiStatus="取得失敗："+(err&&err.message?err.message:"不明なエラー");
   renderPanel();
@@ -2158,7 +2157,7 @@ async function loadUnderFile(file){
   await renderPdfPage();
  }else{
   const url=URL.createObjectURL(file);
-  new THREE.TextureLoader().load(url,t=>{if(U.under.tex)U.under.tex.dispose();U.under.tex=t;U.under.raw=null;U.under.pages=1;U.moveLayers=true;U.sel="under";U.auto=false;rebuild();renderPanel();renderBar();renderSelCard(true);view("top",{instant:true});toast("下地を選択しました。ドラッグ＝移動 / Ctrl＋ドラッグ＝回転","ok");});
+  new THREE.TextureLoader().load(url,t=>{if(U.under.tex)U.under.tex.dispose();U.under.tex=t;U.under.raw=null;U.under.pages=1;setUnderMoveMode(true);renderPanel();toast("下地操作をONにしました。ドラッグ＝移動 / Ctrl＋ドラッグ＝回転","ok");});
  }
 }
 async function renderPdfPage(){
@@ -2172,9 +2171,9 @@ async function renderPdfPage(){
  await page.render({canvasContext:cv.getContext("2d"),viewport:v2}).promise;
  if(U.under.tex)U.under.tex.dispose();
  const tex=new THREE.CanvasTexture(cv);tex.anisotropy=4;
- U.under.tex=tex;U.moveLayers=true;U.sel="under";U.auto=false;
- rebuild();renderPanel();renderBar();renderSelCard(true);view("top",{instant:true});
- toast("下地を選択しました。ドラッグ＝移動 / Ctrl＋ドラッグ＝回転","ok");
+ U.under.tex=tex;setUnderMoveMode(true);
+ renderPanel();
+ toast("下地操作をONにしました。ドラッグ＝移動 / Ctrl＋ドラッグ＝回転","ok");
 }
 function loadPhotoFile(file){
  if(!file)return;
@@ -4389,6 +4388,7 @@ function _toolsSave(p){try{localStorage.setItem("bimgen_tools_pos",JSON.stringif
 window.toolsReset=()=>{try{localStorage.removeItem("bimgen_tools_pos");}catch(e){}const el=document.getElementById("tools");if(el){el.style.left="";el.style.top="";el.style.right="";el.style.bottom="";el.style.transform="";}};
 window.toolsToggle=()=>{U._toolsMin=!U._toolsMin;renderTools();};
 function renderTools(){
+ if(typeof renderUnderControl==="function")renderUnderControl();
  let el=document.getElementById("tools");
  if(!el){el=document.createElement("div");el.id="tools";document.body.appendChild(el);
   // つまみをドラッグで移動
@@ -4405,12 +4405,34 @@ function renderTools(){
   <div class="tool-grp">
    <button class="tool ${U.dim.on?"on":""}" title="2点クリックで距離を測る" onclick="S('dim.on',!U.dim.on,false);if(!U.dim.on){U.dim.a=null;U.dim.b=null;}rebuild();renderBar()"><span>↔</span>寸法</button>
    <button class="tool ${U.snap!==false?"on":""}" title="頂点・道路への吸着、15°刻み回転" onclick="U.snap=!U.snap;renderBar();renderPanel()"><span>⌖</span>吸着</button>
-   <button class="tool ${U.moveLayers?"on":""}" title="PDF・地図を操作：ドラッグ＝移動 / Ctrl＋ドラッグ＝回転" onclick="U.moveLayers=!U.moveLayers;if(U.moveLayers&&U.under&&U.under.tex){U.sel='under';U.auto=false;renderSelCard(true);view('top',{instant:true});}else if(!U.moveLayers&&U.sel==='under'){U.sel=null;renderSelCard();}rebuild();renderBar()"><span>✥</span>下地を動かす</button>
+   <button class="tool ${U.moveLayers?"on":""}" title="PDF・地図を操作：ドラッグ＝移動 / Ctrl＋ドラッグ＝回転" onclick="setUnderMoveMode(!U.moveLayers)"><span>✥</span>下地を動かす</button>
    <button class="tool" title="道具をしまう" onclick="toolsToggle()" style="min-width:34px"><span>▾</span><span style="font-size:0"></span></button>
   </div>
   ${U.polyInput.on?`<div class="tool-hint">なぞり中：${U.polyInput.pts.length}点　<b>ダブルクリックで確定</b>　<a href="#" onclick="if(U.polyInput.pts.length){U.polyInput.pts.pop();rebuild();renderPanel();renderBar();}return false">↩ 1点戻す</a><a href="#" onclick="U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar();return false">中止(Esc)</a></div>`:""}`;
 }
 window.renderTools=renderTools;
+
+function setUnderMoveMode(on){
+ U.moveLayers=!!on;
+ if(U.moveLayers&&U.under&&U.under.tex){
+  U.sel="under";U.auto=false;
+  closeRightSurfaces("sel");
+  renderSelCard(true);view("top",{instant:true});
+ }else if(U.sel==="under"){U.sel=null;renderSelCard();}
+ rebuild();renderBar();renderUnderControl();
+}
+window.setUnderMoveMode=setUnderMoveMode;
+function renderUnderControl(){
+ let el=document.getElementById("under-control");
+ if(!el){el=document.createElement("div");el.id="under-control";document.body.appendChild(el);}
+ const has=!!(U.under&&U.under.tex&&U.under.show!==false);
+ if(!has||document.body.classList.contains("simple")){el.style.display="none";return;}
+ el.style.display="";
+ const on=!!U.moveLayers;
+ el.className=on?"on":"";
+ el.innerHTML=`<button class="under-main" onclick="setUnderMoveMode(${!on})"><span>✥</span><b>${on?"下地操作中":"下地を動かす"}</b><small>${on?"ドラッグ＝移動　Ctrl＋ドラッグ＝回転":"PDF / 地理院地図を選択"}</small></button>${on?`<button class="under-done" onclick="setUnderMoveMode(false)">完了</button>`:""}`;
+}
+window.renderUnderControl=renderUnderControl;
 
 // ───── 選択中の物の属性カード（右上バーの下）：クリックした物のパラメータだけを出す ─────
 let _selCardKey=null;
