@@ -450,8 +450,8 @@ function panBy(dxp,dyp){
  const rx=fz, rz=-fx;
  const k=ctrl.r*(_coarsePointer?0.00112:0.0015);  // 指操作は少し穏やかに
  // 指を右(dxp>0)→ワールドが右に動く→注視点は-right。指を下(dyp>0)→注視点は+fwd（奥）
- ctrl.cx += (-rx*dxp + fx*dyp)*k;
- ctrl.cz += (-rz*dxp + fz*dyp)*k;
+ ctrl.cx += (rx*dxp + fx*dyp)*k;
+ ctrl.cz += (rz*dxp + fz*dyp)*k;
 }
 function _tempDragKey(k){
  if(["crane","ev","mixer","rough","fence"].includes(k)||k.startsWith("fpt:"))return true;
@@ -1879,7 +1879,7 @@ function loadProjectJSON(file){
    if(U.cost)delete U.cost;  // 旧バージョンの概算単価データを破棄
    if(!U.geo)U.geo={elev:null,name:"",status:""};
    if(U.snap==null)U.snap=true;
-   (U.cobj||[]).forEach(c=>{if(c.size==null){const t=COBJ_TYPES[c.type];if(t)c.size=t.sizes[0].key;}if(c.type==="rough"||c.type==="pump"){if(c.boomPct==null)c.boomPct=c.type==="pump"?62:55;if(c.boomAngle==null)c.boomAngle=c.type==="pump"?48:42;if(c.outPct==null)c.outPct=c.type==="pump"?85:70;}});
+   (U.cobj||[]).forEach(c=>{if(c.size==null){const t=COBJ_TYPES[c.type];if(t)c.size=t.sizes[0].key;}if(c.type==="rough"||c.type==="pump"){if(c.boomPct==null)c.boomPct=c.type==="pump"?62:55;if(c.boomAngle==null)c.boomAngle=c.type==="pump"?48:42;if(c.boomRy==null)c.boomRy=0;if(c.outPct==null)c.outPct=c.type==="pump"?85:70;}});
    migrateLegacyVehicles();
    if(U.p.addr==null)U.p.addr="";
    U.sel=null;U._layersOpen=false;U._hudMin=true;U._titleMin=true;
@@ -2600,8 +2600,8 @@ window.addCO=(type)=>{if(U.tw.mode==="plan"&&type!=="obstacle"){toast("完成フ
  const sz=(preferred&&cobjSize(type,preferred))||t.sizes[0];
  const a=placementAnchor(5),nx0=a.x,nz0=a.z;const hd=(U.snap!==false)?nearestRoadHeading(nx0,nz0):null;
  const obj={type,size:sz.key,x:nx0,z:nz0,w:sz.w,d:sz.d,h:sz.h,ry:hd!=null?hd:0,phase:U.tw.mode};
- if(type==="rough"){obj.boomPct=55;obj.boomAngle=42;obj.outPct=70;}
- if(type==="pump"){obj.boomPct=62;obj.boomAngle=48;obj.outPct=85;}
+ if(type==="rough"){obj.boomPct=55;obj.boomAngle=42;obj.boomRy=0;obj.outPct=70;}
+ if(type==="pump"){obj.boomPct=62;obj.boomAngle=48;obj.boomRy=0;obj.outPct=85;}
  U.cobj.push(obj);U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();focusSelectionCamera(U.sel,{duration:220});};
 window.addTowerCrane=(model="JCL015")=>{snapshot();const t=COBJ_TYPES.towercrane,sz=t.sizes.find(s=>s.key===model)||t.sizes[0],spec=craneSpec(sz.key);
  const i=(U.cobj||[]).filter(c=>c.type==="towercrane").length,a=placementAnchor(2);
@@ -2627,7 +2627,7 @@ window.addAnnotZone=()=>{snapshot();const sdz2=numv(U.site.dz,0),sd2=posv(U.site
 window.addAnnotText=()=>{const t=prompt("注記の文字を入力（40文字まで）","注意");if(t==null)return;snapshot();const sdz2=numv(U.site.dz,0);U.annot.push({type:"text",x:numv(U.site.dx,0),z:sdz2,ry:0,color:"red",text:t.slice(0,40),fsize:2.5});U.sel="an:"+(U.annot.length-1);rebuild();renderPanel();};
 window.editAnnotText=(i)=>{const a=U.annot[i];if(!a)return;const t=prompt("注記の文字を編集",a.text||"");if(t==null)return;snapshot();a.text=t.slice(0,40);rebuild();renderPanel();};
 window.delAnnot=(i)=>{snapshot();U.annot.splice(i,1);if(U.sel==="an:"+i)U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
-window.setCOSize=(i,key)=>{const c=U.cobj[i];if(!c)return;const sz=cobjSize(c.type,key);if(sz){snapshot();c.size=key;c.w=sz.w;c.d=sz.d;c.h=(c.type==="towercrane"?(craneSpec(key).selfH||sz.h):sz.h);if(c.type==="rough"||c.type==="pump"){if(c.boomPct==null)c.boomPct=60;if(c.boomAngle==null)c.boomAngle=45;if(c.outPct==null)c.outPct=80;}}rebuild();renderPanel();};
+window.setCOSize=(i,key)=>{const c=U.cobj[i];if(!c)return;const sz=cobjSize(c.type,key);if(sz){snapshot();c.size=key;c.w=sz.w;c.d=sz.d;c.h=(c.type==="towercrane"?(craneSpec(key).selfH||sz.h):sz.h);if(c.type==="rough"||c.type==="pump"){if(c.boomPct==null)c.boomPct=60;if(c.boomAngle==null)c.boomAngle=45;if(c.boomRy==null)c.boomRy=0;if(c.outPct==null)c.outPct=80;}}rebuild();renderPanel();};
 window.setCOParam=(i,k,v)=>{const c=U.cobj[i];if(!c)return;const n=parseFloat(v);if(!isFinite(n))return;snapshot("co."+i+"."+k);c[k]=n;rebuildThrottled();};
 window.setCOHeight=(i,v)=>{const c=U.cobj[i];if(!c)return;const n=parseFloat(v);if(!isFinite(n))return;const spec=c.type==="towercrane"?craneSpec(c.size):null;const lo=spec&&spec.selfH?spec.selfH:0.1,hi=spec&&spec.maxInstallH?spec.maxInstallH:80;snapshot("co."+i+".h");c.h=Math.max(lo,Math.min(hi,n));rebuild();renderPanel();if(typeof renderMobile==="function")renderMobile();};
 window.selCO=(i)=>{U.sel="co:"+i;rebuild();renderPanel();};
@@ -3995,7 +3995,7 @@ window.openDemoCase=()=>{
  closeStart(); rebuild();renderPanel();renderBar();view("bird");
  toast("デモ案件を開きました（傾斜地・仮囲い・クレーン・注記入り）","ok");
 };
-function closeStart(){const s=document.getElementById("start");if(s){s.classList.add("hide");setTimeout(()=>{s.style.display="none";},260);}}
+function closeStart(){document.body.classList.remove("start-open");setLeftPanelCollapsed(true);const s=document.getElementById("start");if(s){s.classList.add("hide");setTimeout(()=>{s.style.display="none";},260);}}
 window.closeStart=closeStart;
 // ───── 実案件 GUIDE MODE：ボタンを覚えさせず、1アクションずつ体験 ─────
 const REAL_TUTORIAL={active:false,step:0,traceI:0,complete:false,loading:false,allow:null,target:null};
@@ -4226,6 +4226,9 @@ window.v4NewProject=()=>{
  setTimeout(go,260);setTimeout(()=>el.classList.add("out"),480);setTimeout(()=>{el.className="";el.innerHTML="";},760);
 };
 window.openStart=()=>{
+ document.body.classList.add("start-open");
+ setLeftPanelCollapsed(true);
+ closeSettings();U._layersOpen=false;renderLayers();U.sel=null;renderSelCard();
  let s=document.getElementById("start");
  if(!s){s=document.createElement("div");s.id="start";document.body.appendChild(s);}
  s.className="v4-start";
@@ -4918,12 +4921,17 @@ window.toggleMenu=(btn)=>{
 };
 window.closeMenus=()=>{document.querySelectorAll(".mn.open").forEach(x=>x.classList.remove("open"));const p=document.getElementById("mn-portal");if(p){p.classList.remove("open");p.innerHTML="";}};
 document.addEventListener("pointerdown",(e)=>{if(!e.target.closest(".mn")&&!e.target.closest("#mn-portal"))closeMenus();});
-$("#phead").addEventListener("click",()=>{
- const p=$("#panel"),w=$("#pwrap"),closed=p.classList.toggle("collapsed");
+function setLeftPanelCollapsed(closed){
+ const p=$("#panel"),w=$("#pwrap"),a=$("#parr"),h=$("#phead");
+ if(!p||!w)return;
+ p.classList.toggle("collapsed",!!closed);
  w.style.display=closed?"none":"";
- $("#parr").textContent=closed?"▶":"▲";
- $("#phead").setAttribute("aria-expanded",closed?"false":"true");
-});
+ if(a)a.textContent=closed?"▶":"▲";
+ if(h)h.setAttribute("aria-expanded",closed?"false":"true");
+}
+window.setLeftPanelCollapsed=setLeftPanelCollapsed;
+$("#phead").addEventListener("click",()=>setLeftPanelCollapsed(!$("#panel").classList.contains("collapsed")));
 U._titleMin = true;U._hudMin=true;U._layersOpen=false;  // 起動時は右側パネルを閉じる
+setLeftPanelCollapsed(true);                           // 最初の案件表示も3Dを主役にする
 renderBar();renderPanel();rebuild();
 setTimeout(()=>{const d=$("#drag");if(d)d.style.display="none";},9000);
