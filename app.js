@@ -1362,23 +1362,7 @@ function rebuild(){
   pg.position.set(sdx+numv(U.poles.dx,0),0,sdz+numv(U.poles.dz,0));
   g.add(pg);dragMap.poles=pg;}
 
- // 生コン車（ドラッグ可）
- if(false&&U.tw.mixer&&U.tw.mode==="build"&&!L){
-  const mg=new THREE.Group();mg.userData.dragKey="mixer";
-  box(mg,2.4,1,7,0xe9ebee,0,1.3,0);box(mg,2.2,1.7,2.2,0x5a7fae,0,1.9,-3.1);
-  cylm(mg,1.25,.8,4.4,0xf2f4f6,0,2.6,.8,{rx:Math.PI/2-.2,seg:14});
-  [-2.3,0,2.3].forEach(o=>{cylm(mg,.55,.55,.4,0x2c2f33,-1.05,.55,o,{rz:Math.PI/2});cylm(mg,.55,.55,.4,0x2c2f33,1.05,.55,o,{rz:Math.PI/2});});
-  mg.position.set(numv(U.tw.mixX,-12),0,U.tw.mixZ==null?roadZ:numv(U.tw.mixZ,0));mg.rotation.y=numv(U.tw.mixRy,0)*Math.PI/180;
-  g.add(mg);dragMap.mixer=mg;}
-
- // ラフタークレーン（ドラッグ可）
- if(false&&U.tw.rough&&(U.tw.mode==="build"||PH_GROUND)&&!L){
-  const rg=new THREE.Group();rg.userData.dragKey="rough";
-  box(rg,2.7,1.3,9,0xe8b820,0,1.1,0);box(rg,2.4,1.8,2.4,0xe8b820,0,2.4,2.8);
-  [[1.9,3.6],[1.9,-3.6],[-1.9,3.6],[-1.9,-3.6]].forEach(([ox,oz])=>box(rg,.4,1,.4,0x7d7f84,ox,.5,oz));
-  const bl=builtH+12;const boom=new THREE.Mesh(new THREE.BoxGeometry(.8,bl,.8),mat(0xe8b820));
-  boom.geometry.translate(0,bl/2,0);boom.position.set(0,2.2,-1);boom.rotation.x=.55;boom.castShadow=!L;rg.add(boom);
-  rg.position.set(numv(U.tw.rufX,14),0,numv(U.tw.rufZ,-2));rg.rotation.y=numv(U.tw.rufRy,0)*Math.PI/180;g.add(rg);dragMap.rough=rg;}
+ // 旧U.tw.mixer / U.tw.roughの簡易ポリゴン描画は廃止。migrateLegacyVehicles()でconstructionObjectsへ統合。
 
  // 添景（スケール感のための人物のみ・植栽は配置しない）
  if(!L&&U.tw.mode==="plan"&&U.tw.person){
@@ -1600,10 +1584,44 @@ function rebuild(){
     const body=new THREE.Mesh(new THREE.BoxGeometry(w,hgt,d),baseMat);body.position.y=hgt/2;body.castShadow=!L;cg.add(body);
     const ee=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w,hgt,d)),new THREE.LineBasicMaterial({color:0x8a7f5f}));ee.position.y=hgt/2;cg.add(ee);
    }
-  }else{ // ミキサー・トラック：車体＋運転台（＋ドラム）
+  }else if(c.type==="mixer"){ // 生コン車：専用詳細モデル。旧箱＋単純ドラム表現は使用しない
+   const cabMat=L?baseMat:new THREE.MeshLambertMaterial({color:warn?0xD64545:0xE9EDF2});
+   const frameMat=L?baseMat:new THREE.MeshLambertMaterial({color:0x2B3037});
+   const drumMat=L?baseMat:new THREE.MeshLambertMaterial({color:warn?0xD64545:0xD9DEE5});
+   const accentMat=L?baseMat:new THREE.MeshLambertMaterial({color:0x4F7CC4});
+   const glassMat=L?baseMat:new THREE.MeshLambertMaterial({color:0x365169,transparent:true,opacity:.84});
+   // ラダーフレーム＋前後バンパー
+   const frame=new THREE.Mesh(new THREE.BoxGeometry(w*.72,.30,d*.82),frameMat);frame.position.y=.66;frame.castShadow=!L;cg.add(frame);
+   const bumperF=new THREE.Mesh(new THREE.BoxGeometry(w*.88,.28,.22),frameMat);bumperF.position.set(0,.72,-d*.47);cg.add(bumperF);
+   const bumperR=new THREE.Mesh(new THREE.BoxGeometry(w*.78,.24,.18),frameMat);bumperR.position.set(0,.74,d*.45);cg.add(bumperR);
+   // キャブ：下部＋上部を分け、箱感を弱める
+   const cabLow=new THREE.Mesh(new THREE.BoxGeometry(w*.88,.78,d*.22),cabMat);cabLow.position.set(0,1.22,-d*.36);cabLow.castShadow=!L;cg.add(cabLow);
+   const cabTop=new THREE.Mesh(new THREE.BoxGeometry(w*.82,1.05,d*.19),cabMat);cabTop.position.set(0,2.05,-d*.37);cabTop.castShadow=!L;cg.add(cabTop);
+   const wind=new THREE.Mesh(new THREE.BoxGeometry(w*.62,.62,.055),glassMat);wind.position.set(0,2.18,-d*.472);cg.add(wind);
+   [-1,1].forEach(sx=>{const side=new THREE.Mesh(new THREE.BoxGeometry(.055,.52,d*.09),glassMat);side.position.set(sx*w*.415,2.15,-d*.37);cg.add(side);});
+   // 3軸タイヤ・ホイール
+   const wheelMat=L?baseMat:new THREE.MeshLambertMaterial({color:0x1F2329});
+   const hubMat=L?baseMat:new THREE.MeshLambertMaterial({color:0x9DA6B2});
+   const axleZ=[-d*.31,d*.06,d*.31];
+   axleZ.forEach(z=>[-1,1].forEach(sx=>{
+    const wh=new THREE.Mesh(new THREE.CylinderGeometry(.48,.48,.34,14),wheelMat);wh.rotation.z=Math.PI/2;wh.position.set(sx*w*.49,.52,z);cg.add(wh);
+    const hub=new THREE.Mesh(new THREE.CylinderGeometry(.20,.20,.36,12),hubMat);hub.rotation.z=Math.PI/2;hub.position.copy(wh.position);cg.add(hub);
+   }));
+   // ドラム架台・回転ドラム（前小径→後大径のコンクリートミキサーらしいシルエット）
+   const cradle=new THREE.Mesh(new THREE.BoxGeometry(w*.72,.22,d*.50),frameMat);cradle.position.set(0,1.18,d*.11);cradle.rotation.x=-.05;cg.add(cradle);
+   const drum=new THREE.Mesh(new THREE.CylinderGeometry(w*.30,w*.47,d*.50,18),drumMat);drum.position.set(0,2.05,d*.08);drum.rotation.x=Math.PI/2-.20;drum.castShadow=!L;cg.add(drum);
+   const band1=new THREE.Mesh(new THREE.TorusGeometry(w*.39,.055,6,18),accentMat);band1.rotation.x=Math.PI/2-.20;band1.position.set(0,2.02,-d*.02);cg.add(band1);
+   const band2=new THREE.Mesh(new THREE.TorusGeometry(w*.43,.055,6,18),accentMat);band2.rotation.x=Math.PI/2-.20;band2.position.set(0,2.08,d*.15);cg.add(band2);
+   // 後部ホッパー・シュート・梯子
+   const hopper=new THREE.Mesh(new THREE.ConeGeometry(w*.34,.72,10,1,true),drumMat);hopper.rotation.x=Math.PI/2;hopper.position.set(0,2.28,d*.39);cg.add(hopper);
+   const chute=new THREE.Mesh(new THREE.BoxGeometry(w*.42,.10,d*.30),drumMat);chute.position.set(0,1.43,d*.48);chute.rotation.x=-.42;cg.add(chute);
+   const waterTank=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,w*.55,10),accentMat);waterTank.rotation.z=Math.PI/2;waterTank.position.set(0,1.18,-d*.16);cg.add(waterTank);
+   const ladderMat=L?baseMat:new THREE.MeshLambertMaterial({color:0x697482});
+   [-.28,.28].forEach(x=>{const rail=new THREE.Mesh(new THREE.BoxGeometry(.045,1.45,.045),ladderMat);rail.position.set(x,1.65,d*.43);cg.add(rail);});
+   for(let yy=1.02;yy<=2.26;yy+=.25){const rung=new THREE.Mesh(new THREE.BoxGeometry(.62,.035,.035),ladderMat);rung.position.set(0,yy,d*.43);cg.add(rung);}
+  }else{ // 一般トラック
    const body=new THREE.Mesh(new THREE.BoxGeometry(w,hgt*0.7,d),baseMat);body.position.y=hgt*0.45;body.castShadow=!L;cg.add(body);
    const cab=new THREE.Mesh(new THREE.BoxGeometry(w,hgt*0.6,d*0.22),baseMat);cab.position.set(0,hgt*0.5,-d*0.36);cg.add(cab);
-   if(c.type==="mixer"){const drum=new THREE.Mesh(new THREE.CylinderGeometry(w*0.45,w*0.32,d*0.5,12),new THREE.MeshLambertMaterial({color:warn?0xD64545:0xC8CCD2}));drum.position.set(0,hgt*0.7,d*0.08);drum.rotation.x=Math.PI/2-0.25;drum.castShadow=!L;cg.add(drum);}
   }
   // ───── 干渉チェックガイド（重機選択時・画像出力時は非表示）─────
   if(seld&&!L&&!U._exporting){
