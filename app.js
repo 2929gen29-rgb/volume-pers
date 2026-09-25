@@ -566,7 +566,11 @@ el.addEventListener("pointerdown",(e)=>{
   }
   if(o){snapshot();dragObj=o;U.sel=o.userData.dragKey;
    if(e.ctrlKey||e.metaKey){rotMode=true;rotStartX=e.clientX;rotStartRy=getRy(o.userData.dragKey);}
-   else{rotMode=false;const gp=groundPoint(e);dragOff.set(o.position.x-gp.x,0,o.position.z-gp.z);dragStart={lx:o.position.x,lz:o.position.z,gx:gp.x,gz:gp.z};}
+   else{
+    rotMode=false;const gp=groundPoint(e);dragOff.set(o.position.x-gp.x,0,o.position.z-gp.z);dragStart={lx:o.position.x,lz:o.position.z,gx:gp.x,gz:gp.z};
+    const dk=o.userData.dragKey||"";
+    if(dk.startsWith("co:")){const ii=+dk.slice(3),grp=cobjGroup();if(grp.length>=2&&grp.includes(ii))dragStart.group=grp.map(gi=>({i:gi,x:numv(U.cobj[gi].x,0),z:numv(U.cobj[gi].z,0)}));}
+   }
    U.auto=false;syncBtns();renderSelCard();}else{if(U.sel){clearSelection({restore:true});}}}
 });
 el.addEventListener("pointermove",(e)=>{
@@ -586,7 +590,13 @@ el.addEventListener("pointermove",(e)=>{
     if(best){wx=best.x;wz=best.z;}else{wx=Math.round(wx*10)/10;wz=Math.round(wz*10)/10;}
    }
    const dx=wx-ox, dz=wz-oz; dragObj.position.x=dx*c-dz*s; dragObj.position.z=dx*s+dz*c;
-  }else{dragObj.position.x=gp.x+dragOff.x;dragObj.position.z=gp.z+dragOff.z;}
+  }else{
+   dragObj.position.x=gp.x+dragOff.x;dragObj.position.z=gp.z+dragOff.z;
+   if(dragStart&&Array.isArray(dragStart.group)){
+    const dx=dragObj.position.x-dragStart.lx,dz=dragObj.position.z-dragStart.lz;
+    dragStart.group.forEach(q=>{const o=U.cobj[q.i];if(!o)return;o.x=q.x+dx;o.z=q.z+dz;const gm=dragMap["co:"+q.i];if(gm){gm.position.x=o.x;gm.position.z=o.z;}});
+   }
+  }
   return;}
  if(ctrl.ptrs.size===1){
    if(_selCamBase){_selCamBase=null;_selCamKey=null;} // カメラを手で動かしたら、その視点を新しい基準にする
@@ -644,6 +654,10 @@ const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
   if(k.startsWith("nb:")){const n=U.nbs[+k.slice(3)];if(n){n.x=+x.toFixed(1);n.z=+z.toFixed(1);}}
   if(k.startsWith("blk:")){const b=U.blocks[+k.slice(4)];if(b){b.dx=+(x-numv(U.site.dx,0)).toFixed(1);b.dz=+(z-numv(U.site.dz,0)).toFixed(1);}}
   if(k.startsWith("co:")){const c=U.cobj[+k.slice(3)];if(c){
+    if(dragStart&&Array.isArray(dragStart.group)){
+     const dx=x-dragStart.lx,dz=z-dragStart.lz;
+     dragStart.group.forEach(q=>{const o=U.cobj[q.i];if(o){o.x=+(q.x+dx).toFixed(1);o.z=+(q.z+dz).toFixed(1);}});
+    }else{
     let nx=+x.toFixed(1), nz=+z.toFixed(1);
     // スナップ：前面道路の歩行帯/敷鉄板ラインに近ければZを吸着、角度は道路平行(0°)へ寄せる
     if(U.snap!==false){
@@ -654,7 +668,8 @@ const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
        if(Math.hypot(numv(o.x,0)-nx,numv(o.z,0)-nz)<3){c.ry=numv(o.ry,0);}}});
     }
     if(U.snap!==false&&!ROADCLEAR_SKIP.has(c.type)){const hd=nearestRoadHeading(nx,nz);if(hd!=null)c.ry=hd;}   // なぞった道路の向きへ
-    c.x=nx;c.z=nz;}}
+    c.x=nx;c.z=nz;
+    }}}
   if(k.startsWith("sub:")){const s=U.subsurface[+k.slice(4)];if(s){s.x=+x.toFixed(1);s.z=+z.toFixed(1);}}
   if(k.startsWith("an:")){const a=U.annot[+k.slice(3)];if(a){a.x=+x.toFixed(1);a.z=+z.toFixed(1);}}
   if(k.startsWith("fpt:")){const p=U.tw.fencePts[+k.slice(4)];if(p){p.x=+x.toFixed(2);p.z=+z.toFixed(2);}}  // 位置はグループ内ローカル座標
@@ -1507,7 +1522,8 @@ function rebuild(){
    if(c.type!=="walkzone"&&c.type!=="safepath"&&overlap(cb,wb))warn=true;}
   c._warn=warn;
   const cg=new THREE.Group(); cg.userData.dragKey="co:"+i; cg.userData.cobjType=c.type;
-  const seld=(U.sel==="co:"+i);
+  const grouped=cobjInGroup(i);
+  const seld=(U.sel==="co:"+i)||grouped;
   const col=warn?0xD64545:(seld?0x4B82FF:t.color);
   const baseMat=L?new THREE.MeshBasicMaterial({color:0xffffff}):new THREE.MeshLambertMaterial({color:col});
   if(c.type==="towercrane"){
@@ -2029,7 +2045,7 @@ function rebuild(){
 
 // ───── 案件データの保存・読込 (JSON / AES暗号化対応) ─────
 function saveProjectJSON(){
- const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="_pileCount"||k==="_pileNote"||k==="_crop"||k==="_mEdit"||k==="_snapHit"||k==="_toolsMin"||k==="_layersOpen"||k==="_roadClear"||k==="_roadRemain"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
+ const saveState=JSON.parse(JSON.stringify(U,(k,v)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="_pileCount"||k==="_pileNote"||k==="_crop"||k==="_mEdit"||k==="_snapHit"||k==="_toolsMin"||k==="_layersOpen"||k==="_cobjGroup"||k==="_roadClear"||k==="_roadRemain"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus")?(k==="ents"?null:(k==="_warn"?undefined:null)):v));
  // 互換のためのメタ情報（将来バージョンで古いデータを安全に開くための目印）
  saveState._meta={app:"BimGen",appVer:APP_VER,schema:2,savedAt:new Date().toISOString()};
  const jsonStr=JSON.stringify(saveState,null,2);
@@ -2437,7 +2453,7 @@ window.addEventListener("unhandledrejection",(e)=>{try{toast("エラー："+((e.
 
 // ───── Undo（操作の取り消し：Uのスナップショットを最大30段階保持）─────
 const _hist=[]; let _histLast=0, _histKey="";
-const _SNAP_SKIP=(k)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="_pileCount"||k==="_pileNote"||k==="_crop"||k==="_mEdit"||k==="_snapHit"||k==="_toolsMin"||k==="_layersOpen"||k==="_roadClear"||k==="_roadRemain"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus");
+const _SNAP_SKIP=(k)=>(k==="tex"||k==="raw"||k==="ents"||k==="_warn"||k==="_stats"||k==="_dimDist"||k==="_exporting"||k==="_titleMin"||k==="_acc"||k==="_hudMin"||k==="_pileCount"||k==="_pileNote"||k==="_crop"||k==="_mEdit"||k==="_snapHit"||k==="_toolsMin"||k==="_layersOpen"||k==="_cobjGroup"||k==="_roadClear"||k==="_roadRemain"||k==="sel"||k==="polyInput"||k==="calib"||k==="gsiStatus");
 // key: 同じ操作（スライダー連続など）は700ms以内なら1回にまとめる
 function snapshot(key){
  const now=Date.now();
@@ -2844,7 +2860,7 @@ window.addTowerCrane=(model="JCL015")=>{snapshot();const t=COBJ_TYPES.towercrane
  U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();focusSelectionCamera(U.sel,{duration:240});if(typeof renderMobile==="function")renderMobile();
  toast("追加タワークレーンを配置しました。ドラッグで位置調整できます","ok");
 };
-window.delCO=(i)=>{snapshot();U.cobj.splice(i,1);if(U.sel==="co:"+i)U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
+window.delCO=(i)=>{snapshot();U.cobj.splice(i,1);if(U.sel==="co:"+i)U.sel=null;const gg=cobjGroup().filter(x=>x!==i).map(x=>x>i?x-1:x);U._cobjGroup=gg;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
 window.addSub=(kind)=>{
  snapshot();
  const sdz2=numv(U.site.dz,0),sd2=posv(U.site.d,18);
@@ -4697,6 +4713,35 @@ function renderUnderControl(){
  el.innerHTML=`<button class="under-main" onclick="setUnderMoveMode(${!on})"><span>✥</span><b>${on?"下地操作中":"下地を動かす"}</b><small>${on?"ドラッグ＝移動　Ctrl＋ドラッグ＝回転":"PDF / 地理院地図を選択"}</small></button>${on?`<button class="under-done" onclick="setUnderMoveMode(false)">完了</button>`:""}`;
 }
 window.renderUnderControl=renderUnderControl;
+
+// ───── 仮設オブジェクトのグループ移動 ─────
+function cobjGroup(){
+ if(!Array.isArray(U._cobjGroup))U._cobjGroup=[];
+ U._cobjGroup=U._cobjGroup.filter(i=>Number.isInteger(i)&&i>=0&&i<U.cobj.length);
+ return U._cobjGroup;
+}
+function cobjInGroup(i){return cobjGroup().includes(i);}
+window.toggleCobjGroup=(i)=>{
+ const a=cobjGroup(),p=a.indexOf(i);
+ if(p>=0)a.splice(p,1);else a.push(i);
+ U._cobjGroup=a;rebuild();renderSelCard(true);renderPanel();
+ const msg=a.length>=2?"仮設グループ："+a.length+"個。どれかをドラッグするとまとめて移動します。":a.length===1?"あと1個以上追加するとグループ移動できます。":"グループ選択を解除しました。";
+ toast(msg,"ok");
+};
+window.clearCobjGroup=()=>{U._cobjGroup=[];rebuild();renderSelCard(true);renderPanel();};
+window.rotateCobjGroup=(deg)=>{
+ const a=cobjGroup();if(a.length<2)return;
+ snapshot();
+ const pts=a.map(i=>U.cobj[i]).filter(Boolean),cx=pts.reduce((s,o)=>s+numv(o.x,0),0)/pts.length,cz=pts.reduce((s,o)=>s+numv(o.z,0),0)/pts.length;
+ const th=numv(deg,0)*Math.PI/180,cc=Math.cos(th),ss=Math.sin(th);
+ pts.forEach(o=>{const dx=numv(o.x,0)-cx,dz=numv(o.z,0)-cz;o.x=+(cx+dx*cc+dz*ss).toFixed(2);o.z=+(cz-dx*ss+dz*cc).toFixed(2);o.ry=+((((numv(o.ry,0)+deg)%360)+360)%360).toFixed(0);});
+ rebuild();renderSelCard(true);renderPanel();
+};
+window.groupVisibleTemp=()=>{
+ const a=[];(U.cobj||[]).forEach((o,i)=>{if(o&&o.type!=="obstacle"&&cobjVisibleInPhase(o,U.tw.mode))a.push(i);});
+ U._cobjGroup=a;rebuild();renderSelCard(true);renderPanel();
+ toast(a.length?"この工程の仮設 "+a.length+"個をグループ選択しました。":"この工程にグループ化できる仮設物がありません。",a.length?"ok":"err");
+};
 
 // ───── 選択中の物の属性カード（右上バーの下）：クリックした物のパラメータだけを出す ─────
 let _selCardKey=null;
