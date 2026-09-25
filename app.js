@@ -99,8 +99,8 @@ const COBJ_TYPES={
    {key:"70t",label:"70t級（概略）",w:3.0,d:13.5,h:3.7,out:7.8,tail:4.5,work:40,boomMin:11,boomMax:47},
    {key:"80t",label:"80t級（概略）",w:3.0,d:14.0,h:3.8,out:8.0,tail:4.7,work:43,boomMin:11.5,boomMax:50},
    {key:"100t",label:"100t級（概略）",w:3.2,d:15.0,h:3.9,out:8.4,tail:5.0,work:48,boomMin:12,boomMax:54},
-   {key:"110t",label:"TADANO GR-1100EX（110t）",w:3.315,d:14.45,h:3.79,out:7.3,tail:5.0,work:48.3,boomMin:12.0,boomMax:56.0},
-   {key:"145t",label:"TADANO GR-1450EX（145t・構内専用）",w:3.315,d:16.19,h:3.785,out:8.2,tail:5.5,work:54.0,boomMin:13.1,boomMax:61.0},
+   {key:"110t",label:"TADANO GR-1100EX（110t）",w:3.315,d:14.45,h:3.795,out:7.3,tail:4.39,work:48.3,boomMin:12.0,boomMax:56.0},
+   {key:"145t",label:"TADANO GR-1450EX（145t・構内専用）",w:3.315,d:16.19,h:3.785,out:8.2,tail:4.6,work:54.0,boomMin:13.1,boomMax:61.0},
  ]},
  pump:{label:"コンクリポンプ車",color:0x4F7CC4,sizes:[
    {key:"s2t",label:"小型(2t)・ブーム16m級",w:2.0,d:6.5,h:3.2,out:4.0,work:16,boomMin:5,boomMax:16},
