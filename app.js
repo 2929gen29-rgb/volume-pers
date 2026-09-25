@@ -454,6 +454,7 @@ function objRyKey(k){
  if(k==="crane")return ["tw","craneRot"]; if(k==="ev")return ["tw","evRy"];
  if(k==="mixer")return ["tw","mixRy"]; if(k==="rough")return ["tw","rufRy"];
  if(k==="poles")return ["poles","ry"]; if(k==="demo")return ["demo","ry"];
+ if(k==="under")return ["under","rot"]; if(k==="photo")return ["photo","rot"];
  if(k==="road"||k==="roadwalk"||k==="roadside")return ["road","ry"];
  if(k==="fence")return ["tw","fenceRy"];
  if(k.startsWith("nb:"))return ["nb",+k.slice(3)];
@@ -467,6 +468,7 @@ function objRyKey(k){
 function getRy(k){const r=objRyKey(k);if(!r)return 0;
  if(r[0]==="tw")return numv(U.tw[r[1]],0); if(r[0]==="poles")return numv(U.poles.ry,0); if(r[0]==="demo")return numv(U.demo.ry,0);
  if(r[0]==="road")return numv(U.road.ry,0);
+ if(r[0]==="under")return numv(U.under.rot,0); if(r[0]==="photo")return numv(U.photo.rot,0);
  if(r[0]==="nb")return numv((U.nbs[r[1]]||{}).ry,0); if(r[0]==="blk")return numv((U.blocks[r[1]]||{}).ry,0);
  if(r[0]==="co")return numv((U.cobj[r[1]]||{}).ry,0);
  if(r[0]==="sub")return numv((U.subsurface[r[1]]||{}).ry,0);
@@ -478,6 +480,8 @@ function setRy(k,deg){const r=objRyKey(k);if(!r)return;deg=((deg%360)+360)%360;
  else if(r[0]==="poles")U.poles.ry=+deg.toFixed(0);
  else if(r[0]==="demo")U.demo.ry=+deg.toFixed(0);
  else if(r[0]==="road")U.road.ry=+deg.toFixed(0);
+ else if(r[0]==="under")U.under.rot=+deg.toFixed(1);
+ else if(r[0]==="photo")U.photo.rot=+deg.toFixed(1);
  else if(r[0]==="nb"){if(U.nbs[r[1]])U.nbs[r[1]].ry=+deg.toFixed(0);}
  else if(r[0]==="blk"){if(U.blocks[r[1]])U.blocks[r[1]].ry=+deg.toFixed(0);}
  else if(r[0]==="co"){if(U.cobj[r[1]])U.cobj[r[1]].ry=+deg.toFixed(0);}
@@ -550,11 +554,14 @@ el.addEventListener("pointermove",(e)=>{
   return;}
  if(ctrl.ptrs.size===1){
    if(_selCamBase){_selCamBase=null;_selCamKey=null;} // カメラを手で動かしたら、その視点を新しい基準にする
-   if(e.shiftKey){ // Shift+ドラッグ＝パン（注視点を平行移動）
+   if(e.ctrlKey||e.metaKey){ // Ctrl+ドラッグ＝視点回転。通常操作と明確に分離
+    const rs=_coarsePointer?.00435:.006,ps=_coarsePointer?.00315:.004,dy=(e.clientY-prev[1]);
+    ctrl.theta-=(e.clientX-prev[0])*rs;
+    ctrl.phi=Math.min(1.52,Math.max(.12,ctrl.phi+(_coarsePointer?dy:-dy)*ps));
+    U.auto=false;syncBtns();
+   }else{ // 通常ドラッグ＝画面移動（パン）
     panBy(e.clientX-prev[0], e.clientY-prev[1]);
     U.auto=false;
-   }else{ // 通常ドラッグ＝回転
-    {const rs=_coarsePointer?.00435:.006,ps=_coarsePointer?.00315:.004,dy=(e.clientY-prev[1]);ctrl.theta-=(e.clientX-prev[0])*rs;ctrl.phi=Math.min(1.52,Math.max(.12,ctrl.phi+(_coarsePointer?dy:-dy)*ps));}U.auto=false;syncBtns();
    }
  }
  else if(ctrl.ptrs.size===2){if(_selCamBase){_selCamBase=null;_selCamKey=null;}const p=[...ctrl.ptrs.values()];
@@ -1783,6 +1790,7 @@ function loadProjectJSON(file){
    if(U.snap==null)U.snap=true;
    (U.cobj||[]).forEach(c=>{if(c.size==null){const t=COBJ_TYPES[c.type];if(t)c.size=t.sizes[0].key;}});
    if(U.p.addr==null)U.p.addr="";
+   U.sel=null;U._layersOpen=false;
    if(U.site&&U.site.active==null)U.site.active=true;
    if(isTutorialFinishCandidate(U))cacheTutorialFinishState(U);
    // 詳細諸元フィールドの後方互換
@@ -1935,7 +1943,8 @@ async function loadGsiMap(){
   // 敷地中心が地図中心とずれる分を補正（タイル中心と実座標の差）
   U.under.gsiStatus=`✓ ${tile.label}を表示（約${totalM.toFixed(0)}m四方 / ズーム${z}）\n出典：国土地理院`;
   U.under.gsiKind=kind; U.under.gsiZoom=z;
-  rebuild(); renderPanel();
+  U.moveLayers=true;U.sel="under";U.auto=false;
+  rebuild(); renderPanel();renderBar();renderSelCard(true);view("top",{instant:true});
  }catch(err){
   U.under.gsiStatus="取得失敗："+(err&&err.message?err.message:"不明なエラー");
   renderPanel();
@@ -2057,7 +2066,7 @@ async function loadUnderFile(file){
   await renderPdfPage();
  }else{
   const url=URL.createObjectURL(file);
-  new THREE.TextureLoader().load(url,t=>{if(U.under.tex)U.under.tex.dispose();U.under.tex=t;U.under.raw=null;U.under.pages=1;rebuild();renderPanel();});
+  new THREE.TextureLoader().load(url,t=>{if(U.under.tex)U.under.tex.dispose();U.under.tex=t;U.under.raw=null;U.under.pages=1;U.moveLayers=true;U.sel="under";U.auto=false;rebuild();renderPanel();renderBar();renderSelCard(true);view("top",{instant:true});toast("下地を選択しました。ドラッグ＝移動 / Ctrl＋ドラッグ＝回転","ok");});
  }
 }
 async function renderPdfPage(){
@@ -2071,7 +2080,9 @@ async function renderPdfPage(){
  await page.render({canvasContext:cv.getContext("2d"),viewport:v2}).promise;
  if(U.under.tex)U.under.tex.dispose();
  const tex=new THREE.CanvasTexture(cv);tex.anisotropy=4;
- U.under.tex=tex;rebuild();renderPanel();
+ U.under.tex=tex;U.moveLayers=true;U.sel="under";U.auto=false;
+ rebuild();renderPanel();renderBar();renderSelCard(true);view("top",{instant:true});
+ toast("下地を選択しました。ドラッグ＝移動 / Ctrl＋ドラッグ＝回転","ok");
 }
 function loadPhotoFile(file){
  if(!file)return;
@@ -2183,7 +2194,7 @@ function applyState(p){
  const keep={ut:U.under.tex,ur:U.under.raw,up:U.under.pages,upg:U.under.page,pt:U.photo.tex,de:U.dxf.ents,dr:U.dxf.raw};
  Object.assign(U,p);
  U.under.tex=keep.ut;U.under.raw=keep.ur;U.under.pages=keep.up;U.under.page=keep.upg;U.photo.tex=keep.pt;U.dxf.ents=keep.de;U.dxf.raw=keep.dr;
- U.sel=null;U.polyInput={on:false,pts:[],target:null};U.calib={on:false,a:null,b:null};
+ U.sel=null;U._layersOpen=false;U.polyInput={on:false,pts:[],target:null};U.calib={on:false,a:null,b:null};
  if(!Array.isArray(U.annot))U.annot=[];if(!Array.isArray(U.subsurface))U.subsurface=[];if(!U.ojt)U.ojt={};if(!Array.isArray(U.roads))U.roads=[];
  if(U.site&&U.site.active==null)U.site.active=true;
 }
@@ -3845,6 +3856,7 @@ function resetToDefault(){
  if(U.under.tex&&U.under.tex.dispose)U.under.tex.dispose();
  if(U.photo.tex&&U.photo.tex.dispose)U.photo.tex.dispose();
  Object.assign(U,def);
+ U.sel=null;U._layersOpen=false;
  _hist.length=0;
 }
 function deepMerge(t,s){for(const k in s){if(s[k]&&typeof s[k]==="object"&&!Array.isArray(s[k])&&t[k]&&typeof t[k]==="object"){deepMerge(t[k],s[k]);}else t[k]=s[k];}return t;}
@@ -4222,7 +4234,11 @@ window.renderLayers=()=>{
   <div class="ly-lock"><span><small>EDIT LOCK</small><b>動かせる物</b></span><button class="${scope==="all"?"on":""}" onclick="setEditScope('all')">すべて</button><button class="${scope==="temp"?"on":""}" onclick="setEditScope('temp')">仮設物だけ</button></div>
   <div class="ly-body">${group("MODEL",["site","building","roads","nbs"])}${group("TEMPORARY WORKS",["fence","scaffold","crane","vehicles","tempobj","safety"])}${group("CONTEXT",["obstacles","annot","sub","under"])}</div>`;
 };
-window.toggleLayers=()=>{U._layersOpen=!U._layersOpen;renderLayers();};
+window.toggleLayers=()=>{
+ const opening=!U._layersOpen;U._layersOpen=opening;
+ if(opening){U.sel=null;renderSelCard();closeSettings();}
+ renderLayers();
+};
 window.closeSettings=()=>{const e=document.getElementById("settings");if(e)e.classList.remove("open");};
 window.renderSettings=()=>{
  const el=document.getElementById("settings");if(!el||!el.classList.contains("open"))return;
@@ -4236,6 +4252,7 @@ window.renderSettings=()=>{
   <div class="set-foot"><button onclick="UI_PREF.fontScale=100;UI_PREF.labelScale=100;UI_PREF.editScope='all';saveUIPref();applyUIPref();rebuild();renderSettings();renderBar()">RESET / 標準に戻す</button><span>設定はこの端末に保存されます</span></div></div>`;
 };
 window.openSettings=()=>{
+ U._layersOpen=false;renderLayers();U.sel=null;renderSelCard();
  let el=document.getElementById("settings");if(!el){el=document.createElement("div");el.id="settings";document.body.appendChild(el);el.addEventListener("pointerdown",e=>{if(e.target===el)closeSettings();});}
  el.classList.add("open");renderSettings();
 };
@@ -4342,10 +4359,22 @@ function renderSelCard(force){
  else if(k==="crane"){const cs=CRANE_SPECS[U.tw.craneModel]||{};
   title="タワークレーン";
   body=`<label class="f"><span>機種</span><select onchange="S('tw.craneModel',this.value)">${Object.keys(CRANE_SPECS).map(m=>`<option value="${m}" ${U.tw.craneModel===m?"selected":""}>${m}　作業半径${CRANE_SPECS[m].work}m／${CRANE_SPECS[m].cap}t</option>`).join("")}</select></label><div style="font-size:11px;color:var(--mut)">作業半径 ${cs.work||"-"}m・尾部旋回 ${cs.tail||"-"}m</div>`;}
+ else if(k==="under"){
+  title="下地（PDF・地理院地図）";
+  body=`<div class="under-control-note"><b>ドラッグ＝移動</b><span>Ctrl＋ドラッグ＝回転</span></div>
+   ${rowSL("回転 °",numv(U.under.rot,0),"(v)=>{snapshot('under.rot');U.under.rot=v;rebuildThrottled();}",0,359,1)}
+   ${rowSL("透過度",numv(U.under.opacity,.65),"(v)=>{U.under.opacity=v;rebuildThrottled();}",.1,1,.05)}
+   <button class="btn btn-secondary" style="width:100%" onclick="view('top')">真上（配置）で見る</button>`;}
+ else if(k==="photo"){
+  title="周辺写真";
+  body=`<div class="under-control-note"><b>ドラッグ＝移動</b><span>Ctrl＋ドラッグ＝回転</span></div>
+   ${rowSL("回転 °",numv(U.photo.rot,0),"(v)=>{snapshot('photo.rot');U.photo.rot=v;rebuildThrottled();}",0,359,1)}
+   ${rowSL("透過度",numv(U.photo.opacity,.8),"(v)=>{U.photo.opacity=v;rebuildThrottled();}",.1,1,.05)}`;}
  else if(k==="site"||k.startsWith("spt:")){
   title="敷地"+(Array.isArray(U.site.poly)?`（多角形・${U.site.poly.length}頂点・${siteArea().toFixed(0)}㎡）`:`（${posv(U.site.w,25)}×${posv(U.site.d,20)}m）`);
   body=Array.isArray(U.site.poly)?`<div style="font-size:10.5px;color:var(--mut)">青い頂点をドラッグで修正。辺の長さを表示中。</div>`:`<div class="grid2">${rowSL("間口 m",U.site.w,"(v)=>S('site.w',v)",5,120,0.5)}${rowSL("奥行 m",U.site.d,"(v)=>S('site.d',v)",5,120,0.5)}</div>`;}
  else {el.style.display="none";return;}
+ if(U._layersOpen){U._layersOpen=false;const ly=document.getElementById("layers");if(ly)ly.style.display="none";}
  el.style.display="";
  const dupOK=/^(co:|an:|sub:|nb:|rd:|rpt:|blk:|bpt:)/.test(k);
  el.innerHTML=`<div class="sc-h"><div class="sc-title"><small>OBJECT SELECTED</small><span>${title}</span></div><span class="sc-x" onclick="clearSelection({restore:true})">✕</span></div><div class="sc-b">${body}<div class="sc-actions">${dupOK?`<button class="btn btn-secondary" onclick="duplicateSel()">複製</button>`:""}${del?`<button class="btn btn-danger" onclick="${del}">削除</button>`:""}</div><div class="hint">Delete＝削除　Ctrl+D＝複製　Esc＝選択解除　↶で戻せます</div></div>`;
