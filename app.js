@@ -1783,6 +1783,8 @@ function loadProjectJSON(file){
    if(U.snap==null)U.snap=true;
    (U.cobj||[]).forEach(c=>{if(c.size==null){const t=COBJ_TYPES[c.type];if(t)c.size=t.sizes[0].key;}});
    if(U.p.addr==null)U.p.addr="";
+   if(U.site&&U.site.active==null)U.site.active=true;
+   if(isTutorialFinishCandidate(U))cacheTutorialFinishState(U);
    // 詳細諸元フィールドの後方互換
    ["siteArea","bldgArea","consArea","privArea","units","note"].forEach(k=>{if(U.p[k]==null)U.p[k]="";});
    if(U.p.aiIncludeAddr==null)U.p.aiIncludeAddr=false;
@@ -2137,6 +2139,7 @@ function saveDraft(){
  if(!draftEnabled())return;
  try{const s=JSON.stringify(U,(k,v)=>_SNAP_SKIP(k)?undefined:v);
   localStorage.setItem(DRAFT_KEY,JSON.stringify({savedAt:Date.now(),name:U.p.name||"",data:s}));
+  if(isTutorialFinishCandidate(U))localStorage.setItem(TUTORIAL_FINISH_KEY,s);
  }catch(e){/* 容量超過等は無視 */}
 }
 function scheduleDraft(){clearTimeout(_draftT);_draftT=setTimeout(saveDraft,2000);}
@@ -2145,12 +2148,44 @@ window.addEventListener("beforeunload",saveDraft);
 window.addEventListener("pagehide",saveDraft);                       // iOS/Android：タブ切替・閉じる
 document.addEventListener("visibilitychange",()=>{if(document.hidden)saveDraft();});
 function readDraft(){try{const j=localStorage.getItem(DRAFT_KEY);return j?JSON.parse(j):null;}catch(e){return null;}}
+const TUTORIAL_FINISH_KEY="bimgen_tutorial_finish_profile_v1";
+function isTutorialFinishCandidate(p){
+ try{
+  return !!(p&&p.p&&p.site&&p.tw
+   &&Math.round(numv(p.p.floors,0))>=10
+   &&Array.isArray(p.site.poly)&&p.site.poly.length>=6
+   &&Array.isArray(p.nbs)&&p.nbs.length>=2
+   &&Array.isArray(p.cobj)&&p.cobj.some(x=>x&&x.type==="lsev")
+   &&p.cobj.some(x=>x&&x.type==="mixer")
+   &&p.cobj.some(x=>x&&x.type==="pump")
+   &&p.tw.crane===true&&p.tw.fence===true
+   &&Array.isArray(p.roads)&&p.roads.length>0);
+ }catch(e){return false;}
+}
+function cacheTutorialFinishState(p){
+ if(!isTutorialFinishCandidate(p))return false;
+ try{
+  const s=JSON.stringify(p,(k,v)=>_SNAP_SKIP(k)?undefined:v);
+  localStorage.setItem(TUTORIAL_FINISH_KEY,s);return true;
+ }catch(e){return false;}
+}
+function readTutorialFinishState(){
+ try{
+  const own=localStorage.getItem(TUTORIAL_FINISH_KEY);
+  if(own){const p=JSON.parse(own);if(isTutorialFinishCandidate(p))return p;}
+  const d=readDraft();
+  if(d&&d.data){const p=JSON.parse(d.data);if(isTutorialFinishCandidate(p)){cacheTutorialFinishState(p);return p;}}
+ }catch(e){}
+ return null;
+}
+window.cacheTutorialFinishState=cacheTutorialFinishState;
 function applyState(p){
  const keep={ut:U.under.tex,ur:U.under.raw,up:U.under.pages,upg:U.under.page,pt:U.photo.tex,de:U.dxf.ents,dr:U.dxf.raw};
  Object.assign(U,p);
  U.under.tex=keep.ut;U.under.raw=keep.ur;U.under.pages=keep.up;U.under.page=keep.upg;U.photo.tex=keep.pt;U.dxf.ents=keep.de;U.dxf.raw=keep.dr;
  U.sel=null;U.polyInput={on:false,pts:[],target:null};U.calib={on:false,a:null,b:null};
  if(!Array.isArray(U.annot))U.annot=[];if(!Array.isArray(U.subsurface))U.subsurface=[];if(!U.ojt)U.ojt={};if(!Array.isArray(U.roads))U.roads=[];
+ if(U.site&&U.site.active==null)U.site.active=true;
 }
 window.restoreDraft=()=>{
  const d=readDraft(); if(!d){toast("下書きがありません");return;}
@@ -3766,8 +3801,35 @@ function loadRealDemoState(tutorial){
  }else{U.tab="仮設";U.tabGroup="3";}
  closeStart();rebuild();renderPanel();renderBar();view(tutorial?"bird":"bird",{instant:true});
 }
+async function loadTutorialFinishedProject(skipped){
+ const saved=readTutorialFinishState();
+ if(saved){
+  resetToDefault();
+  applyState(JSON.parse(JSON.stringify(saved)));
+  U.auto=false;U.sel=null;
+  U.tab="施工/CAD";U.tabGroup="3";
+  ensureLayers();Object.keys(LAYER_DEFAULTS).forEach(k=>U.layers[k]=true);
+  rebuild();renderPanel();renderBar();
+  if(U.geo&&U.geo.lat!=null&&U.geo.lon!=null){
+   try{await loadGsiMap();}catch(e){}
+  }
+  view("bird",{intro:true,duration:720});
+  saveDraft();
+  toast(skipped?"チュートリアルをスキップしました。保存済みの完成案件を開きました。":"チュートリアル完了。保存済みの完成案件を開きました。","ok");
+  return true;
+ }
+ // 公開コードには実在住所・座標を埋め込まず、完成形の匿名デモをフォールバックにする。
+ loadRealDemoState(false);
+ U.layers.nbs=true;U.layers.annot=true;U.layers.sub=true;U.layers.roads=true;U.layers.fence=true;U.layers.crane=true;U.layers.tempobj=true;U.layers.vehicles=true;U.layers.safety=true;U.layers.obstacles=true;
+ rebuild();renderPanel();renderBar();view("bird",{intro:true,duration:720});
+ toast("完成案件を表示しました。地図まで同じ状態にするには、完成版案件ファイルを一度読み込むとこの端末に記憶されます。","ok");
+ return false;
+}
+window.loadTutorialFinishedProject=loadTutorialFinishedProject;
+
 window.openRealDemo=()=>{
  const loadDemo=()=>{
+  cacheTutorialFinishState(U);
   loadRealDemoState(true);
   setTimeout(()=>startRealTutorial(),1180);
  };
@@ -3912,12 +3974,11 @@ function tutorialComplete(){
 window.startRealTutorial=()=>{
  REAL_TUTORIAL.active=true;REAL_TUTORIAL.loading=false;REAL_TUTORIAL.step=0;REAL_TUTORIAL.traceI=0;REAL_TUTORIAL.complete=false;document.body.classList.add("tutorial-mode");tutorialPrepareStep(0);tutorialRender();
 };
-window.exitRealTutorial=(skipped)=>{
+window.exitRealTutorial=async(skipped)=>{
  REAL_TUTORIAL.active=false;REAL_TUTORIAL.complete=false;REAL_TUTORIAL.allow=null;REAL_TUTORIAL.target=null;document.body.classList.remove("tutorial-mode");clearTutorialTrace();
  const e=document.getElementById("real-tutorial");if(e)e.remove();document.querySelectorAll(".tutorial-target").forEach(x=>x.classList.remove("tutorial-target"));
  U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;
- rebuild();renderPanel();renderBar();view("bird",{intro:true,duration:720});
- toast(skipped?"チュートリアルをスキップしました。現在のサンプル案件を自由に操作できます。":"チュートリアル完了。全機能を操作できます。","ok");
+ await loadTutorialFinishedProject(!!skipped);
 };
 document.addEventListener("pointerdown",(e)=>{
  if(!REAL_TUTORIAL.active)return;
@@ -4680,7 +4741,12 @@ window.toggleMenu=(btn)=>{
 };
 window.closeMenus=()=>{document.querySelectorAll(".mn.open").forEach(x=>x.classList.remove("open"));const p=document.getElementById("mn-portal");if(p){p.classList.remove("open");p.innerHTML="";}};
 document.addEventListener("pointerdown",(e)=>{if(!e.target.closest(".mn")&&!e.target.closest("#mn-portal"))closeMenus();});
-$("#phead").addEventListener("click",()=>{const w=$("#pwrap");const off=w.style.display==="none";w.style.display=off?"":"none";$("#parr").textContent=off?"▲":"▼";});
+$("#phead").addEventListener("click",()=>{
+ const p=$("#panel"),w=$("#pwrap"),closed=p.classList.toggle("collapsed");
+ w.style.display=closed?"none":"";
+ $("#parr").textContent=closed?"▶":"▲";
+ $("#phead").setAttribute("aria-expanded",closed?"false":"true");
+});
 U._titleMin = (window.innerWidth < 720);  // モバイルは初期最小化
 renderBar();renderPanel();rebuild();
 setTimeout(()=>{const d=$("#drag");if(d)d.style.display="none";},9000);
