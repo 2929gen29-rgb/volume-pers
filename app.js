@@ -2595,7 +2595,10 @@ function v4PhaseSceneTransition(next){
 }
 window.v4PhaseSceneTransition=v4PhaseSceneTransition;
 window.setMode=(m)=>v4PhaseSceneTransition(m);
-window.addCO=(type)=>{if(U.tw.mode==="plan"&&type!=="obstacle"){toast("完成フェーズでは仮設物を配置しません。工程を施工中へ戻してください","err");return;}snapshot();const t=COBJ_TYPES[type]||COBJ_TYPES.truck;const sz=t.sizes[0];const a=placementAnchor(5),nx0=a.x,nz0=a.z;const hd=(U.snap!==false)?nearestRoadHeading(nx0,nz0):null;
+window.addCO=(type)=>{if(U.tw.mode==="plan"&&type!=="obstacle"){toast("完成フェーズでは仮設物を配置しません。工程を施工中へ戻してください","err");return;}snapshot();const t=COBJ_TYPES[type]||COBJ_TYPES.truck;
+ const preferred={rough:"25t",pump:"m4t",mixer:"8t",truck:"4t"}[type];
+ const sz=(preferred&&cobjSize(type,preferred))||t.sizes[0];
+ const a=placementAnchor(5),nx0=a.x,nz0=a.z;const hd=(U.snap!==false)?nearestRoadHeading(nx0,nz0):null;
  const obj={type,size:sz.key,x:nx0,z:nz0,w:sz.w,d:sz.d,h:sz.h,ry:hd!=null?hd:0,phase:U.tw.mode};
  if(type==="rough"){obj.boomPct=55;obj.boomAngle=42;obj.outPct=70;}
  if(type==="pump"){obj.boomPct=62;obj.boomAngle=48;obj.outPct=85;}
@@ -4126,9 +4129,9 @@ window.addEventListener("resize",()=>{if(REAL_TUTORIAL.active&&[3,5].includes(RE
 
 // ───── 初めての方向けガイド（ツアー）：デモ案件を開いて5ステップを順に案内 ─────
 const TOUR_STEPS=[
- {t:"① 3Dの動かし方",b:"何もない所をドラッグで回転、ホイール／2本指で拡大、物の上をドラッグで移動、Ctrl＋ドラッグで回転。",do:()=>{view("bird");}},
+ {t:"① 3Dの動かし方",b:"空白をドラッグ＝画面移動、Ctrl＋ドラッグ＝視点回転。物の上はドラッグ＝移動、Ctrl＋ドラッグ＝その物を回転。ホイール／2本指で拡大縮小します。",do:()=>{view("bird");}},
  {t:"② 検討判定（右下）",b:"OK／注意／要検討が常に出ます。行にマウスを乗せると対処の目安。今は「要検討」がある狭小地の例です。",do:()=>{U._hudMin=false;renderHUD();}},
- {t:"③ 左の段階バー",b:"①下地を貼る → ②なぞる → ③仮設を計画 → ④検討・出力。上から順に進めば流れどおりです。",do:()=>{U.tabGroup="3";U.tab="仮設";renderPanel();}},
+ {t:"③ 左の段階バー",b:"①案件 → ②図面・敷地 → ③仮設 → ④検討。案件情報から地図・PDF、敷地と建物をなぞり、最後に仮設をじっくり詰めます。",do:()=>{U.tabGroup="3";U.tab="仮設";renderPanel();}},
  {t:"④ 上の道具でなぞる",b:"敷地・建物・道路・仮囲いは、地図や図面の上をクリックしてなぞります。Backspaceで1点戻す、Escで中止。",do:()=>{view("top");}},
  {t:"⑤ 出力と保存",b:"④「検討・出力」→ 📄検討シートでA4横1枚に。💾保存で案件ファイル。作業中の内容はこの端末に自動退避されます。",do:()=>{U.tabGroup="4";U.tab="検討";renderPanel();view("bird");}},
 ];
