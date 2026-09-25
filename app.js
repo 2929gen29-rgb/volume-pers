@@ -801,17 +801,30 @@ window.roadClearance=roadClearance;
 
 // ───── 工程フェーズ描画（山留め・掘削 / 杭工事 / 鉄骨建て方）※rebuildから呼ぶ ─────
 //  1階を含む矩形ブロックの外形を「建物範囲」として扱う（多角形ブロックは外接矩形で近似）
+function _phaseLocal(lx,lz,ry){
+ const cc=Math.cos(ry||0),ss=Math.sin(ry||0);
+ // Three.js rotation.y と同じ向き：x'=x cos+z sin / z'=-x sin+z cos
+ return {x:lx*cc+lz*ss,z:-lx*ss+lz*cc};
+}
+function _phasePoint(fp,lx,lz,rOff=0){
+ const q=_phaseLocal(lx,lz,(fp.ry||0)+rOff);
+ return {x:fp.x+q.x,z:fp.z+q.z};
+}
 function _footprints(ctx){
  const out=[];
  (U.blocks||[]).forEach(b=>{
   const f1=Math.max(1,Math.round(posv(b.f1,1))); if(f1!==1)return;
   let W,D;
+  const ry=numv(b.ry,0)*Math.PI/180,bdx=numv(b.dx,0),bdz=numv(b.dz,0);
   if(b.shape==="poly"&&Array.isArray(b.poly)&&b.poly.length>=3){
-   const xs=b.poly.map(p=>p.x),zs=b.poly.map(p=>p.z);W=Math.max(...xs)-Math.min(...xs);D=Math.max(...zs)-Math.min(...zs);
-   out.push({W,D,x:ctx.sdx+(Math.max(...xs)+Math.min(...xs))/2,z:ctx.sdz+(Math.max(...zs)+Math.min(...zs))/2,ry:0,f2:Math.round(posv(b.f2,1))});
+   const xs=b.poly.map(p=>numv(p.x,0)),zs=b.poly.map(p=>numv(p.z,0));
+   const minX=Math.min(...xs),maxX=Math.max(...xs),minZ=Math.min(...zs),maxZ=Math.max(...zs);
+   W=Math.max(.1,maxX-minX);D=Math.max(.1,maxZ-minZ);
+   const lc={x:(minX+maxX)/2,z:(minZ+maxZ)/2},rc=_phaseLocal(lc.x,lc.z,ry);
+   out.push({W,D,x:ctx.sdx+bdx+rc.x,z:ctx.sdz+bdz+rc.z,ry,f2:Math.round(posv(b.f2,1))});
   }else{
    W=posv(b.w,Math.sqrt(posv(b.area,200)*posv(b.ratio,1.5)));D=posv(b.d,Math.sqrt(posv(b.area,200)/posv(b.ratio,1.5)));
-   out.push({W,D,x:ctx.sdx+numv(b.dx,0),z:ctx.sdz+numv(b.dz,0),ry:numv(b.ry,0)*Math.PI/180,f2:Math.round(posv(b.f2,1))});
+   out.push({W,D,x:ctx.sdx+bdx,z:ctx.sdz+bdz,ry,f2:Math.round(posv(b.f2,1))});
   }
  });
  return out;
@@ -834,16 +847,15 @@ function buildPhase(ctx){
    // 山留め壁（4面・鋼矢板/親杭横矢板のイメージ：GL+0.8mまで立ち上げ）
    const t=0.25, wc=0x7d8794;
    const face=(w,h,x,z,r)=>{const m=add(new THREE.BoxGeometry(w,h,t),wc,0,0,0,0);m.position.set(x,gl-depth+h/2,z);m.rotation.y=r;};
-   // ローカル→回転
-   const rot=(lx,lz)=>({x:fp.x+lx*Math.cos(fp.ry)-lz*Math.sin(fp.ry),z:fp.z+lx*Math.sin(fp.ry)+lz*Math.cos(fp.ry)});
+   // 建物と同じThree.js座標系でローカル→ワールド変換
    let p;
-   p=rot(0,-D/2);face(W,wallH,p.x,p.z,fp.ry);  p=rot(0,D/2);face(W,wallH,p.x,p.z,fp.ry);
-   p=rot(-W/2,0);face(D,wallH,p.x,p.z,fp.ry+Math.PI/2); p=rot(W/2,0);face(D,wallH,p.x,p.z,fp.ry+Math.PI/2);
+   p=_phasePoint(fp,0,-D/2);face(W,wallH,p.x,p.z,fp.ry);  p=_phasePoint(fp,0,D/2);face(W,wallH,p.x,p.z,fp.ry);
+   p=_phasePoint(fp,-W/2,0);face(D,wallH,p.x,p.z,fp.ry+Math.PI/2); p=_phasePoint(fp,W/2,0);face(D,wallH,p.x,p.z,fp.ry+Math.PI/2);
    // 腹起し・切梁（1段：GL-1.5m）
    if(depth>=2.5){const y=gl-1.5, bc=0xc9a33a;
     add(new THREE.BoxGeometry(W-0.5,0.3,0.3),bc,fp.x,y,fp.z,fp.ry);
     add(new THREE.BoxGeometry(0.3,0.3,D-0.5),bc,fp.x,y,fp.z,fp.ry);
-    const n=Math.max(1,Math.round(W/6)); for(let i=1;i<n;i++){const lx=-W/2+W*i/n; const q=rot(lx,0); add(new THREE.BoxGeometry(0.3,0.3,D-0.5),bc,q.x,y,q.z,fp.ry);}
+    const n=Math.max(1,Math.round(W/6)); for(let i=1;i<n;i++){const lx=-W/2+W*i/n; const q=_phasePoint(fp,lx,0); add(new THREE.BoxGeometry(0.3,0.3,D-0.5),bc,q.x,y,q.z,fp.ry);}
    }
    // 掘削深さの寸法ラベル（注記と同じ座布団方式）
    ghost(fp);
@@ -854,9 +866,8 @@ function buildPhase(ctx){
   const pileGrid=(fp,pt,rOff,color,opacity,yTop,tag)=>{
    const nx=Math.max(1,Math.floor(fp.W/pt)), nz=Math.max(1,Math.floor(fp.D/pt));
    const sx=(fp.W-(nx-1)*pt)/2, sz=(fp.D-(nz-1)*pt)/2;
-   const rot=(lx,lz)=>({x:fp.x+lx*Math.cos(fp.ry+rOff)-lz*Math.sin(fp.ry+rOff),z:fp.z+lx*Math.sin(fp.ry+rOff)+lz*Math.cos(fp.ry+rOff)});
    const geo=new THREE.CylinderGeometry(dia/2,dia/2,len,12);
-   for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const lx=-fp.W/2+sx+i*pt, lz=-fp.D/2+sz+j*pt; const q=rot(lx,lz);
+   for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const lx=-fp.W/2+sx+i*pt, lz=-fp.D/2+sz+j*pt; const q=_phasePoint(fp,lx,lz,rOff);
     add(geo,color,q.x,gl+yTop-len/2,q.z,0,opacity<1?{transparent:true,opacity,depthWrite:false}:{});}
    return nx*nz;
   };
@@ -869,7 +880,8 @@ function buildPhase(ctx){
    if(tw.oldPiles){ // 既存杭（撤去/残置の検討用）：赤・半透明・ピッチと角度をずらせる
     const oW=fp.W+numv(tw.oldExtend,2)*2,oD=fp.D+numv(tw.oldExtend,2)*2; let op=Math.max(2,numv(tw.oldPitch,4));
     const oEst=Math.max(1,Math.floor(oW/op))*Math.max(1,Math.floor(oD/op)); if(oEst>300)op=+(op*Math.sqrt(oEst/300)).toFixed(1);
-    nOld+=pileGrid({W:oW,D:oD,x:fp.x+numv(tw.oldDx,0),z:fp.z+numv(tw.oldDz,0),ry:fp.ry},op,numv(tw.oldRot,0)*Math.PI/180,0xd64545,0.45,-0.3);
+    const oc=_phasePoint(fp,numv(tw.oldDx,0),numv(tw.oldDz,0));
+    nOld+=pileGrid({W:oW,D:oD,x:oc.x,z:oc.z,ry:fp.ry},op,numv(tw.oldRot,0)*Math.PI/180,0xd64545,0.45,-0.3);
    }
    ghost(fp);
   });
@@ -884,13 +896,12 @@ function buildPhase(ctx){
   fps.forEach(fp=>{
    const nx=Math.max(2,Math.round(fp.W/pitch)+1), nz=Math.max(2,Math.round(fp.D/pitch)+1);
    const px=fp.W/(nx-1), pz=fp.D/(nz-1);
-   const rot=(lx,lz)=>({x:fp.x+lx*Math.cos(fp.ry)-lz*Math.sin(fp.ry),z:fp.z+lx*Math.sin(fp.ry)+lz*Math.cos(fp.ry)});
    const colGeo=new THREE.BoxGeometry(0.45,nF*fh,0.45);
-   for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const q=rot(-fp.W/2+i*px,-fp.D/2+j*pz);add(colGeo,col,q.x,gl+nF*fh/2,q.z,fp.ry);}
+   for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const q=_phasePoint(fp,-fp.W/2+i*px,-fp.D/2+j*pz);add(colGeo,col,q.x,gl+nF*fh/2,q.z,fp.ry);}
    // 各階の梁（X方向・Z方向）
    for(let f=1;f<=nF;f++){const y=gl+f*fh-0.3;
-    for(let j=0;j<nz;j++){const q=rot(0,-fp.D/2+j*pz);add(new THREE.BoxGeometry(fp.W,0.5,0.28),col,q.x,y,q.z,fp.ry);}
-    for(let i=0;i<nx;i++){const q=rot(-fp.W/2+i*px,0);add(new THREE.BoxGeometry(0.28,0.5,fp.D),col,q.x,y,q.z,fp.ry);}
+    for(let j=0;j<nz;j++){const q=_phasePoint(fp,0,-fp.D/2+j*pz);add(new THREE.BoxGeometry(fp.W,0.5,0.28),col,q.x,y,q.z,fp.ry);}
+    for(let i=0;i<nx;i++){const q=_phasePoint(fp,-fp.W/2+i*px,0);add(new THREE.BoxGeometry(0.28,0.5,fp.D),col,q.x,y,q.z,fp.ry);}
     // デッキプレート（床）：薄い板・半透明
     add(new THREE.BoxGeometry(fp.W,0.08,fp.D),0xb8c0cc,fp.x,y+0.3,fp.z,fp.ry,{transparent:true,opacity:0.55});
    }
