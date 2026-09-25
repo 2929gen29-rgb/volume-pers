@@ -4465,6 +4465,7 @@ function renderSelCard(force){
    ${mech?`<div class="machine-controls"><small>WORKING CONFIGURATION</small>
      ${rowSL("ブーム伸長 "+(boomLen!=null?"（約"+boomLen.toFixed(1)+"m）":""),boomPct,`(v)=>setCOParam(${i},'boomPct',v)`,0,100,5)}
      ${rowSL("ブーム角度 °",boomAngle,`(v)=>setCOParam(${i},'boomAngle',v)`,5,80,1)}
+     ${rowSL("ブーム旋回 °",((numv(c.boomRy,0)%360)+360)%360,`(v)=>setCOParam(${i},'boomRy',v)`,0,359,1)}
      ${rowSL("アウトリガー張出 %",outPct,`(v)=>setCOParam(${i},'outPct',v)`,0,100,5)}
      <div class="machine-note">低ポリ施工検討モデル。外形・可動状態の確認用で、実機寸法はメーカー資料で最終確認してください。</div>
     </div>`:""}
