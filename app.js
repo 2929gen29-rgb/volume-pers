@@ -1105,11 +1105,23 @@ function rebuild(){
  layer(U.photo,"photo",0.10);
  layer(U.under,"under",0.18);
 
- // 近隣建物
+ // 近隣建物：プレゼン時にも箱だけに見えない軽量ファサード
  U.nbs.forEach((n,i)=>{
-  const m=box(g,posv(n.w,10),posv(n.h,12),posv(n.d,10),0xc0c7d0,numv(n.x,20),posv(n.h,12)/2,numv(n.z,20));
-  m.rotation.y=numv(n.ry,0)*Math.PI/180;
-  m.userData.dragKey="nb:"+i;dragMap["nb:"+i]=m;
+  const nw=posv(n.w,10),nh=posv(n.h,12),nd=posv(n.d,10);
+  const ng=new THREE.Group();ng.userData.dragKey="nb:"+i;
+  const body=new THREE.Mesh(new THREE.BoxGeometry(nw,nh,nd),mat(0xc0c7d0));body.position.y=nh/2;body.castShadow=!L;body.receiveShadow=!L;ng.add(body);
+  if(!L){
+   const ed=new THREE.LineSegments(new THREE.EdgesGeometry(body.geometry,18),new THREE.LineBasicMaterial({color:0x8B95A2,transparent:true,opacity:.50}));ed.position.copy(body.position);ng.add(ed);
+   const nf=Math.max(2,Math.min(18,Math.round(nh/3.1))),M=new THREE.Matrix4();
+   const bandGeo=new THREE.BoxGeometry(nw*.88,.66,.055);
+   const bands=new THREE.InstancedMesh(bandGeo,new THREE.MeshLambertMaterial({color:0x64798F,transparent:true,opacity:.56}),nf*2);
+   for(let fl=0;fl<nf;fl++){const yy=(fl+.54)*(nh/nf);bands.setMatrixAt(fl*2,M.makeTranslation(0,yy,nd/2+.036));bands.setMatrixAt(fl*2+1,M.makeTranslation(0,yy,-nd/2-.036));}
+   ng.add(bands);
+   const parap=new THREE.Mesh(new THREE.BoxGeometry(nw+.14,.30,nd+.14),mat(0xAAB2BC));parap.position.y=nh+.15;ng.add(parap);
+   if(nh>16){const box1=new THREE.Mesh(new THREE.BoxGeometry(Math.max(1.2,nw*.18),.9,Math.max(1.0,nd*.16)),mat(0x929CA7));box1.position.set(-nw*.18,nh+.60,0);ng.add(box1);}
+  }
+  ng.position.set(numv(n.x,20),0,numv(n.z,20));ng.rotation.y=numv(n.ry,0)*Math.PI/180;
+  g.add(ng);dragMap["nb:"+i]=ng;
  });
 
  // 建物ブロック
@@ -1175,6 +1187,13 @@ function rebuild(){
       for(let fl=0;fl<nF;fl++){const yb=y0+0.12+fl*fh; const r=new THREE.Mesh(new THREE.BoxGeometry(len-0.6,1.1,0.12),railMat);
        r.position.set(ox+(a.x+b2.x)/2+nx*outward*0.75,yb+0.55,oz+(a.z+b2.z)/2+nz*outward*0.75); r.rotation.y=-Math.atan2(dz,dx); g.add(r);}}}
    }
+   // プレゼン用屋上設備（多角形建物）：大きな輪郭が読める程度に限定
+   if(bTo===f2&&f2===floorsAll&&U.tw.mode==="plan"&&!L&&DET){
+    const pcx=pts.reduce((s,p)=>s+p.x,0)/pts.length,pcz=pts.reduce((s,p)=>s+p.z,0)/pts.length;
+    const u1=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.25,1.6),new THREE.MeshLambertMaterial({color:0xAEB7C1}));u1.position.set(ox+pcx-1.2,y0+bh+1.05,oz+pcz);u1.castShadow=true;g.add(u1);
+    const u2=new THREE.Mesh(new THREE.BoxGeometry(1.6,.82,1.25),new THREE.MeshLambertMaterial({color:0x7E8995}));u2.position.set(ox+pcx+1.1,y0+bh+.82,oz+pcz+.6);g.add(u2);
+    const vent=new THREE.Mesh(new THREE.CylinderGeometry(.22,.30,1.15,10),new THREE.MeshLambertMaterial({color:0x8D98A4}));vent.position.set(ox+pcx+.2,y0+bh+1.0,oz+pcz-1.0);g.add(vent);
+   }
    // 屋上パラペット相当（簡易）
    if(bTo===f2&&U.tw.mode==="plan"&&!L){const cap=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:0.8,bevelEnabled:false}),new THREE.MeshLambertMaterial({color:isApt?0xcfd3d9:isOff?0x33425a:0xcfd3d9}));cap.geometry.rotateX(-Math.PI/2);cap.position.set(ox,y0+bh+0.12,oz);g.add(cap);}
    // 多角形建物にも足場を巻く（建物メッシュの実バウンディングボックスから・座標ズレ防止）
@@ -1207,7 +1226,14 @@ function rebuild(){
   if(!L){const be=new THREE.LineSegments(new THREE.EdgesGeometry(bodyMesh.geometry,18),new THREE.LineBasicMaterial({color:0x657180,transparent:true,opacity:.48}));be.position.copy(bodyMesh.position);bg.add(be);}
   if(bTo===f2&&U.tw.mode==="plan"){lbox(W+0.5,0.9,D+0.5,bodyCol===0x3a587a?0x33425a:bodyCol,0,y0+bh+0.55,0);
    if(f2===floorsAll)lbox(W*0.28,3,D*0.3,bodyCol===0x3a587a?0x33425a:bodyCol,W*0.22,y0+bh+2.4,-D*0.15);}
-  if(f1===1&&!entDone){lbox(Math.min(8,W*0.5),fh*0.9,0.4,0x3a587a,0,gl+fh*0.45+0.12,D/2+0.18);entDone=true;}
+  if(f1===1&&!entDone){
+   const ew=Math.min(8,W*.50);
+   lbox(ew,fh*.88,.18,0x3a587a,0,gl+fh*.45+.12,D/2+.12);
+   lbox(ew+.70,.18,1.55,0xCBD2DA,0,gl+fh*.82,D/2+.82);
+   lbox(.20,fh*.78,.20,0xAAB3BD,-ew*.42,gl+fh*.39,D/2+.72);
+   lbox(.20,fh*.78,.20,0xAAB3BD, ew*.42,gl+fh*.39,D/2+.72);
+   entDone=true;
+  }
   if(!L&&DET){const M=new THREE.Matrix4();
    if(isApt){const mk=(geo,c,zz,yy,op)=>{const im=new THREE.InstancedMesh(geo,new THREE.MeshLambertMaterial({color:c,transparent:!!op,opacity:op||1}),nF);
      for(let i=0;i<nF;i++)im.setMatrixAt(i,M.makeTranslation(0,y0+i*fh+yy,zz));im.castShadow=true;bg.add(im);};
@@ -1235,6 +1261,20 @@ function rebuild(){
     for(let i=0;i<nF;i++)for(let j=0;j<nx;j++){const x=-W/2+(j+.5)*(W/nx);
      if(f1+i>1){im.setMatrixAt(k++,M.makeTranslation(x,y0+i*fh+fh*.55,D/2+.06));im.setMatrixAt(k++,M.makeTranslation(x,y0+i*fh+fh*.55,-D/2-.06));}}
     im.count=k;bg.add(im);}
+   // 縦マリオンで窓帯を分節。InstancedMeshで描画負荷を抑える。
+   const mullN=Math.max(3,Math.min(12,Math.floor(W/2.2)));
+   const mullGeo=new THREE.BoxGeometry(.055,fh*.54,.065);
+   const mullMat=new THREE.MeshLambertMaterial({color:isOff?0xB9C8D8:0x778596,transparent:true,opacity:.86});
+   const mulls=new THREE.InstancedMesh(mullGeo,mullMat,mullN*nF*2);let mk2=0;
+   for(let fl=0;fl<nF;fl++)for(let j=1;j<=mullN;j++){const x=-W/2+j*(W/(mullN+1)),yy=y0+fl*fh+fh*.55;
+    mulls.setMatrixAt(mk2++,M.makeTranslation(x,yy,D/2+.086));mulls.setMatrixAt(mk2++,M.makeTranslation(x,yy,-D/2-.086));}
+   mulls.count=mk2;bg.add(mulls);
+   // 屋上設備は少数の大きなシルエットだけ追加。細かい機器を大量生成しない。
+   if(bTo===f2&&f2===floorsAll&&U.tw.mode==="plan"){
+    lbox(Math.max(1.6,W*.14),1.35,Math.max(1.4,D*.16),0xAEB7C1,-W*.18,y0+bh+1.42,-D*.12);
+    lbox(Math.max(1.2,W*.10),.85,Math.max(1.1,D*.12),0x7E8995,W*.18,y0+bh+1.16,D*.08);
+    const vent=new THREE.Mesh(new THREE.CylinderGeometry(.22,.30,1.2,10),new THREE.MeshLambertMaterial({color:0x8D98A4}));vent.position.set(W*.05,y0+bh+1.25,-D*.28);vent.castShadow=true;bg.add(vent);
+   }
   }else if(L){const pts=[];  // 線画モード：窓ラインのみ
    for(let i=1;i<=nF;i++){const y=y0+i*fh;
     pts.push(-W/2,y,D/2+.01,W/2,y,D/2+.01,-W/2,y,-D/2-.01,W/2,y,-D/2-.01);
