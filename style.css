@@ -1776,3 +1776,58 @@ body.touch-full:not(.simple) #panel.collapsed #phead .brand{
 }
 body.touch-full:not(.simple) #panel.collapsed #phead .brand-mark{width:24px;height:22px}
 body.touch-full:not(.simple) #panel.collapsed #pwrap{display:none!important}
+
+
+/* UX Stage 7 — panel docking + machine controls */
+/* Right-side inspectors are mutually exclusive in JS and share one dock so
+   they never stack over one another. */
+#selcard,#layers{
+  right:12px!important;top:62px!important;
+  width:286px!important;max-height:calc(100dvh - 86px)!important;
+  overflow:auto
+}
+#layers{z-index:7}
+#selcard{z-index:7}
+@media (min-width:821px){
+  body:not(.simple) #selcard,
+  body:not(.simple) #layers{bottom:12px;max-height:none!important}
+}
+
+/* Underlay becomes an explicit editing task immediately after PDF/map load. */
+.under-control-note{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  margin:0 0 9px;padding:8px 9px;border:1px solid #C9D8F1;border-radius:7px;
+  background:#EEF4FF;color:#3A5274;font-size:10.5px
+}
+.under-control-note b{font-size:11px;color:#1F56A9}
+.under-control-note span{font-weight:700}
+
+/* Heavy equipment working configuration. */
+.machine-controls{
+  margin:8px 0 9px;padding:9px 9px 5px;border:1px solid #D8E1EC;
+  border-radius:8px;background:#F7F9FC
+}
+.machine-controls>small{
+  display:block;margin-bottom:7px;font-family:var(--mono);font-size:8px;
+  font-weight:900;letter-spacing:.11em;color:#56749B
+}
+.machine-controls label.f{margin-bottom:7px}
+.machine-controls .machine-note{
+  margin:1px 0 5px;padding-top:6px;border-top:1px solid #E1E6ED;
+  font-size:9.5px;line-height:1.45;color:#68788C
+}
+
+/* Make the underlay action visually easier to spot among drawing tools. */
+#tools .tool[title^="PDF・地図を操作"]{
+  min-width:66px;border-left:1px solid #D7E0EB
+}
+#tools .tool[title^="PDF・地図を操作"].on{
+  box-shadow:0 0 0 2px rgba(75,130,255,.14)
+}
+
+@media(max-width:820px){
+ #selcard,#layers{
+   left:8px!important;right:8px!important;top:auto!important;bottom:72px!important;
+   width:auto!important;max-height:44dvh!important
+ }
+}
