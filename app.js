@@ -1356,7 +1356,13 @@ function rebuild(){
    a(new THREE.CylinderGeometry(.31,.31,mhT,20),0,mhT/2,0);
    a(new THREE.BoxGeometry(1.4,1.4,1.4),0,mhT+.7,0);
    a(new THREE.BoxGeometry(jib,.45,.6),jib/2-.6,mhT+1.5,0);
-   a(new THREE.BoxGeometry(spec.tail+1,.4,.8),-(spec.tail+1)/2+.2,mhT+1.5,0);
+   const tailL=spec.tail+1;
+   a(new THREE.BoxGeometry(tailL,.4,.8),-tailL/2+.2,mhT+1.5,0);
+   // 運転室・カウンターウェイト・トロリ
+   const cab=new THREE.Mesh(new THREE.BoxGeometry(.9,1.15,.9),mat(0xE7EAEE));cab.position.set(-.72,mhT+1.3,-.62);cab.castShadow=!L;cg.add(cab);
+   const win=new THREE.Mesh(new THREE.BoxGeometry(.58,.48,.05),mat(0x365169,{transparent:true,opacity:.84}));win.position.set(-.72,mhT+1.42,-1.08);cg.add(win);
+   for(let n=0;n<3;n++)a(new THREE.BoxGeometry(.34,.72,1.0),-tailL+.42+n*.32,mhT+1.9,0);
+   a(new THREE.BoxGeometry(.58,.28,.72),jib*.72,mhT+1.12,0);
    a(new THREE.BoxGeometry(.25,3,.25),0,mhT+3,0);
    const drop=Math.max(3,mhT-builtH-3);
    a(new THREE.BoxGeometry(.06,drop,.06),jib*.75,mhT+1.3-drop/2,0);a(new THREE.BoxGeometry(.7,.7,.7),jib*.75,mhT+1.3-drop,0);
@@ -1366,6 +1372,8 @@ function rebuild(){
    [-1,1].forEach(sx=>[-1,1].forEach(sz=>a(new THREE.BoxGeometry(.08,H*0.55,.08),sx*bw/2,H*0.275,sz*bw/2)));
    for(let y=1;y<H*0.55;y+=1.2){a(new THREE.BoxGeometry(bw,.06,.06),0,y,bw/2);a(new THREE.BoxGeometry(bw,.06,.06),0,y,-bw/2);}
    a(new THREE.BoxGeometry(.5,1.2,.7),0,H*0.55+.6,0);
+   a(new THREE.BoxGeometry(.62,.48,.72),-.48,H*0.55+.78,0);
+   a(new THREE.BoxGeometry(.42,.58,.50),.36,H*0.55+.84,-.28);
    const boomLen=spec.jib, ang=35*Math.PI/180;
    const boom=new THREE.Mesh(new THREE.BoxGeometry(boomLen,.18,.18),cm);boom.position.set(Math.cos(ang)*boomLen/2,H*0.55+1.2+Math.sin(ang)*boomLen/2,0);boom.rotation.z=ang;boom.castShadow=!L;cg.add(boom);
    a(new THREE.BoxGeometry(.12,H*0.45,.12),0,H*0.55+H*0.225,0);
@@ -1374,7 +1382,12 @@ function rebuild(){
   }else{ // 格子マスト（従来）
    a(new THREE.BoxGeometry(4.5,.9,4.5),0,.45,0);a(new THREE.BoxGeometry(1.5,mh,1.5),0,mh/2,0);
    a(new THREE.BoxGeometry(2.1,2,2.1),0,mh+1,0);a(new THREE.BoxGeometry(jib,.8,1),jib/2-1.2,mh+2.2,0);
-   a(new THREE.BoxGeometry(7,.7,1),-4.2,mh+2.2,0);a(new THREE.BoxGeometry(1.4,2,2.2),-7,mh+1.4,0);
+   a(new THREE.BoxGeometry(7,.7,1),-4.2,mh+2.2,0);
+   // 運転室とカウンターウェイト
+   const cab=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.55,1.15),mat(0xE7EAEE));cab.position.set(-1.15,mh+2.0,-.72);cab.castShadow=!L;cg.add(cab);
+   const win=new THREE.Mesh(new THREE.BoxGeometry(.78,.62,.05),mat(0x365169,{transparent:true,opacity:.84}));win.position.set(-1.15,mh+2.15,-1.32);cg.add(win);
+   for(let n=0;n<4;n++)a(new THREE.BoxGeometry(.38,1.4,2.1),-6.2-n*.38,mh+1.55,0);
+   a(new THREE.BoxGeometry(.58,.30,.78),jib*.72,mh+1.75,0);
    a(new THREE.BoxGeometry(.5,4.5,.5),0,mh+4.4,0);
    const drop=Math.max(4,mh-builtH-4);
    a(new THREE.BoxGeometry(.07,drop,.07),jib*.72,mh+2-drop/2,0);a(new THREE.BoxGeometry(.9,.9,.9),jib*.72,mh+2-drop,0);
