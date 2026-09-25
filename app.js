@@ -54,7 +54,7 @@ const U={
  annot:[],       // 注記（地面貼り付け）{type:"zone"|"text", x,z,w,d,ry,color,text,fsize}
  poles:{n:3,pitch:18,far:true,dx:0,dz:0,ry:0},
  demo:{w:22,d:14,h:9,dx:0,dz:0,ry:0},
- tw:{mode:"plan",step:8,fenceShape:"rect",fencePts:[],fenceGateSeg:0,pitDepth:4,retainMargin:1,pilePitch:5,pileDia:0.8,pileLen:15,oldPiles:false,oldPitch:4,oldRot:0,oldExtend:2,oldDx:0,oldDz:0,steelPitch:7,crane:true,craneModel:"JCL022",craneHeight:0, craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceAll:false,fenceDx:0,fenceDz:0,fenceRy:0,fenceW:0,fenceD:0,scaffold:true,poles:false,person:false,mixer:true,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
+ tw:{mode:"plan",step:8,fenceShape:"rect",fencePts:[],fenceGateSeg:0,pitDepth:4,retainMargin:1,pilePitch:5,pileDia:0.8,pileLen:15,oldPiles:false,oldPitch:4,oldRot:0,oldExtend:2,oldDx:0,oldDz:0,steelPitch:7,crane:true,craneModel:"JCL022",craneHeight:0, craneX:18,craneZ:-2,craneJib:28,craneRot:25,radius:true,ev:true,evX:-6,evZ:null,evRy:0,fence:true,fenceH:3,fenceGate:"front",fenceAll:false,fenceDx:0,fenceDz:0,fenceRy:0,fenceW:0,fenceD:0,scaffold:true,poles:false,person:false,mixer:false,mixX:-12,mixZ:null,mixRy:0,rough:false,rufX:14,rufZ:-2,rufRy:0},
  under:{tex:null,show:true,width:40,opacity:.65,rot:0,dx:0,dz:0,pages:1,page:1,raw:null,gsiKind:"std",gsiZoom:17,gsiStatus:""},
  photo:{tex:null,show:true,width:160,opacity:.8,rot:0,dx:0,dz:0},
  nbs:[], line:false, auto:true, tab:"諸元", tabGroup:"建物", moveLayers:false,
@@ -179,6 +179,25 @@ function cobjVisibleInPhase(c,phase){
 window.cobjVisibleInPhase=cobjVisibleInPhase;
 // 指定タイプ・クラスの寸法を引く
 function cobjSize(type,sizeKey){const t=COBJ_TYPES[type];if(!t)return null;const arr=t.sizes;return arr.find(s=>s.key===sizeKey)||arr[0];}
+function migrateLegacyVehicles(){
+ if(!U.tw)return;
+ if(!Array.isArray(U.cobj))U.cobj=[];
+ if(U.tw.mixer){
+  if(!U.cobj.some(c=>c&&c.type==="mixer")){
+   const sz=cobjSize("mixer",(U.roadwork&&U.roadwork.mixerSize)||"8t")||COBJ_TYPES.mixer.sizes[1],a=placementAnchor(5);
+   U.cobj.push({type:"mixer",size:sz.key,x:numv(U.tw.mixX,a.x),z:U.tw.mixZ==null?a.z:numv(U.tw.mixZ,a.z),w:sz.w,d:sz.d,h:sz.h,ry:numv(U.tw.mixRy,0),phase:"build"});
+  }
+  U.tw.mixer=false;
+ }
+ if(U.tw.rough){
+  if(!U.cobj.some(c=>c&&c.type==="rough")){
+   const sz=cobjSize("rough","25t"),a=placementAnchor(4);
+   U.cobj.push({type:"rough",size:"25t",x:numv(U.tw.rufX,a.x),z:numv(U.tw.rufZ,a.z),w:sz.w,d:sz.d,h:sz.h,ry:numv(U.tw.rufRy,0),phase:"build",boomPct:55,boomAngle:42,outPct:70});
+  }
+  U.tw.rough=false;
+ }
+}
+window.migrateLegacyVehicles=migrateLegacyVehicles;
 // 地下の支障物（範囲マーカー）種類：色・ラベル
 const SUBSURFACE_TYPES={
  elec:{label:"共同溝・電気埋設管",color:0xE8B020},
@@ -1342,7 +1361,7 @@ function rebuild(){
   g.add(pg);dragMap.poles=pg;}
 
  // 生コン車（ドラッグ可）
- if(U.tw.mixer&&U.tw.mode==="build"&&!L){
+ if(false&&U.tw.mixer&&U.tw.mode==="build"&&!L){
   const mg=new THREE.Group();mg.userData.dragKey="mixer";
   box(mg,2.4,1,7,0xe9ebee,0,1.3,0);box(mg,2.2,1.7,2.2,0x5a7fae,0,1.9,-3.1);
   cylm(mg,1.25,.8,4.4,0xf2f4f6,0,2.6,.8,{rx:Math.PI/2-.2,seg:14});
@@ -1351,7 +1370,7 @@ function rebuild(){
   g.add(mg);dragMap.mixer=mg;}
 
  // ラフタークレーン（ドラッグ可）
- if(U.tw.rough&&(U.tw.mode==="build"||PH_GROUND)&&!L){
+ if(false&&U.tw.rough&&(U.tw.mode==="build"||PH_GROUND)&&!L){
   const rg=new THREE.Group();rg.userData.dragKey="rough";
   box(rg,2.7,1.3,9,0xe8b820,0,1.1,0);box(rg,2.4,1.8,2.4,0xe8b820,0,2.4,2.8);
   [[1.9,3.6],[1.9,-3.6],[-1.9,3.6],[-1.9,-3.6]].forEach(([ox,oz])=>box(rg,.4,1,.4,0x7d7f84,ox,.5,oz));
@@ -1859,6 +1878,7 @@ function loadProjectJSON(file){
    if(!U.geo)U.geo={elev:null,name:"",status:""};
    if(U.snap==null)U.snap=true;
    (U.cobj||[]).forEach(c=>{if(c.size==null){const t=COBJ_TYPES[c.type];if(t)c.size=t.sizes[0].key;}if(c.type==="rough"||c.type==="pump"){if(c.boomPct==null)c.boomPct=c.type==="pump"?62:55;if(c.boomAngle==null)c.boomAngle=c.type==="pump"?48:42;if(c.outPct==null)c.outPct=c.type==="pump"?85:70;}});
+   migrateLegacyVehicles();
    if(U.p.addr==null)U.p.addr="";
    U.sel=null;U._layersOpen=false;
    if(U.site&&U.site.active==null)U.site.active=true;
@@ -2267,6 +2287,7 @@ function applyState(p){
  U.sel=null;U._layersOpen=false;U.polyInput={on:false,pts:[],target:null};U.calib={on:false,a:null,b:null};
  if(!Array.isArray(U.annot))U.annot=[];if(!Array.isArray(U.subsurface))U.subsurface=[];if(!U.ojt)U.ojt={};if(!Array.isArray(U.roads))U.roads=[];
  if(U.site&&U.site.active==null)U.site.active=true;
+ migrateLegacyVehicles();
 }
 window.restoreDraft=()=>{
  const d=readDraft(); if(!d){toast("下書きがありません");return;}
