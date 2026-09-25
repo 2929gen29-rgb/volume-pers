@@ -88,15 +88,22 @@ const COBJ_TYPES={
    {key:"semi",label:"セミトレーラー",w:2.5,d:16.5,h:3.8},
  ]},
  rough:{label:"ラフタークレーン",color:0xE8B820,sizes:[
-   {key:"13t",label:"13t吊",w:2.3,d:8.5,h:3.2,out:4.6,tail:3.2,work:18},
-   {key:"25t",label:"25t吊",w:2.75,d:11.5,h:3.4,out:5.8,tail:3.7,work:26},
-   {key:"50t",label:"50t吊",w:3.0,d:12.5,h:3.6,out:7.0,tail:4.2,work:34},
-   {key:"70t",label:"70t吊",w:3.0,d:13.5,h:3.7,out:7.8,tail:4.5,work:40},
+   {key:"10t",label:"10t級（概略）",w:2.2,d:7.7,h:3.1,out:4.2,tail:3.0,work:16,boomMin:7,boomMax:23},
+   {key:"13t",label:"13t級（概略）",w:2.3,d:8.5,h:3.2,out:4.6,tail:3.2,work:18,boomMin:7.5,boomMax:28},
+   {key:"16t",label:"16t級（概略）",w:2.4,d:9.0,h:3.2,out:5.0,tail:3.3,work:21,boomMin:8,boomMax:31},
+   {key:"20t",label:"20t級（概略）",w:2.5,d:9.7,h:3.3,out:5.4,tail:3.5,work:24,boomMin:8.5,boomMax:33},
+   {key:"25t",label:"25t級（概略）",w:2.75,d:11.5,h:3.4,out:5.8,tail:3.7,work:26,boomMin:9,boomMax:35},
+   {key:"35t",label:"35t級（概略）",w:2.75,d:11.8,h:3.5,out:6.4,tail:4.0,work:30,boomMin:9.5,boomMax:37},
+   {key:"50t",label:"50t級（概略）",w:3.0,d:12.5,h:3.6,out:7.0,tail:4.2,work:34,boomMin:10,boomMax:40},
+   {key:"60t",label:"60t級（概略）",w:3.0,d:13.0,h:3.7,out:7.4,tail:4.4,work:37,boomMin:10.5,boomMax:44},
+   {key:"70t",label:"70t級（概略）",w:3.0,d:13.5,h:3.7,out:7.8,tail:4.5,work:40,boomMin:11,boomMax:47},
+   {key:"80t",label:"80t級（概略）",w:3.0,d:14.0,h:3.8,out:8.0,tail:4.7,work:43,boomMin:11.5,boomMax:50},
+   {key:"100t",label:"100t級（概略）",w:3.2,d:15.0,h:3.9,out:8.4,tail:5.0,work:48,boomMin:12,boomMax:54},
  ]},
  pump:{label:"コンクリポンプ車",color:0x4F7CC4,sizes:[
-   {key:"s2t",label:"小型(2t)",w:2.0,d:6.5,h:3.2,out:4.0,work:16},
-   {key:"m4t",label:"中型(4t)",w:2.3,d:9.0,h:3.6,out:5.2,work:24},
-   {key:"l8t",label:"大型(8t)",w:2.5,d:11.5,h:3.8,out:6.4,work:32},
+   {key:"s2t",label:"小型(2t)・ブーム16m級",w:2.0,d:6.5,h:3.2,out:4.0,work:16,boomMin:5,boomMax:16},
+   {key:"m4t",label:"中型(4t)・ブーム24m級",w:2.3,d:9.0,h:3.6,out:5.2,work:24,boomMin:7,boomMax:24},
+   {key:"l8t",label:"大型(8t)・ブーム32m級",w:2.5,d:11.5,h:3.8,out:6.4,work:32,boomMin:9,boomMax:32},
  ]},
  backhoe:{label:"バックホウ（ユンボ）",color:0xE8731A,sizes:[
    {key:"01",label:"0.1m³(ミニ)",w:1.7,d:3.8,h:2.6,tail:1.4,work:5},
@@ -1427,14 +1434,77 @@ function rebuild(){
    const mast=new THREE.Mesh(new THREE.BoxGeometry(.6,hgt,.6),baseMat);mast.position.set(0,hgt/2,d*0.25);mast.castShadow=!L;cg.add(mast);
    if(L){const ee=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(.6,hgt,.6)),new THREE.LineBasicMaterial({color:0x16243d}));ee.position.copy(mast.position);cg.add(ee);}
   }else if(c.type==="pump"){
-   const body=new THREE.Mesh(new THREE.BoxGeometry(w,2.2,d),baseMat);body.position.y=1.4;body.castShadow=!L;cg.add(body);
-   const boom=new THREE.Mesh(new THREE.BoxGeometry(.4,.4,d*1.4),new THREE.MeshLambertMaterial({color:warn?0xD64545:0x33425a}));boom.position.set(0,3.2,d*.2);boom.rotation.x=-.5;cg.add(boom);
-  }else if(c.type==="rough"){ // ラフター：車体＋ブーム
-   const body=new THREE.Mesh(new THREE.BoxGeometry(w,hgt*0.55,d),baseMat);body.position.y=hgt*0.3;body.castShadow=!L;cg.add(body);
-   const cab=new THREE.Mesh(new THREE.BoxGeometry(w*0.9,1.6,d*0.22),baseMat);cab.position.set(0,hgt*0.55+0.8,d*0.3);cg.add(cab);
-   const boomL=Math.max(8,(sz.work||16)*0.7);
-   const boom=new THREE.Mesh(new THREE.BoxGeometry(.5,.5,boomL),new THREE.MeshLambertMaterial({color:warn?0xD64545:0xC99A1A}));
-   boom.position.set(0,hgt*0.55+0.6+boomL*0.18,-d*0.1);boom.rotation.x=-0.7;boom.geometry.translate(0,0,boomL/2);cg.add(boom);
+   // ポンプ車：シャーシ＋キャブ＋ポンプ架装＋4本アウトリガー＋多関節ブーム。
+   // 高密度メッシュではなく基本形状の組み合わせで、軽さを保ったままシルエットを実機寄りにする。
+   const bodyMat=L?baseMat:new THREE.MeshLambertMaterial({color:warn?0xD64545:0x4F7CC4});
+   const darkMat=L?baseMat:new THREE.MeshLambertMaterial({color:0x263442});
+   const metalMat=L?baseMat:new THREE.MeshLambertMaterial({color:0xD9DEE5});
+   const chassis=new THREE.Mesh(new THREE.BoxGeometry(w*.90,.48,d*.88),darkMat);chassis.position.y=.72;chassis.castShadow=!L;cg.add(chassis);
+   const cab=new THREE.Mesh(new THREE.BoxGeometry(w*.92,1.75,d*.22),bodyMat);cab.position.set(0,1.55,-d*.34);cab.castShadow=!L;cg.add(cab);
+   const glass=new THREE.Mesh(new THREE.BoxGeometry(w*.72,.68,.06),L?baseMat:new THREE.MeshLambertMaterial({color:0x38546B,transparent:true,opacity:.82}));glass.position.set(0,1.82,-d*.455);cg.add(glass);
+   const deck=new THREE.Mesh(new THREE.BoxGeometry(w*.86,.72,d*.48),metalMat);deck.position.set(0,1.22,d*.10);cg.add(deck);
+   const hopper=new THREE.Mesh(new THREE.CylinderGeometry(w*.30,w*.42,.9,8),bodyMat);hopper.rotation.x=Math.PI/2;hopper.position.set(0,1.45,d*.39);cg.add(hopper);
+   const wheelMat=L?baseMat:new THREE.MeshLambertMaterial({color:0x20252B});
+   const axleZ=[-d*.31,-d*.08,d*.27];
+   axleZ.forEach(z=>[-1,1].forEach(sx=>{const wh=new THREE.Mesh(new THREE.CylinderGeometry(.48,.48,.32,10),wheelMat);wh.rotation.z=Math.PI/2;wh.position.set(sx*(w*.48),.5,z);cg.add(wh);}));
+   const outPct=Math.max(0,Math.min(100,numv(c.outPct,85)))/100;
+   const outSpan=w+(Math.max(w,sz.out||w)-w)*outPct;
+   const beamMat=L?baseMat:new THREE.MeshLambertMaterial({color:0x56616E});
+   [-d*.22,d*.27].forEach(z=>[-1,1].forEach(sx=>{
+    const ext=Math.max(.15,(outSpan-w)/2),beam=new THREE.Mesh(new THREE.BoxGeometry(ext,.18,.20),beamMat);
+    beam.position.set(sx*(w/2+ext/2),.58,z);cg.add(beam);
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(.16,.58,.16),beamMat);leg.position.set(sx*(outSpan/2),.30,z);cg.add(leg);
+    const pad=new THREE.Mesh(new THREE.BoxGeometry(.62,.08,.62),beamMat);pad.position.set(sx*(outSpan/2),.05,z);cg.add(pad);
+   }));
+   const pct=Math.max(0,Math.min(100,numv(c.boomPct,62)))/100;
+   const total=Math.max(5,numv(sz.boomMin,6)+(numv(sz.boomMax,sz.work||20)-numv(sz.boomMin,6))*pct);
+   const baseA=Math.max(15,Math.min(75,numv(c.boomAngle,48)))*Math.PI/180;
+   const ratios=[.31,.27,.23,.19],angs=[baseA,baseA+.58,baseA-.22,-.38];
+   let py=2.38,pz=d*.17;
+   ratios.forEach((rr,bi)=>{
+    const len=total*rr,th=angs[bi],thick=Math.max(.20,.38-bi*.045);
+    const bm=new THREE.Mesh(new THREE.BoxGeometry(thick,thick,len),bi<2?bodyMat:metalMat);
+    bm.geometry.translate(0,0,-len/2);bm.position.set(0,py,pz);bm.rotation.x=th;bm.castShadow=!L;cg.add(bm);
+    const pin=new THREE.Mesh(new THREE.CylinderGeometry(thick*.75,thick*.75,thick*.38,8),darkMat);pin.rotation.z=Math.PI/2;pin.position.set(0,py,pz);cg.add(pin);
+    py+=Math.sin(th)*len;pz-=Math.cos(th)*len;
+   });
+   const hoseLen=Math.max(1.8,total*.10);const hose=new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,hoseLen,7),darkMat);hose.position.set(0,py-hoseLen/2,pz);cg.add(hose);
+  }else if(c.type==="rough"){ // ラフター：多軸車体＋旋回台＋アウトリガー＋伸縮ブーム
+   const yellow=L?baseMat:new THREE.MeshLambertMaterial({color:warn?0xD64545:0xE8B820});
+   const dark=L?baseMat:new THREE.MeshLambertMaterial({color:0x272C33});
+   const glass=L?baseMat:new THREE.MeshLambertMaterial({color:0x365169,transparent:true,opacity:.84});
+   const chassis=new THREE.Mesh(new THREE.BoxGeometry(w*.90,.62,d*.82),dark);chassis.position.y=.82;chassis.castShadow=!L;cg.add(chassis);
+   const carrier=new THREE.Mesh(new THREE.BoxGeometry(w*.88,.82,d*.70),yellow);carrier.position.set(0,1.20,.12);carrier.castShadow=!L;cg.add(carrier);
+   const axles=d>13?4:d>10?3:2;
+   for(let ai=0;ai<axles;ai++){const z=-d*.34+(d*.68)*(axles===1?0:ai/(axles-1));[-1,1].forEach(sx=>{const wh=new THREE.Mesh(new THREE.CylinderGeometry(.62,.62,.38,10),dark);wh.rotation.z=Math.PI/2;wh.position.set(sx*w*.49,.62,z);cg.add(wh);});}
+   const driveCab=new THREE.Mesh(new THREE.BoxGeometry(w*.84,1.78,d*.20),yellow);driveCab.position.set(0,2.03,-d*.33);cg.add(driveCab);
+   const wind=new THREE.Mesh(new THREE.BoxGeometry(w*.64,.70,.06),glass);wind.position.set(0,2.20,-d*.435);cg.add(wind);
+   const turret=new THREE.Mesh(new THREE.CylinderGeometry(w*.34,w*.38,.48,12),dark);turret.position.set(0,1.72,d*.08);cg.add(turret);
+   const opCab=new THREE.Mesh(new THREE.BoxGeometry(w*.42,1.55,d*.18),yellow);opCab.position.set(-w*.24,2.55,d*.13);cg.add(opCab);
+   const opGlass=new THREE.Mesh(new THREE.BoxGeometry(w*.30,.62,.05),glass);opGlass.position.set(-w*.24,2.72,d*.035);cg.add(opGlass);
+   const cw=new THREE.Mesh(new THREE.BoxGeometry(w*.76,.85,d*.13),dark);cw.position.set(0,2.18,d*.29);cg.add(cw);
+   const outPct=Math.max(0,Math.min(100,numv(c.outPct,70)))/100;
+   const outSpan=w+(Math.max(w,sz.out||w)-w)*outPct;
+   [-d*.24,d*.25].forEach(z=>[-1,1].forEach(sx=>{
+    const ext=Math.max(.12,(outSpan-w)/2),beam=new THREE.Mesh(new THREE.BoxGeometry(ext,.22,.25),yellow);
+    beam.position.set(sx*(w/2+ext/2),.72,z);cg.add(beam);
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(.18,.66,.18),dark);leg.position.set(sx*(outSpan/2),.34,z);cg.add(leg);
+    const pad=new THREE.Mesh(new THREE.BoxGeometry(.70,.09,.70),dark);pad.position.set(sx*(outSpan/2),.055,z);cg.add(pad);
+   }));
+   const pct=Math.max(0,Math.min(100,numv(c.boomPct,55)))/100;
+   const boomL=Math.max(6,numv(sz.boomMin,8)+(numv(sz.boomMax,sz.work||24)-numv(sz.boomMin,8))*pct);
+   const ang=Math.max(5,Math.min(80,numv(c.boomAngle,42)))*Math.PI/180;
+   const baseY=2.82,baseZ=d*.11;
+   const lens=[boomL*.42,boomL*.33,boomL*.25],widths=[.58,.46,.34];
+   let py=baseY,pz=baseZ;
+   lens.forEach((len,bi)=>{
+    const bm=new THREE.Mesh(new THREE.BoxGeometry(widths[bi],widths[bi],len),bi===0?yellow:(L?baseMat:new THREE.MeshLambertMaterial({color:bi===1?0xD5AA27:0xE7C65A})));
+    bm.geometry.translate(0,0,-len/2);bm.position.set(0,py,pz);bm.rotation.x=ang;bm.castShadow=!L;cg.add(bm);
+    py+=Math.sin(ang)*len;pz-=Math.cos(ang)*len;
+   });
+   const head=new THREE.Mesh(new THREE.BoxGeometry(.62,.55,.48),yellow);head.position.set(0,py,pz);cg.add(head);
+   const drop=Math.max(1.8,Math.min(8,boomL*.14));const rope=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,drop,6),dark);rope.position.set(0,py-drop/2,pz);cg.add(rope);
+   const hook=new THREE.Mesh(new THREE.BoxGeometry(.24,.34,.20),dark);hook.position.set(0,py-drop,pz);cg.add(hook);
   }else if(c.type==="backhoe"){ // バックホウ：履帯＋旋回体＋アーム
    const track=new THREE.Mesh(new THREE.BoxGeometry(w,0.8,d),baseMat);track.position.y=.4;track.castShadow=!L;cg.add(track);
    const turret=new THREE.Mesh(new THREE.BoxGeometry(w*0.8,1.3,d*0.6),baseMat);turret.position.set(0,1.4,-d*0.1);cg.add(turret);
@@ -1515,10 +1585,10 @@ function rebuild(){
   // ───── 干渉チェックガイド（重機選択時・画像出力時は非表示）─────
   if(seld&&!L&&!U._exporting){
    const ringMat=(cc,op)=>new THREE.MeshBasicMaterial({color:cc,transparent:true,opacity:op,side:THREE.DoubleSide});
-   // A. アウトリガー最大張出（矩形ガイド）
-   if(sz.out){const ow=sz.out, od=Math.max(sz.out,d*0.8);
-    const g4=new THREE.Mesh(new THREE.PlaneGeometry(ow*2,od*2),ringMat(0xF2A33C,0.10));g4.rotation.x=-Math.PI/2;g4.position.y=0.05;cg.add(g4);
-    const eg=new THREE.EdgesGeometry(new THREE.PlaneGeometry(ow*2,od*2));const el2=new THREE.LineSegments(eg,new THREE.LineBasicMaterial({color:0xE8731A}));el2.rotation.x=-Math.PI/2;el2.position.y=0.06;cg.add(el2);
+   // A. アウトリガー張出（現在の張出率を反映）
+   if(sz.out){const pct=Math.max(0,Math.min(100,numv(c.outPct,100)))/100,ow=w+(Math.max(w,sz.out)-w)*pct,od=Math.max(d*.75,w);
+    const g4=new THREE.Mesh(new THREE.PlaneGeometry(ow,od),ringMat(0xF2A33C,0.10));g4.rotation.x=-Math.PI/2;g4.position.y=0.05;cg.add(g4);
+    const eg=new THREE.EdgesGeometry(new THREE.PlaneGeometry(ow,od));const el2=new THREE.LineSegments(eg,new THREE.LineBasicMaterial({color:0xE8731A}));el2.rotation.x=-Math.PI/2;el2.position.y=0.06;cg.add(el2);
    }
    // B. テールスイング（後端旋回半径）の円
    if(sz.tail){const ring=new THREE.Mesh(new THREE.RingGeometry(sz.tail-0.25,sz.tail,48),ringMat(0xD64545,0.5));ring.rotation.x=-Math.PI/2;ring.position.set(0,0.08,-d*0.2);cg.add(ring);}
@@ -1788,7 +1858,7 @@ function loadProjectJSON(file){
    if(U.cost)delete U.cost;  // 旧バージョンの概算単価データを破棄
    if(!U.geo)U.geo={elev:null,name:"",status:""};
    if(U.snap==null)U.snap=true;
-   (U.cobj||[]).forEach(c=>{if(c.size==null){const t=COBJ_TYPES[c.type];if(t)c.size=t.sizes[0].key;}});
+   (U.cobj||[]).forEach(c=>{if(c.size==null){const t=COBJ_TYPES[c.type];if(t)c.size=t.sizes[0].key;}if(c.type==="rough"||c.type==="pump"){if(c.boomPct==null)c.boomPct=c.type==="pump"?62:55;if(c.boomAngle==null)c.boomAngle=c.type==="pump"?48:42;if(c.outPct==null)c.outPct=c.type==="pump"?85:70;}});
    if(U.p.addr==null)U.p.addr="";
    U.sel=null;U._layersOpen=false;
    if(U.site&&U.site.active==null)U.site.active=true;
@@ -2504,7 +2574,10 @@ function v4PhaseSceneTransition(next){
 window.v4PhaseSceneTransition=v4PhaseSceneTransition;
 window.setMode=(m)=>v4PhaseSceneTransition(m);
 window.addCO=(type)=>{if(U.tw.mode==="plan"&&type!=="obstacle"){toast("完成フェーズでは仮設物を配置しません。工程を施工中へ戻してください","err");return;}snapshot();const t=COBJ_TYPES[type]||COBJ_TYPES.truck;const sz=t.sizes[0];const a=placementAnchor(5),nx0=a.x,nz0=a.z;const hd=(U.snap!==false)?nearestRoadHeading(nx0,nz0):null;
- U.cobj.push({type,size:sz.key,x:nx0,z:nz0,w:sz.w,d:sz.d,h:sz.h,ry:hd!=null?hd:0,phase:U.tw.mode});U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();focusSelectionCamera(U.sel,{duration:220});};
+ const obj={type,size:sz.key,x:nx0,z:nz0,w:sz.w,d:sz.d,h:sz.h,ry:hd!=null?hd:0,phase:U.tw.mode};
+ if(type==="rough"){obj.boomPct=55;obj.boomAngle=42;obj.outPct=70;}
+ if(type==="pump"){obj.boomPct=62;obj.boomAngle=48;obj.outPct=85;}
+ U.cobj.push(obj);U.sel="co:"+(U.cobj.length-1);rebuild();renderPanel();focusSelectionCamera(U.sel,{duration:220});};
 window.addTowerCrane=(model="JCL015")=>{snapshot();const t=COBJ_TYPES.towercrane,sz=t.sizes.find(s=>s.key===model)||t.sizes[0],spec=craneSpec(sz.key);
  const i=(U.cobj||[]).filter(c=>c.type==="towercrane").length,a=placementAnchor(2);
  const bx=U.site.active===false?a.x:numv(U.tw.craneX,0),bz=U.site.active===false?a.z:numv(U.tw.craneZ,0);
@@ -2529,7 +2602,8 @@ window.addAnnotZone=()=>{snapshot();const sdz2=numv(U.site.dz,0),sd2=posv(U.site
 window.addAnnotText=()=>{const t=prompt("注記の文字を入力（40文字まで）","注意");if(t==null)return;snapshot();const sdz2=numv(U.site.dz,0);U.annot.push({type:"text",x:numv(U.site.dx,0),z:sdz2,ry:0,color:"red",text:t.slice(0,40),fsize:2.5});U.sel="an:"+(U.annot.length-1);rebuild();renderPanel();};
 window.editAnnotText=(i)=>{const a=U.annot[i];if(!a)return;const t=prompt("注記の文字を編集",a.text||"");if(t==null)return;snapshot();a.text=t.slice(0,40);rebuild();renderPanel();};
 window.delAnnot=(i)=>{snapshot();U.annot.splice(i,1);if(U.sel==="an:"+i)U.sel=null;_selCamBase=null;_selCamKey=null;rebuild();renderPanel();};
-window.setCOSize=(i,key)=>{const c=U.cobj[i];if(!c)return;const sz=cobjSize(c.type,key);if(sz){snapshot();c.size=key;c.w=sz.w;c.d=sz.d;c.h=(c.type==="towercrane"?(craneSpec(key).selfH||sz.h):sz.h);}rebuild();renderPanel();};
+window.setCOSize=(i,key)=>{const c=U.cobj[i];if(!c)return;const sz=cobjSize(c.type,key);if(sz){snapshot();c.size=key;c.w=sz.w;c.d=sz.d;c.h=(c.type==="towercrane"?(craneSpec(key).selfH||sz.h):sz.h);if(c.type==="rough"||c.type==="pump"){if(c.boomPct==null)c.boomPct=60;if(c.boomAngle==null)c.boomAngle=45;if(c.outPct==null)c.outPct=80;}}rebuild();renderPanel();};
+window.setCOParam=(i,k,v)=>{const c=U.cobj[i];if(!c)return;const n=parseFloat(v);if(!isFinite(n))return;snapshot("co."+i+"."+k);c[k]=n;rebuildThrottled();};
 window.setCOHeight=(i,v)=>{const c=U.cobj[i];if(!c)return;const n=parseFloat(v);if(!isFinite(n))return;const spec=c.type==="towercrane"?craneSpec(c.size):null;const lo=spec&&spec.selfH?spec.selfH:0.1,hi=spec&&spec.maxInstallH?spec.maxInstallH:80;snapshot("co."+i+".h");c.h=Math.max(lo,Math.min(hi,n));rebuild();renderPanel();if(typeof renderMobile==="function")renderMobile();};
 window.selCO=(i)=>{U.sel="co:"+i;rebuild();renderPanel();};
 window.setPage=async(v)=>{U.under.page=v;await renderPdfPage();};
@@ -4319,8 +4393,20 @@ function renderSelCard(force){
  const rowSL=(lab,val,fn,mn,mx,st)=>SL(lab,val,fn,mn,mx,st);
  if(k.startsWith("co:")){const i=+k.slice(3),c=U.cobj[i];if(!c){el.style.display="none";return;}const t=COBJ_TYPES[c.type]||{label:c.type,sizes:[]};
   title=t.label;
+  const mech=(c.type==="rough"||c.type==="pump");
+  const szNow=cobjSize(c.type,c.size)||{};
+  const boomPct=Math.max(0,Math.min(100,numv(c.boomPct,c.type==="pump"?62:55)));
+  const boomAngle=Math.max(5,Math.min(80,numv(c.boomAngle,c.type==="pump"?48:42)));
+  const outPct=Math.max(0,Math.min(100,numv(c.outPct,c.type==="pump"?85:70)));
+  const boomLen=(szNow.boomMin!=null&&szNow.boomMax!=null)?(szNow.boomMin+(szNow.boomMax-szNow.boomMin)*boomPct/100):null;
   body=`<label class="f"><span>サイズ</span><select onchange="setCOSize(${i},this.value)">${(t.sizes||[]).map(s=>`<option value="${s.key}" ${c.size===s.key?"selected":""}>${s.label}</option>`).join("")}</select></label>
    ${c.type==="towercrane"?rowSL("設置高さ m",numv(c.h,craneSpec(c.size).selfH),`(v)=>setCOHeight(${i},v)`,craneSpec(c.size).selfH,craneSpec(c.size).maxInstallH||51,.5):""}
+   ${mech?`<div class="machine-controls"><small>WORKING CONFIGURATION</small>
+     ${rowSL("ブーム伸長 "+(boomLen!=null?"（約"+boomLen.toFixed(1)+"m）":""),boomPct,`(v)=>setCOParam(${i},'boomPct',v)`,0,100,5)}
+     ${rowSL("ブーム角度 °",boomAngle,`(v)=>setCOParam(${i},'boomAngle',v)`,5,80,1)}
+     ${rowSL("アウトリガー張出 %",outPct,`(v)=>setCOParam(${i},'outPct',v)`,0,100,5)}
+     <div class="machine-note">低ポリ施工検討モデル。外形・可動状態の確認用で、実機寸法はメーカー資料で最終確認してください。</div>
+    </div>`:""}
    ${rowSL("向き °",numv(c.ry,0),`(v)=>{snapshot('co.ry.${i}');U.cobj[${i}].ry=v;rebuildThrottled();}`,0,359,1)}
    <div class="sc-refdist">📏 ${refDistanceText(numv(c.x,0),numv(c.z,0))}</div>
    ${c._warn?`<div style="font-size:11px;color:#B0433A;font-weight:700">⚠ 歩行帯と干渉しています</div>`:""}
