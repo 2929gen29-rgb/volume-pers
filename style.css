@@ -2119,3 +2119,55 @@ body:not(.simple) #tools .tool[title^="選択モード"].on{box-shadow:inset 0 0
  /* The selected-object inspector uses the neighboring right-side lane. */
  body:not(.simple):not(.touch-full) #selcard{right:88px!important}
 }
+
+/* v62 — consistent SketchUp-style numeric inspector, ZZZ visual language. */
+body:not(.simple) #selcard .sc-v62-position{
+ border:1px solid #C9D9F0;border-radius:10px;
+ margin:0 0 11px;overflow:hidden;background:#F4F8FF
+}
+body:not(.simple) #selcard .sc-v62-heading{
+ display:flex;align-items:center;justify-content:space-between;gap:7px;
+ padding:9px 10px 7px;background:#E9F1FF;border-bottom:1px solid #D9E6F6
+}
+body:not(.simple) #selcard .sc-v62-heading small{
+ color:#4E75AD;font:700 8px var(--mono);letter-spacing:.10em
+}
+body:not(.simple) #selcard .sc-v62-heading b{color:#253A56;font-size:11.5px}
+body:not(.simple) #selcard .sc-v62-fields{
+ display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:9px 9px 6px
+}
+body:not(.simple) #selcard .sc-v62-field{min-width:0;display:block}
+body:not(.simple) #selcard .sc-v62-field span{
+ display:flex;align-items:center;justify-content:space-between;
+ font-size:10px;font-weight:800;color:#3D5272;padding-bottom:5px
+}
+body:not(.simple) #selcard .sc-v62-field small{font-size:9px;color:#7E90AC}
+body:not(.simple) #selcard .sc-v62-field input{
+ width:100%;min-width:0;height:34px;box-sizing:border-box;
+ font:650 12px var(--mono);text-align:center;padding:4px 2px;
+ border:1px solid #C9D6E8;background:white;border-radius:7px;color:#1B3151
+}
+body:not(.simple) #selcard .sc-v62-field input:focus{
+ border-color:#4B82FF;outline:2px solid rgba(75,130,255,.20);outline-offset:0
+}
+body:not(.simple) #selcard .sc-v62-note{
+ margin:0;padding:0 9px 9px;color:#647895;line-height:1.5;font-size:9px
+}
+body:not(.simple) #selcard .sc-v62-details{
+ border-top:1px solid #E1E7F0;border-bottom:1px solid #E1E7F0;
+ margin:0 0 9px;background:#FFF
+}
+body:not(.simple) #selcard .sc-v62-details summary{
+ display:flex;align-items:center;justify-content:space-between;gap:5px;
+ cursor:pointer;list-style:none;color:#273C59;font-size:11px;font-weight:750;
+ padding:10px 6px;user-select:none
+}
+body:not(.simple) #selcard .sc-v62-details summary::-webkit-details-marker{display:none}
+body:not(.simple) #selcard .sc-v62-details summary:after{
+ content:"▾";color:#6786B0;font-size:13px
+}
+body:not(.simple) #selcard .sc-v62-details:not([open]) summary:after{content:"▸"}
+body:not(.simple) #selcard .sc-v62-details summary small{
+ margin-left:auto;color:#8291A5;font:700 8px var(--mono);letter-spacing:.08em
+}
+body:not(.simple) #selcard .sc-v62-detail-body{padding:1px 3px 9px}
