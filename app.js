@@ -4658,9 +4658,9 @@ function startDraw(target){
  toast(msg+"クリックでなぞり、ダブルクリックで確定");
 }
 window.startDraw=startDraw;
-function _toolsPos(){try{return JSON.parse(localStorage.getItem("bimgen_tools_pos")||"null");}catch(e){return null;}}
-function _toolsSave(p){try{localStorage.setItem("bimgen_tools_pos",JSON.stringify(p));}catch(e){}}
-window.toolsReset=()=>{try{localStorage.removeItem("bimgen_tools_pos");}catch(e){}const el=document.getElementById("tools");if(el){el.style.left="";el.style.top="";el.style.right="";el.style.bottom="";el.style.transform="";}};
+function _toolsPos(){try{return JSON.parse(localStorage.getItem("bimgen_tools_pos_v59")||"null");}catch(e){return null;}}
+function _toolsSave(p){try{localStorage.setItem("bimgen_tools_pos_v59",JSON.stringify(p));}catch(e){}}
+window.toolsReset=()=>{try{localStorage.removeItem("bimgen_tools_pos_v59");}catch(e){}const el=document.getElementById("tools");if(el){el.style.left="";el.style.top="";el.style.right="";el.style.bottom="";el.style.transform="";}};
 window.toolsToggle=()=>{U._toolsMin=!U._toolsMin;renderTools();};
 // v58: 選択ツールは作図・測定・下地移動を終了し、通常の3D操作へ戻す。
 window.activateSelectTool=()=>{
@@ -5263,6 +5263,7 @@ function setLeftPanelCollapsed(closed){
  const p=$("#panel"),w=$("#pwrap"),a=$("#parr"),h=$("#phead");
  if(!p||!w)return;
  p.classList.toggle("collapsed",!!closed);
+ document.body.classList.toggle("bim-panel-collapsed",!!closed);
  w.style.display=closed?"none":"";
  if(a)a.textContent=closed?"▶":"▲";
  if(h){h.setAttribute("aria-expanded",closed?"false":"true");h.title=closed?"案件パネルを開く":"案件パネルを閉じる";}
