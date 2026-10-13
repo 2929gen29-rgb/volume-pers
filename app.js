@@ -4706,12 +4706,12 @@ function renderTools(){
  if(U._toolsMin){el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ここをドラッグして道具を移動"><b>⋮⋮</b><small>TOOLS</small></span><button class="tool" style="min-width:auto" onclick="toolsToggle()" title="道具を展開"><span>▶</span>ひらく</button></div>`;return;}
  const on=(t)=>U.polyInput.on&&((t==="block"&&U.polyInput.target==null)||U.polyInput.target===t);
  const b=(t,ic,lab)=>`<button class="tool ${on(t)?"on":""}" title="${lab}（クリック→ダブルクリックで確定）" onclick="startDraw('${t}')"><span>${ic}</span>${lab}</button>`;
- el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ここをドラッグして道具を移動／ダブルクリックで初期位置" ondblclick="toolsReset()"><b>⋮⋮</b><small>TOOLS</small></span><button class="tool ${!U.polyInput.on&&!U.dim.on&&!U.moveLayers?"on":""}" title="選択モードに戻す（Esc）" onclick="activateSelectTool()"><span>↖</span>選択</button>${b("site","▭","敷地")}${b("block","▣","建物")}${b("road","═","道路")}${b("fence","▦","仮囲い")}</div>
+ el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ここをドラッグして道具を移動／ダブルクリックで初期位置" ondblclick="toolsReset()"><b>⋮⋮</b><small>TOOLS</small></span><button class="tool tool-fold" title="道具を折りたたむ" onclick="toolsToggle()"><span>◀</span>たたむ</button><button class="tool ${!U.polyInput.on&&!U.dim.on&&!U.moveLayers?"on":""}" title="選択モードに戻す（Esc）" onclick="activateSelectTool()"><span>↖</span>選択</button>${b("site","▭","敷地")}${b("block","▣","建物")}${b("road","═","道路")}${b("fence","▦","仮囲い")}</div>
   <div class="tool-grp">
    <button class="tool ${U.dim.on?"on":""}" title="2点クリックで距離を測る" onclick="S('dim.on',!U.dim.on,false);if(!U.dim.on){U.dim.a=null;U.dim.b=null;}rebuild();renderBar()"><span>↔</span>寸法</button>
    <button class="tool ${U.snap!==false?"on":""}" title="頂点・道路への吸着、15°刻み回転" onclick="U.snap=!U.snap;renderBar();renderPanel()"><span>⌖</span>吸着</button>
    <button class="tool ${U.moveLayers?"on":""}" title="PDF・地図を操作：ドラッグ＝移動 / Ctrl＋ドラッグ＝回転" onclick="setUnderMoveMode(!U.moveLayers)"><span>✥</span>下地を動かす</button>
-   <button class="tool" title="道具を折りたたむ" onclick="toolsToggle()" class="tool-fold"><span>◀</span>たたむ</button>
+   
   </div>
   ${U.polyInput.on?`<div class="tool-hint">なぞり中：${U.polyInput.pts.length}点　<b>ダブルクリックで確定</b>　<a href="#" onclick="if(U.polyInput.pts.length){U.polyInput.pts.pop();rebuild();renderPanel();renderBar();}return false">↩ 1点戻す</a><a href="#" onclick="U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar();return false">中止(Esc)</a></div>`:""}`;
 }
