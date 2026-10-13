@@ -1846,13 +1846,8 @@ body.touch-full:not(.simple) #panel.collapsed #pwrap{display:none!important}
   body:not(.simple) #bar>.btn,
   body:not(.simple) #bar>.mn{flex:0 0 auto}
 
-  /* Drawing tools own the center lane, clear of both edit panel and inspector. */
-  body:not(.simple) #tools{
-    top:62px!important;left:360px!important;right:310px!important;
-    transform:none!important;max-width:none!important;width:auto!important;
-    justify-content:center;pointer-events:none
-  }
-  body:not(.simple) #tools>*{pointer-events:auto}
+  /* The tool dock is managed by the v61 right-edge layout below.
+     Do not hard-lock left/right/top/width or disable pointer events here. */
 
   /* Right inspector/layers are one exclusive lane. */
   body:not(.simple) #selcard,
@@ -2064,63 +2059,63 @@ body:not(.simple) .sc-v58-help{font-size:11px;line-height:1.6;color:#B7D1FF;back
 body:not(.simple) #tools .tool[title^="選択モード"]{min-width:48px}
 body:not(.simple) #tools .tool[title^="選択モード"].on{box-shadow:inset 0 0 0 1px rgba(124,171,255,.56)}
 
-/* v59 — SketchUp-inspired vertical tool dock / desktop only.
-   The existing ZZZ color, button states and draggable grip are preserved. */
-@media (min-width:1101px) and (pointer:fine){
- body:not(.simple) #tools{
-  left:360px;right:auto;top:78px;bottom:auto;transform:none;
-  display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;
-  flex-wrap:nowrap;gap:5px!important;max-width:68px;max-height:calc(100dvh - 108px);
-  overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;
-  scrollbar-color:rgba(108,141,186,.38) transparent
- }
- body:not(.simple).bim-panel-collapsed #tools{left:78px}
- body:not(.simple) #tools .tool-grp{
-  display:flex;flex-direction:column;align-items:center;flex:0 0 auto;
-  width:64px;max-width:64px;gap:4px!important
- }
- body:not(.simple) #tools .tool{
-  min-width:58px!important;width:58px;min-height:47px;padding:6px 3px!important;
-  white-space:normal;text-align:center;line-height:1.22
- }
- body:not(.simple) #tools .tool span{font-size:17px}
- body:not(.simple) #tools .tool-grip{
-  width:58px!important;min-width:58px!important;min-height:24px!important;
-  justify-content:center;cursor:grab
- }
- body:not(.simple) #tools .tool-hint{
-  max-width:64px;overflow-wrap:anywhere;line-height:1.45;
-  padding:8px 5px;text-align:center;font-size:10px
- }
- body:not(.simple) #tools .tool-hint a{display:block;margin:5px 0 0}
- body:not(.simple) #tools.dragging{opacity:.88}
-}
 
-/* v60 — Right-edge docking / visible collapse / reposition by drag. */
-@media (min-width:1101px) and (pointer:fine){
- body:not(.simple) #tools:not(.tools-user-moved){
-  left:auto;right:12px;top:84px;bottom:auto;transform:none
+/* v61 — RIGHT-EDGE TOOL DOCK (desktop).
+   Default: right edge. After grabbing the dotted grip, the saved left/top
+   inline coordinates take over. No !important position rules may override
+   the drag coordinates. On reset, remove the inline values and re-dock. */
+@media (min-width:821px){
+ body:not(.simple):not(.touch-full) #tools{
+  position:fixed;display:flex;flex-direction:column;flex-wrap:nowrap;
+  align-items:center;justify-content:flex-start;
+  width:66px;max-width:66px;max-height:calc(100dvh - 102px);
+  bottom:auto;transform:none;z-index:59;
+  overflow-x:hidden;overflow-y:auto;
+  overscroll-behavior:contain;scrollbar-width:thin;
+  scrollbar-color:rgba(110,150,215,.34) transparent;
+  pointer-events:auto;touch-action:none
  }
- body:not(.simple).bim-panel-collapsed #tools:not(.tools-user-moved){
-  left:auto;right:12px
+ body:not(.simple):not(.touch-full) #tools:not(.tools-user-moved){
+  top:82px;left:auto;right:12px
  }
- body:not(.simple) #tools{
-  max-height:calc(100dvh - 100px);overflow-y:auto;overflow-x:hidden;
-  z-index:15;touch-action:none
+ body:not(.simple):not(.touch-full) #tools.tools-user-moved{
+  right:auto;left:0;top:82px
  }
- body:not(.simple) #tools.tools-user-moved{right:auto}
- body:not(.simple) #tools .tool-grip{
-  opacity:1!important;color:#99B9FF!important;
-  background:rgba(52,90,158,.24)!important;border-radius:7px!important;
-  cursor:grab;user-select:none;touch-action:none
+ body:not(.simple):not(.touch-full) #tools .tool-grp{
+  display:flex;flex-direction:column;flex:0 0 auto;
+  align-items:center;gap:4px;width:64px;max-width:64px
  }
- body:not(.simple) #tools .tool-grip b{font-size:19px!important}
- body:not(.simple) #tools .tool-fold{
+ body:not(.simple):not(.touch-full) #tools .tool{
+  display:flex;min-width:58px!important;width:58px;
+  min-height:46px;padding:5px 3px!important;
+  flex-direction:column;align-items:center;justify-content:center;
+  white-space:normal;text-align:center;line-height:1.2
+ }
+ body:not(.simple):not(.touch-full) #tools .tool span{font-size:17px}
+ body:not(.simple):not(.touch-full) #tools .tool-grip{
+  display:flex;flex-direction:column;
+  width:58px!important;min-width:58px!important;
+  min-height:36px!important;align-items:center;justify-content:center;
+  opacity:1!important;color:#B0CAFF!important;
+  padding:6px 2px!important;
+  background:rgba(52,90,158,.30)!important;
+  border-radius:7px!important;cursor:grab;
+  touch-action:none;user-select:none;pointer-events:auto
+ }
+ body:not(.simple):not(.touch-full) #tools .tool-grip b{font-size:20px!important}
+ body:not(.simple):not(.touch-full) #tools .tool-grip small{display:block!important;font-size:8px}
+ body:not(.simple):not(.touch-full) #tools .tool-fold{
   display:flex!important;min-height:40px!important;
   background:rgba(49,79,129,.26);color:#DCE8FF;
   outline:1px solid rgba(107,147,213,.42)
  }
- body:not(.simple) #tools .tool-fold span{color:#AFC9FF}
- body:not(.simple) #selcard{right:88px;max-width:calc(100vw - 110px)}
- body:not(.simple) #tools.dragging{cursor:grabbing;overflow:visible}
+ body:not(.simple):not(.touch-full) #tools .tool-fold span{color:#AFC9FF}
+ body:not(.simple):not(.touch-full) #tools .tool-hint{
+  width:64px;overflow-wrap:anywhere;text-align:center;
+  padding:8px 5px;line-height:1.45;font-size:10px
+ }
+ body:not(.simple):not(.touch-full) #tools .tool-hint a{display:block;margin:5px 0 0}
+ body:not(.simple):not(.touch-full) #tools.dragging{cursor:grabbing;overflow:visible}
+ /* The selected-object inspector uses the neighboring right-side lane. */
+ body:not(.simple):not(.touch-full) #selcard{right:88px!important}
 }
