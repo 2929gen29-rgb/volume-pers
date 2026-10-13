@@ -486,6 +486,9 @@ function pickDrag(e){
 const el=renderer.domElement; el.style.touchAction="none"; el.style.webkitUserSelect="none"; el.style.userSelect="none"; el.style.webkitTouchCallout="none";
 el.addEventListener("contextmenu",(e)=>e.preventDefault());   // 長押しの選択・コピー吹き出しを出さない
 let rotMode=false, rotStartX=0, rotStartRy=0;
+// v57: 中ボタンはカメラ専用（描画・選択・仮設移動と競合させない）
+let _middleCamId=null, _middleCamPan=false;
+el.addEventListener("auxclick",(e)=>{if(e.button===1)e.preventDefault();});
 function objRyKey(k){
  if(k==="crane")return ["tw","craneRot"]; if(k==="ev")return ["tw","evRy"];
  if(k==="mixer")return ["tw","mixRy"]; if(k==="rough")return ["tw","rufRy"];
@@ -525,6 +528,12 @@ function setRy(k,deg){const r=objRyKey(k);if(!r)return;deg=((deg%360)+360)%360;
  else if(r[0]==="an"){if(U.annot[r[1]])U.annot[r[1]].ry=+deg.toFixed(0);}
  else if(r[0]==="rd"){if(U.roads[r[1]])U.roads[r[1]].ry=+deg.toFixed(0);}}
 el.addEventListener("pointerdown",(e)=>{
+ if(e.pointerType==="mouse"&&e.button===1){
+  e.preventDefault();_camTween=null;_middleCamId=e.pointerId;_middleCamPan=!!e.shiftKey;
+  ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);el.setPointerCapture(e.pointerId);
+  el.style.cursor=_middleCamPan?"move":"grabbing";return;
+ }
+ if(e.pointerType==="mouse"&&e.button!==0)return;
  _camTween=null; // 手で触れた瞬間は進行中の演出を止める（フォーカス復帰点はまだ保持）
  ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);el.setPointerCapture(e.pointerId);
  // 多角形入力モード：地面クリックで頂点追加
@@ -574,6 +583,14 @@ el.addEventListener("pointerdown",(e)=>{
    U.auto=false;syncBtns();renderSelCard();}else{if(U.sel){clearSelection({restore:true});}}}
 });
 el.addEventListener("pointermove",(e)=>{
+ if(_middleCamId===e.pointerId){
+  const last=ctrl.ptrs.get(e.pointerId);if(!last)return;
+  const dx=e.clientX-last[0],dy=e.clientY-last[1];ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+  if(_selCamBase){_selCamBase=null;_selCamKey=null;}
+  if(e.shiftKey||_middleCamPan)panBy(dx,dy);
+  else{ctrl.theta-=dx*.006;ctrl.phi=Math.min(1.52,Math.max(.12,ctrl.phi-dy*.004));}
+  U.auto=false;syncBtns();return;
+ }
  if(_tapCand&&Math.hypot(e.clientX-_tapCand.x,e.clientY-_tapCand.y)>_tapMovePx){_tapCand=null;clearTimeout(_lpTimer);}
  if(!ctrl.ptrs.has(e.pointerId))return;
  const prev=ctrl.ptrs.get(e.pointerId);ctrl.ptrs.set(e.pointerId,[e.clientX,e.clientY]);
@@ -620,7 +637,7 @@ el.addEventListener("pointermove",(e)=>{
    ctrl.pinch=d; ctrl.panMid=mid; U.auto=false; syncBtns();
   }
 });
-const endPtr=(e)=>{ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
+const endPtr=(e)=>{if(_middleCamId===e.pointerId){_middleCamId=null;_middleCamPan=false;el.style.cursor="";ctrl.ptrs.delete(e.pointerId);return;}ctrl.ptrs.delete(e.pointerId);ctrl.pinch=0;ctrl.panMid=null;
  clearTimeout(_lpTimer);
  if(_tapCand&&Date.now()-_tapCand.t<_longPressMs&&Math.hypot(e.clientX-_tapCand.x,e.clientY-_tapCand.y)<=_tapMovePx){const k=_tapCand.key;_tapCand=null;
   if(U.sel!==k){U.sel=k;dragObj=null;rebuild();focusSelectionCamera(k,{duration:260});renderPanel();renderMobile();toast("選択しました。ドラッグで移動、長押しでメニュー");return;}}
@@ -4381,7 +4398,7 @@ window.addEventListener("resize",()=>{if(REAL_TUTORIAL.active&&[3,5].includes(RE
 
 // ───── 初めての方向けガイド（ツアー）：デモ案件を開いて5ステップを順に案内 ─────
 const TOUR_STEPS=[
- {t:"① 3Dの動かし方",b:"空白をドラッグ＝画面移動、Ctrl＋ドラッグ＝視点回転。物の上はドラッグ＝移動、Ctrl＋ドラッグ＝その物を回転。ホイール／2本指で拡大縮小します。",do:()=>{view("bird");}},
+ {t:"① 3Dの動かし方",b:"空白ドラッグ＝画面移動、Ctrl＋ドラッグ／ホイール押込みドラッグ＝視点回転。Shift＋ホイール押込み＝画面移動。物の上はドラッグ＝移動、Ctrl＋ドラッグ＝その物を回転。ホイール／2本指で拡大縮小します。",do:()=>{view("bird");}},
  {t:"② 検討判定（右下）",b:"OK／注意／要検討が常に出ます。行にマウスを乗せると対処の目安。今は「要検討」がある狭小地の例です。",do:()=>{U._hudMin=false;renderHUD();}},
  {t:"③ 左の段階バー",b:"①案件 → ②図面・敷地 → ③仮設 → ④検討。案件情報から地図・PDF、敷地と建物をなぞり、最後に仮設をじっくり詰めます。",do:()=>{U.tabGroup="3";U.tab="仮設";renderPanel();}},
  {t:"④ 上の道具でなぞる",b:"敷地・建物・道路・仮囲いは、地図や図面の上をクリックしてなぞります。Backspaceで1点戻す、Escで中止。",do:()=>{view("top");}},
