@@ -4658,9 +4658,9 @@ function startDraw(target){
  toast(msg+"クリックでなぞり、ダブルクリックで確定");
 }
 window.startDraw=startDraw;
-function _toolsPos(){try{return JSON.parse(localStorage.getItem("bimgen_tools_pos_v59")||"null");}catch(e){return null;}}
-function _toolsSave(p){try{localStorage.setItem("bimgen_tools_pos_v59",JSON.stringify(p));}catch(e){}}
-window.toolsReset=()=>{try{localStorage.removeItem("bimgen_tools_pos_v59");}catch(e){}const el=document.getElementById("tools");if(el){el.style.left="";el.style.top="";el.style.right="";el.style.bottom="";el.style.transform="";el.classList.remove("tools-user-moved");}};
+function _toolsPos(){try{return JSON.parse(localStorage.getItem("bimgen_tools_pos_v61")||"null");}catch(e){return null;}}
+function _toolsSave(p){try{localStorage.setItem("bimgen_tools_pos_v61",JSON.stringify(p));}catch(e){}}
+window.toolsReset=()=>{try{localStorage.removeItem("bimgen_tools_pos_v61");}catch(e){}const el=document.getElementById("tools");if(el){el.style.left="";el.style.top="";el.style.right="";el.style.bottom="";el.style.transform="";el.classList.remove("tools-user-moved");}};
 window.toolsToggle=()=>{U._toolsMin=!U._toolsMin;renderTools();};
 // v58: 選択ツールは作図・測定・下地移動を終了し、通常の3D操作へ戻す。
 window.activateSelectTool=()=>{
@@ -4678,10 +4678,14 @@ function renderTools(){
   el.addEventListener("pointerdown",(e)=>{
    const g=e.target.closest(".tool-grip");if(!g)return;
    e.preventDefault();e.stopPropagation();
+   if(e.pointerType==="mouse"&&e.button!==0)return;
+   // 右ドックから自由移動へ切り替える直前に絶対座標を確定する
    const r=el.getBoundingClientRect();
    drag={id:e.pointerId,dx:e.clientX-r.left,dy:e.clientY-r.top};
-    el.classList.add("tools-user-moved");
-   el.classList.add("dragging");
+   el.style.left=r.left+"px";el.style.top=r.top+"px";
+   el.style.right="auto";el.style.bottom="auto";el.style.transform="none";
+   el.classList.add("tools-user-moved","dragging");
+   try{el.setPointerCapture(e.pointerId);}catch(_){} 
   });
   window.addEventListener("pointermove",(e)=>{
    if(!drag||e.pointerId!==drag.id)return;
@@ -4691,7 +4695,8 @@ function renderTools(){
   },{passive:true});
   const endDrag=(e)=>{
    if(!drag||(e.pointerId!=null&&e.pointerId!==drag.id))return;
-   drag=null;el.classList.remove("dragging");
+   const id=drag.id;drag=null;el.classList.remove("dragging");
+   try{if(el.hasPointerCapture(id))el.releasePointerCapture(id);}catch(_){}
    const r=el.getBoundingClientRect();_toolsSave({x:Math.round(r.left),y:Math.round(r.top)});
   };
   window.addEventListener("pointerup",endDrag);
@@ -4700,7 +4705,12 @@ function renderTools(){
  }
  if(!el.dataset.posApplied){
   const p=_toolsPos();
-  if(p&&isFinite(p.x)&&isFinite(p.y)){el.classList.add("tools-user-moved");el.style.left=Math.max(8,Math.min(p.x,innerWidth-80))+"px";el.style.top=Math.min(p.y,innerHeight-50)+"px";el.style.right="auto";el.style.bottom="auto";el.style.transform="none";}
+  if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y)){
+   el.classList.add("tools-user-moved");
+   el.style.left=Math.max(8,Math.min(p.x,innerWidth-80))+"px";
+   el.style.top=Math.max(8,Math.min(p.y,innerHeight-50))+"px";
+   el.style.right="auto";el.style.bottom="auto";el.style.transform="none";
+  }
   el.dataset.posApplied="1";
  }
  if(U._toolsMin){el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ここをドラッグして道具を移動"><b>⋮⋮</b><small>TOOLS</small></span><button class="tool" style="min-width:auto" onclick="toolsToggle()" title="道具を展開"><span>▶</span>ひらく</button></div>`;return;}
