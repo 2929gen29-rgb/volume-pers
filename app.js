@@ -4845,6 +4845,7 @@ function renderSelCard(force){
  let el=document.getElementById("selcard");
  if(!el){el=document.createElement("div");el.id="selcard";document.body.appendChild(el);}
  const k=U.sel; if(!k){el.style.display="none";_selCardKey=null;return;}
+ const previousInspectorKey=_selCardKey;
  if(_selCardKey!==k){closeRightSurfaces("sel");U._hudMin=true;U._titleMin=true;const h=document.getElementById("hud");if(h)h.style.display="none";const t=document.getElementById("title");if(t)t.style.display="none";}
  // 同じ物を表示中でカード内を操作している最中（スライダー等）は作り直さない
  if(!force&&_selCardKey===k&&el.contains(document.activeElement))return;
@@ -4932,7 +4933,7 @@ function renderSelCard(force){
  if(U._layersOpen){U._layersOpen=false;const ly=document.getElementById("layers");if(ly)ly.style.display="none";}
  el.style.display="";
  const priorDetails=el.querySelector(".sc-v62-details");
- const detailsOpen=_selCardKey===k?(!priorDetails||priorDetails.open):true;
+ const detailsOpen=previousInspectorKey===k?(!priorDetails||priorDetails.open):true;
  const dupOK=/^(co:|an:|sub:|nb:|rd:|rpt:|blk:|bpt:)/.test(k);
  const selectionHelp=k.startsWith("co:")?"ドラッグで配置変更・Ctrl＋ドラッグで回転":k.startsWith("blk:")?"建物をドラッグして移動・寸法は下で編集":k==="under"||k==="photo"?"下地移動モードで位置を調整":"ドラッグで移動・Ctrl＋ドラッグで回転";
  el.innerHTML=`<div class="sc-h"><div class="sc-title"><small>OBJECT SELECTED</small><span>${title}</span></div><span class="sc-x" onclick="clearSelection({restore:true})">✕</span></div><div class="sc-b"><div class="sc-v58-help">↖ ${selectionHelp}</div>${inspectorPosUI(k)}<details class="sc-v62-details" ${detailsOpen?"open":""}><summary><span>詳細設定</span><small>SIZE / EQUIPMENT</small></summary><div class="sc-v62-detail-body">${body}</div></details><div class="sc-actions">${dupOK?`<button class="btn btn-secondary" onclick="duplicateSel()">複製</button>`:""}${del?`<button class="btn btn-danger" onclick="${del}">削除</button>`:""}</div><div class="hint">Delete＝削除　Ctrl+D＝複製　Esc＝選択解除　↶で戻せます</div></div>`;
