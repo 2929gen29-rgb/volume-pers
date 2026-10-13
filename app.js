@@ -4660,7 +4660,7 @@ function startDraw(target){
 window.startDraw=startDraw;
 function _toolsPos(){try{return JSON.parse(localStorage.getItem("bimgen_tools_pos_v59")||"null");}catch(e){return null;}}
 function _toolsSave(p){try{localStorage.setItem("bimgen_tools_pos_v59",JSON.stringify(p));}catch(e){}}
-window.toolsReset=()=>{try{localStorage.removeItem("bimgen_tools_pos_v59");}catch(e){}const el=document.getElementById("tools");if(el){el.style.left="";el.style.top="";el.style.right="";el.style.bottom="";el.style.transform="";}};
+window.toolsReset=()=>{try{localStorage.removeItem("bimgen_tools_pos_v59");}catch(e){}const el=document.getElementById("tools");if(el){el.style.left="";el.style.top="";el.style.right="";el.style.bottom="";el.style.transform="";el.classList.remove("tools-user-moved");}};
 window.toolsToggle=()=>{U._toolsMin=!U._toolsMin;renderTools();};
 // v58: 選択ツールは作図・測定・下地移動を終了し、通常の3D操作へ戻す。
 window.activateSelectTool=()=>{
@@ -4680,6 +4680,7 @@ function renderTools(){
    e.preventDefault();e.stopPropagation();
    const r=el.getBoundingClientRect();
    drag={id:e.pointerId,dx:e.clientX-r.left,dy:e.clientY-r.top};
+    el.classList.add("tools-user-moved");
    el.classList.add("dragging");
   });
   window.addEventListener("pointermove",(e)=>{
@@ -4699,10 +4700,10 @@ function renderTools(){
  }
  if(!el.dataset.posApplied){
   const p=_toolsPos();
-  if(p&&isFinite(p.x)&&isFinite(p.y)){el.style.left=Math.min(p.x,innerWidth-80)+"px";el.style.top=Math.min(p.y,innerHeight-50)+"px";el.style.right="auto";el.style.bottom="auto";el.style.transform="none";}
+  if(p&&isFinite(p.x)&&isFinite(p.y)){el.classList.add("tools-user-moved");el.style.left=Math.max(8,Math.min(p.x,innerWidth-80))+"px";el.style.top=Math.min(p.y,innerHeight-50)+"px";el.style.right="auto";el.style.bottom="auto";el.style.transform="none";}
   el.dataset.posApplied="1";
  }
- if(U._toolsMin){el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ここをドラッグして道具を移動"><b>⋮⋮</b><small>TOOLS</small></span><button class="tool" style="min-width:auto" onclick="toolsToggle()" title="道具を表示"><span>✎</span>道具</button></div>`;return;}
+ if(U._toolsMin){el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ここをドラッグして道具を移動"><b>⋮⋮</b><small>TOOLS</small></span><button class="tool" style="min-width:auto" onclick="toolsToggle()" title="道具を展開"><span>▶</span>ひらく</button></div>`;return;}
  const on=(t)=>U.polyInput.on&&((t==="block"&&U.polyInput.target==null)||U.polyInput.target===t);
  const b=(t,ic,lab)=>`<button class="tool ${on(t)?"on":""}" title="${lab}（クリック→ダブルクリックで確定）" onclick="startDraw('${t}')"><span>${ic}</span>${lab}</button>`;
  el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ここをドラッグして道具を移動／ダブルクリックで初期位置" ondblclick="toolsReset()"><b>⋮⋮</b><small>TOOLS</small></span><button class="tool ${!U.polyInput.on&&!U.dim.on&&!U.moveLayers?"on":""}" title="選択モードに戻す（Esc）" onclick="activateSelectTool()"><span>↖</span>選択</button>${b("site","▭","敷地")}${b("block","▣","建物")}${b("road","═","道路")}${b("fence","▦","仮囲い")}</div>
@@ -4710,7 +4711,7 @@ function renderTools(){
    <button class="tool ${U.dim.on?"on":""}" title="2点クリックで距離を測る" onclick="S('dim.on',!U.dim.on,false);if(!U.dim.on){U.dim.a=null;U.dim.b=null;}rebuild();renderBar()"><span>↔</span>寸法</button>
    <button class="tool ${U.snap!==false?"on":""}" title="頂点・道路への吸着、15°刻み回転" onclick="U.snap=!U.snap;renderBar();renderPanel()"><span>⌖</span>吸着</button>
    <button class="tool ${U.moveLayers?"on":""}" title="PDF・地図を操作：ドラッグ＝移動 / Ctrl＋ドラッグ＝回転" onclick="setUnderMoveMode(!U.moveLayers)"><span>✥</span>下地を動かす</button>
-   <button class="tool" title="道具をしまう" onclick="toolsToggle()" style="min-width:34px"><span>▾</span><span style="font-size:0"></span></button>
+   <button class="tool" title="道具を折りたたむ" onclick="toolsToggle()" class="tool-fold"><span>◀</span>たたむ</button>
   </div>
   ${U.polyInput.on?`<div class="tool-hint">なぞり中：${U.polyInput.pts.length}点　<b>ダブルクリックで確定</b>　<a href="#" onclick="if(U.polyInput.pts.length){U.polyInput.pts.pop();rebuild();renderPanel();renderBar();}return false">↩ 1点戻す</a><a href="#" onclick="U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;rebuild();renderPanel();renderBar();return false">中止(Esc)</a></div>`:""}`;
 }
