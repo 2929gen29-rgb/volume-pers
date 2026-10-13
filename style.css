@@ -2058,3 +2058,8 @@ body:not(.simple) #tools.dragging{background:transparent!important;box-shadow:no
   grid-column:1/-1;display:grid!important;grid-template-columns:1fr 1fr 1fr;gap:4px
 }
 .cobj-group-actions .btn{min-height:29px;font-size:9.5px}
+
+/* v58: 既存ゼンゼロ風UIのまま選択操作のガイドを追加（PCのみ） */
+body:not(.simple) .sc-v58-help{font-size:11px;line-height:1.6;color:#B7D1FF;background:rgba(52,105,204,.14);border:1px solid rgba(97,146,241,.22);border-radius:7px;padding:7px 9px;margin-bottom:10px}
+body:not(.simple) #tools .tool[title^="選択モード"]{min-width:48px}
+body:not(.simple) #tools .tool[title^="選択モード"].on{box-shadow:inset 0 0 0 1px rgba(124,171,255,.56)}
