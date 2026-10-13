@@ -4662,6 +4662,13 @@ function _toolsPos(){try{return JSON.parse(localStorage.getItem("bimgen_tools_po
 function _toolsSave(p){try{localStorage.setItem("bimgen_tools_pos",JSON.stringify(p));}catch(e){}}
 window.toolsReset=()=>{try{localStorage.removeItem("bimgen_tools_pos");}catch(e){}const el=document.getElementById("tools");if(el){el.style.left="";el.style.top="";el.style.right="";el.style.bottom="";el.style.transform="";}};
 window.toolsToggle=()=>{U._toolsMin=!U._toolsMin;renderTools();};
+// v58: 選択ツールは作図・測定・下地移動を終了し、通常の3D操作へ戻す。
+window.activateSelectTool=()=>{
+ U.polyInput.on=false;U.polyInput.pts=[];U.polyInput.target=null;
+ U.dim.on=false;U.dim.a=null;U.dim.b=null;U.moveLayers=false;
+ if(U.calib)U.calib.on=false;
+ rebuild();renderPanel();renderBar();toast("選択モード：クリックで選択・ドラッグで移動","ok");
+};
 function renderTools(){
  if(typeof renderUnderControl==="function")renderUnderControl();
  let el=document.getElementById("tools");
@@ -4698,7 +4705,7 @@ function renderTools(){
  if(U._toolsMin){el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ここをドラッグして道具を移動"><b>⋮⋮</b><small>TOOLS</small></span><button class="tool" style="min-width:auto" onclick="toolsToggle()" title="道具を表示"><span>✎</span>道具</button></div>`;return;}
  const on=(t)=>U.polyInput.on&&((t==="block"&&U.polyInput.target==null)||U.polyInput.target===t);
  const b=(t,ic,lab)=>`<button class="tool ${on(t)?"on":""}" title="${lab}（クリック→ダブルクリックで確定）" onclick="startDraw('${t}')"><span>${ic}</span>${lab}</button>`;
- el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ここをドラッグして道具を移動／ダブルクリックで初期位置" ondblclick="toolsReset()"><b>⋮⋮</b><small>TOOLS</small></span>${b("site","▭","敷地")}${b("block","▣","建物")}${b("road","═","道路")}${b("fence","▦","仮囲い")}</div>
+ el.innerHTML=`<div class="tool-grp"><span class="tool-grip" title="ここをドラッグして道具を移動／ダブルクリックで初期位置" ondblclick="toolsReset()"><b>⋮⋮</b><small>TOOLS</small></span><button class="tool ${!U.polyInput.on&&!U.dim.on&&!U.moveLayers?"on":""}" title="選択モードに戻す（Esc）" onclick="activateSelectTool()"><span>↖</span>選択</button>${b("site","▭","敷地")}${b("block","▣","建物")}${b("road","═","道路")}${b("fence","▦","仮囲い")}</div>
   <div class="tool-grp">
    <button class="tool ${U.dim.on?"on":""}" title="2点クリックで距離を測る" onclick="S('dim.on',!U.dim.on,false);if(!U.dim.on){U.dim.a=null;U.dim.b=null;}rebuild();renderBar()"><span>↔</span>寸法</button>
    <button class="tool ${U.snap!==false?"on":""}" title="頂点・道路への吸着、15°刻み回転" onclick="U.snap=!U.snap;renderBar();renderPanel()"><span>⌖</span>吸着</button>
@@ -4853,7 +4860,8 @@ function renderSelCard(force){
  if(U._layersOpen){U._layersOpen=false;const ly=document.getElementById("layers");if(ly)ly.style.display="none";}
  el.style.display="";
  const dupOK=/^(co:|an:|sub:|nb:|rd:|rpt:|blk:|bpt:)/.test(k);
- el.innerHTML=`<div class="sc-h"><div class="sc-title"><small>OBJECT SELECTED</small><span>${title}</span></div><span class="sc-x" onclick="clearSelection({restore:true})">✕</span></div><div class="sc-b">${body}<div class="sc-actions">${dupOK?`<button class="btn btn-secondary" onclick="duplicateSel()">複製</button>`:""}${del?`<button class="btn btn-danger" onclick="${del}">削除</button>`:""}</div><div class="hint">Delete＝削除　Ctrl+D＝複製　Esc＝選択解除　↶で戻せます</div></div>`;
+ const selectionHelp=k.startsWith("co:")?"ドラッグで配置変更・Ctrl＋ドラッグで回転":k.startsWith("blk:")?"建物をドラッグして移動・寸法は下で編集":k==="under"||k==="photo"?"下地移動モードで位置を調整":"ドラッグで移動・Ctrl＋ドラッグで回転";
+ el.innerHTML=`<div class="sc-h"><div class="sc-title"><small>OBJECT SELECTED</small><span>${title}</span></div><span class="sc-x" onclick="clearSelection({restore:true})">✕</span></div><div class="sc-b"><div class="sc-v58-help">↖ ${selectionHelp}</div>${body}<div class="sc-actions">${dupOK?`<button class="btn btn-secondary" onclick="duplicateSel()">複製</button>`:""}${del?`<button class="btn btn-danger" onclick="${del}">削除</button>`:""}</div><div class="hint">Delete＝削除　Ctrl+D＝複製　Esc＝選択解除　↶で戻せます</div></div>`;
 }
 window.renderSelCard=renderSelCard;
 // 選択中の物を複製（少しずらして配置）／削除
