@@ -4778,6 +4778,67 @@ window.groupVisibleTemp=()=>{
  toast(a.length?"この工程の仮設 "+a.length+"個をグループ選択しました。":"この工程にグループ化できる仮設物がありません。",a.length?"ok":"err");
 };
 
+// v62 — inspector coordinate adapter. UI inputs use model-global metres;
+// the existing model data keys, save schema and drawing logic remain unchanged.
+function inspectorPositionSpec(k){
+ let ref=null,xKey="",zKey="",baseX=0,baseZ=0;
+ const idx=(prefix)=>k.startsWith(prefix)&&/^\d+$/.test(k.slice(prefix.length))?Number(k.slice(prefix.length)):-1;
+ let i=idx("co:");
+ if(i>=0){ref=U.cobj[i];xKey="x";zKey="z";}
+ else if((i=idx("nb:"))>=0){ref=U.nbs[i];xKey="x";zKey="z";}
+ else if((i=idx("an:"))>=0){ref=U.annot[i];xKey="x";zKey="z";}
+ else if((i=idx("sub:"))>=0){ref=U.subsurface[i];xKey="x";zKey="z";}
+ else if((i=idx("blk:"))>=0){ref=U.blocks[i];xKey="dx";zKey="dz";baseX=numv(U.site.dx,0);baseZ=numv(U.site.dz,0);}
+ else if((i=idx("rd:"))>=0){ref=U.roads[i];xKey="dx";zKey="dz";baseX=numv(U.site.dx,0);baseZ=numv(U.site.dz,0);}
+ else if(k==="crane"){ref=U.tw;xKey="craneX";zKey="craneZ";}
+ else if(k==="ev"){ref=U.tw;xKey="evX";zKey="evZ";}
+ else if(k==="fence"){ref=U.tw;xKey="fenceDx";zKey="fenceDz";baseX=numv(U.site.dx,0);baseZ=numv(U.site.dz,0);}
+ else if(k==="under"||k==="photo"){ref=U[k];xKey="dx";zKey="dz";}
+ else if(k==="site"){ref=U.site;xKey="dx";zKey="dz";}
+ if(!ref)return null;
+ const obj=dragMap[k],fx=obj?obj.position.x-baseX:0,fz=obj?obj.position.z-baseZ:0;
+ const px=ref[xKey]==null?fx:numv(ref[xKey],fx);
+ const pz=ref[zKey]==null?fz:numv(ref[zKey],fz);
+ return {ref,xKey,zKey,baseX,baseZ,x:baseX+px,z:baseZ+pz,angle:objRyKey(k)?getRy(k):null};
+}
+function inspectorPosUI(k){
+ if(document.body.classList.contains("simple"))return "";
+ const p=inspectorPositionSpec(k);if(!p)return "";
+ const fmt=(n)=>(Math.round(n*100)/100).toFixed(2);
+ const inp=(field,label,n,unit,step)=>'<label class="sc-v62-field"><span>'+label+' <small>'+unit+'</small></span><input type="number" step="'+step+'" value="'+fmt(n)+'" aria-label="'+label+'" onchange="inspectorEditTransform(&quot;'+field+'&quot;,this.value)" onkeydown="if(event.key===&quot;Enter&quot;)this.blur()"></label>';
+ return '<section class="sc-v62-position" aria-label="配置と回転"><div class="sc-v62-heading"><small>POSITION / ROTATION</small><b>配置・回転</b></div>'+
+  '<div class="sc-v62-fields">'+inp("x","X",p.x,"m","0.01")+inp("z","Z",p.z,"m","0.01")+
+  (p.angle===null?'':inp("ry","回転",p.angle,"°","1"))+'</div>'+
+  '<p class="sc-v62-note">数値を入力して Enter で確定。位置はモデル原点を基準とします。</p></section>';
+}
+window.inspectorEditTransform=(field,value)=>{
+ const k=U.sel,sp=k&&inspectorPositionSpec(k);
+ if(!sp||!["x","z","ry"].includes(field))return;
+ if(value==null||String(value).trim()===""||!Number.isFinite(Number(value))){
+  toast("有効な数値を入力してください","err");renderSelCard(true);return;
+ }
+ const v=Number(value);
+ if(Math.abs(v)>10000){toast("入力値が大きすぎます","err");renderSelCard(true);return;}
+ if(field==="ry"&&sp.angle==null)return;
+ const old=field==="ry"?sp.angle:sp[field];
+ if(Math.abs(v-old)<0.00001)return;
+ snapshot("inspector."+k+"."+field);
+ if(field==="ry"){setRy(k,v);}
+ else{
+  const prop=field==="x"?sp.xKey:sp.zKey;
+  const base=field==="x"?sp.baseX:sp.baseZ;
+  const next=+(v-base).toFixed(2);
+  // Group-selected temporary objects should translate together.
+  const ci=k.startsWith("co:")?Number(k.slice(3)):-1;
+  const group=ci>=0&&cobjInGroup(ci)?cobjGroup():[];
+  if(group.length>=2){
+   const delta=next-numv(sp.ref[prop],0);
+   group.forEach(gi=>{const c=U.cobj[gi];if(c)c[prop]=+(numv(c[prop],0)+delta).toFixed(2);});
+  }else sp.ref[prop]=next;
+ }
+ rebuild();renderPanel();renderSelCard(true);
+};
+
 // ───── 選択中の物の属性カード（右上バーの下）：クリックした物のパラメータだけを出す ─────
 let _selCardKey=null;
 function renderSelCard(force){
@@ -4870,9 +4931,11 @@ function renderSelCard(force){
  else {el.style.display="none";return;}
  if(U._layersOpen){U._layersOpen=false;const ly=document.getElementById("layers");if(ly)ly.style.display="none";}
  el.style.display="";
+ const priorDetails=el.querySelector(".sc-v62-details");
+ const detailsOpen=_selCardKey===k?(!priorDetails||priorDetails.open):true;
  const dupOK=/^(co:|an:|sub:|nb:|rd:|rpt:|blk:|bpt:)/.test(k);
  const selectionHelp=k.startsWith("co:")?"ドラッグで配置変更・Ctrl＋ドラッグで回転":k.startsWith("blk:")?"建物をドラッグして移動・寸法は下で編集":k==="under"||k==="photo"?"下地移動モードで位置を調整":"ドラッグで移動・Ctrl＋ドラッグで回転";
- el.innerHTML=`<div class="sc-h"><div class="sc-title"><small>OBJECT SELECTED</small><span>${title}</span></div><span class="sc-x" onclick="clearSelection({restore:true})">✕</span></div><div class="sc-b"><div class="sc-v58-help">↖ ${selectionHelp}</div>${body}<div class="sc-actions">${dupOK?`<button class="btn btn-secondary" onclick="duplicateSel()">複製</button>`:""}${del?`<button class="btn btn-danger" onclick="${del}">削除</button>`:""}</div><div class="hint">Delete＝削除　Ctrl+D＝複製　Esc＝選択解除　↶で戻せます</div></div>`;
+ el.innerHTML=`<div class="sc-h"><div class="sc-title"><small>OBJECT SELECTED</small><span>${title}</span></div><span class="sc-x" onclick="clearSelection({restore:true})">✕</span></div><div class="sc-b"><div class="sc-v58-help">↖ ${selectionHelp}</div>${inspectorPosUI(k)}<details class="sc-v62-details" ${detailsOpen?"open":""}><summary><span>詳細設定</span><small>SIZE / EQUIPMENT</small></summary><div class="sc-v62-detail-body">${body}</div></details><div class="sc-actions">${dupOK?`<button class="btn btn-secondary" onclick="duplicateSel()">複製</button>`:""}${del?`<button class="btn btn-danger" onclick="${del}">削除</button>`:""}</div><div class="hint">Delete＝削除　Ctrl+D＝複製　Esc＝選択解除　↶で戻せます</div></div>`;
 }
 window.renderSelCard=renderSelCard;
 // 選択中の物を複製（少しずらして配置）／削除
