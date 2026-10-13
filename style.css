@@ -2063,3 +2063,35 @@ body:not(.simple) #tools.dragging{background:transparent!important;box-shadow:no
 body:not(.simple) .sc-v58-help{font-size:11px;line-height:1.6;color:#B7D1FF;background:rgba(52,105,204,.14);border:1px solid rgba(97,146,241,.22);border-radius:7px;padding:7px 9px;margin-bottom:10px}
 body:not(.simple) #tools .tool[title^="選択モード"]{min-width:48px}
 body:not(.simple) #tools .tool[title^="選択モード"].on{box-shadow:inset 0 0 0 1px rgba(124,171,255,.56)}
+
+/* v59 — SketchUp-inspired vertical tool dock / desktop only.
+   The existing ZZZ color, button states and draggable grip are preserved. */
+@media (min-width:1101px) and (pointer:fine){
+ body:not(.simple) #tools{
+  left:360px;right:auto;top:78px;bottom:auto;transform:none;
+  display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;
+  flex-wrap:nowrap;gap:5px!important;max-width:68px;max-height:calc(100dvh - 108px);
+  overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;
+  scrollbar-color:rgba(108,141,186,.38) transparent
+ }
+ body:not(.simple).bim-panel-collapsed #tools{left:78px}
+ body:not(.simple) #tools .tool-grp{
+  display:flex;flex-direction:column;align-items:center;flex:0 0 auto;
+  width:64px;max-width:64px;gap:4px!important
+ }
+ body:not(.simple) #tools .tool{
+  min-width:58px!important;width:58px;min-height:47px;padding:6px 3px!important;
+  white-space:normal;text-align:center;line-height:1.22
+ }
+ body:not(.simple) #tools .tool span{font-size:17px}
+ body:not(.simple) #tools .tool-grip{
+  width:58px!important;min-width:58px!important;min-height:24px!important;
+  justify-content:center;cursor:grab
+ }
+ body:not(.simple) #tools .tool-hint{
+  max-width:64px;overflow-wrap:anywhere;line-height:1.45;
+  padding:8px 5px;text-align:center;font-size:10px
+ }
+ body:not(.simple) #tools .tool-hint a{display:block;margin:5px 0 0}
+ body:not(.simple) #tools.dragging{opacity:.88}
+}
