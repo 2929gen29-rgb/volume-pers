@@ -2211,7 +2211,7 @@ body:not(.simple) #selcard .sc-v63-actions button{
  border-color:#AFC5E7;background:#EFF5FF;color:#1D529B;font-size:12px
 }
 body:not(.simple) #selcard .sc-v63-rotate{
- display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:4px;margin-top:7px
+ display:grid;grid-template-columns:minmax(0,1fr) 68px 68px;align-items:center;gap:4px;margin-top:7px
 }
 body:not(.simple) #selcard .sc-v63-rotate small{font-size:9px;color:#637A97}
 body:not(.simple) #selcard .sc-v63-actions button:hover,
