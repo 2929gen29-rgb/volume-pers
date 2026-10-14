@@ -4809,8 +4809,38 @@ function inspectorPosUI(k){
  return '<section class="sc-v62-position" aria-label="配置と回転"><div class="sc-v62-heading"><small>POSITION / ROTATION</small><b>配置・回転</b></div>'+
   '<div class="sc-v62-fields">'+inp("x","X",p.x,"m","0.01")+inp("z","Z",p.z,"m","0.01")+
   (p.angle===null?'':inp("ry","回転",p.angle,"°","1"))+'</div>'+
-  '<p class="sc-v62-note">数値を入力して Enter で確定。位置はモデル原点を基準とします。</p></section>';
+  inspectorNudgeUI(p)+
+  '<p class="sc-v62-note">数値入力または微調整ボタンで配置。X・Zはモデル原点基準（m）。</p></section>';
 }
+// v63 — Precision move uses the existing v62 position editor as one source
+// of truth, so grouped temporary works and Undo work exactly as before.
+let _inspectorStep=0.5; // transient UI preference: never persisted in project data.
+function inspectorNudgeUI(p){
+ const steps=[0.1,0.5,1];
+ const mk=(field,dir,label,disabled=false)=>'<button type="button" '+(disabled?'disabled ':'')+'onclick="inspectorNudge(&quot;'+field+'&quot;,'+dir+')" title="'+label+'" aria-label="'+label+'">'+label+'</button>';
+ return '<div class="sc-v63-nudge" aria-label="配置の微調整">'+
+  '<div class="sc-v63-head"><b>位置を微調整</b><span>MOVE / WORLD AXES</span></div>'+
+  '<div class="sc-v63-steps"><small>1回の移動距離</small>'+steps.map(step=>'<button type="button" class="'+(_inspectorStep===step?'on':'')+'" aria-pressed="'+(_inspectorStep===step)+'" onclick="setInspectorStep('+step+')">'+step.toFixed(1)+'m</button>').join('')+'</div>'+
+  '<div class="sc-v63-actions">'+mk("x",-1,"−X")+mk("x",1,"＋X")+mk("z",-1,"−Z")+mk("z",1,"＋Z")+'</div>'+
+  (p.angle==null?'':'<div class="sc-v63-rotate"><small>選択物の回転</small>'+mk("ry",-15,"↶ 15°")+mk("ry",15,"15° ↷")+'</div>')+
+  '</div>';
+}
+window.setInspectorStep=(step)=>{
+ const v=Number(step);
+ if(![0.1,0.5,1].includes(v))return;
+ _inspectorStep=v;renderSelCard(true);
+};
+window.inspectorNudge=(field,amount)=>{
+ const k=U.sel,p=k&&inspectorPositionSpec(k);
+ if(!p||!["x","z","ry"].includes(field))return;
+ const n=Number(amount);
+ if(!Number.isFinite(n)||n===0)return;
+ if(field==="ry"&&p.angle==null)return;
+ const before=field==="ry"?p.angle:p[field];
+ const delta=field==="ry"?n:Math.sign(n)*_inspectorStep;
+ const after=+(before+delta).toFixed(2);
+ window.inspectorEditTransform(field,after);
+};
 window.inspectorEditTransform=(field,value)=>{
  const k=U.sel,sp=k&&inspectorPositionSpec(k);
  if(!sp||!["x","z","ry"].includes(field))return;
