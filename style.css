@@ -2171,3 +2171,54 @@ body:not(.simple) #selcard .sc-v62-details summary small{
  margin-left:auto;color:#8291A5;font:700 8px var(--mono);letter-spacing:.08em
 }
 body:not(.simple) #selcard .sc-v62-detail-body{padding:1px 3px 9px}
+
+
+/* v63 — precise movement controls inside the existing ZZZ-style inspector. */
+body:not(.simple) #selcard .sc-v63-nudge{
+ margin:0 9px 9px;padding:9px;border:1px solid #D6E2F2;
+ border-radius:8px;background:#FFF
+}
+body:not(.simple) #selcard .sc-v63-head{
+ display:flex;justify-content:space-between;align-items:center;gap:5px;
+ margin-bottom:9px;color:#294260
+}
+body:not(.simple) #selcard .sc-v63-head b{font-size:11px}
+body:not(.simple) #selcard .sc-v63-head span{
+ font:700 7px var(--mono);letter-spacing:.06em;color:#718BAA
+}
+body:not(.simple) #selcard .sc-v63-steps{
+ display:grid;grid-template-columns:1fr repeat(3,46px);gap:3px;align-items:center;
+ margin-bottom:7px
+}
+body:not(.simple) #selcard .sc-v63-steps small{
+ color:#526985;font-size:9px;line-height:1.25
+}
+body:not(.simple) #selcard .sc-v63-steps button,
+body:not(.simple) #selcard .sc-v63-actions button,
+body:not(.simple) #selcard .sc-v63-rotate button{
+ display:inline-flex;align-items:center;justify-content:center;
+ min-width:0;min-height:32px;border-radius:6px;
+ background:#F5F8FD;border:1px solid #D6E0ED;color:#2E4765;
+ font:700 10.5px var(--font);cursor:pointer
+}
+body:not(.simple) #selcard .sc-v63-steps button.on{
+ background:#2768D3;border-color:#2768D3;color:#FFF
+}
+body:not(.simple) #selcard .sc-v63-actions{
+ display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px
+}
+body:not(.simple) #selcard .sc-v63-actions button{
+ border-color:#AFC5E7;background:#EFF5FF;color:#1D529B;font-size:12px
+}
+body:not(.simple) #selcard .sc-v63-rotate{
+ display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:4px;margin-top:7px
+}
+body:not(.simple) #selcard .sc-v63-rotate small{font-size:9px;color:#637A97}
+body:not(.simple) #selcard .sc-v63-actions button:hover,
+body:not(.simple) #selcard .sc-v63-rotate button:hover,
+body:not(.simple) #selcard .sc-v63-steps button:not(.on):hover{
+ border-color:#6D9FE8;background:#DCEBFF
+}
+body:not(.simple) #selcard .sc-v63-nudge button:focus-visible{
+ outline:2px solid #4B82FF;outline-offset:2px
+}
